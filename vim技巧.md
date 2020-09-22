@@ -80,7 +80,9 @@
 -  /{pattern}/,/{pattern/ 也可以使用模式标记范围；
 - {start}+n,{end}+n 加偏移；
 - 0 代表虚拟行位于文件的上方；
-
+- :[range] copy {address} 复制指定范围的内容到address地址处，也做:co，也做:t命令；
+- :[range] move {address} 移动指定范围的内容到address地址处，也做:m;
+- :[range] mormal {command} 在指定范围的行上执行普通模式的命令；
 
 
 
