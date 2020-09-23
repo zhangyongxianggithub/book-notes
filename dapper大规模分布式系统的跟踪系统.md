@@ -25,4 +25,10 @@ requestId记录与发起者关联：
 ![span调用树](附件/span调用.png)
 dapper记录了span的名称、span的id与parent id。单独的span的细节图：
 ![单独的span的细节图](附件/单独的span的细节图.png)
+## 植入点
+侵入性比较低，主要是因为：
+- dapper把span的信息存储在ThreadLocal中；
+- 线程池中保留span的上下文信息；
+- 使用rpc通信框架做植入点。
+## Annotation
 

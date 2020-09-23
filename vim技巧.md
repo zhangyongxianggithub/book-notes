@@ -83,6 +83,11 @@
 - :[range] copy {address} 复制指定范围的内容到address地址处，也做:co，也做:t命令；
 - :[range] move {address} 移动指定范围的内容到address地址处，也做:m;
 - :[range] mormal {command} 在指定范围的行上执行普通模式的命令；
-
+- @: 重复上次的Ex命令；
+- :bn[ext] 查看缓冲区列表，向下翻；
+- :bp[revious] 查看缓冲区列表，向上翻；
+- 命令模式下，\<Tab>可以自动补全命令；
+- \<C-d> 显示补全列表；
+-  
 
 
