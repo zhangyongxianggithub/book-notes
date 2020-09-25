@@ -38,3 +38,11 @@ lvmid [[classname|JARfilename|Unknown][arg*][jvmarg*]]
 ![](附件/jps命令输出.png)
 待-l参数会出现比较长的名字：
 ![](附件/jps命令输出-l.png)
+
+# jstat
+jstat的命令全称是Java Vitual Machine Statistics Monitoring Tool 中文名Java虚拟机概况监控工具。
+## SYNOPSIS
+jstat [generalOption|outputOptions vmid [interval [ s|ms ][count]]]
+## PARAMETERS
+- generalOption 一个单独的只出现一次的命令行选项 -help或者-options
+- vmid 
