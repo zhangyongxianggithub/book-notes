@@ -45,4 +45,18 @@ jstat的命令全称是Java Vitual Machine Statistics Monitoring Tool 中文名J
 jstat [generalOption|outputOptions vmid [interval [ s|ms ][count]]]
 ## PARAMETERS
 - generalOption 一个单独的只出现一次的命令行选项 -help或者-options
-- vmid 
+- outputOptions 一个或者多个输出选项，包含一个单独的statOption，比如-t、-h、-J选项
+- vmid 虚拟机进程标识符，可以是本地的也可以是远程的；
+- interval[s|ms] 输出/采样间隔时间与单位；
+- count 采样展示次数，缺省是无限的一直到虚拟机终止或者jstat终止，必须是一个正数；
+## DESCRIPTION
+jstat展示jvm进程的性能统计数据。
+## VIRTUAL MACHINE IDENTUIFIER
+vmid的语法与URI类似：
+[protocol:][//]lvmid[@hostname][:port][/servername]
+- protocol 没法判断是远程的时候，使用一种本地协议，如果vmid看起来是远程的，那么缺省是rmi；
+- lvmid 本地的JVM进程标识符，用来在一个系统中唯一标识一个JVM进程，lvmid是必须提供的，一般来说就是每个操作系统中进程的进程号；
+- hostname 主机名或者远程地址；
+- port 端口号，如果使用的是RMI，缺省的port是1099；
+- servername 如果是RMI，servername代表RMI远程对象的名字。
+## OPTIONS
