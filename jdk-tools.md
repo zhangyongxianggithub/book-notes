@@ -60,3 +60,205 @@ vmid的语法与URI类似：
 - port 端口号，如果使用的是RMI，缺省的port是1099；
 - servername 如果是RMI，servername代表RMI远程对象的名字。
 ## OPTIONS
+jstat支持2中类型的选项，generalOptions用于让jstat显示用法与版本信息，outputOptions用于决定jstat输出的内容与格式。
+## GENERAL OPTIONS
+general options是排他的，指定了选项后，不能指定其他的选项与参数
+- -help 显示jstat的帮助信息；
+- -options 显示统计选项，也就是显示可用的output options。
+## OUTPUT OPTIONS
+只有在没有指定general options的情况下，才可以指定output options，output options的组成是 -statOption -[output option]的形式；
+jstat的输出通常是表格的形式，并且带有表头与标题，-h参数决定表头显示的频率，在不同的参数下，这个表格的内容基本一致，同样名字的列，里面表示的数据含义也是一致的。
+-t参数会额外增加一个时间戳列，interval参数指定jstat的采样率，count指定jstat的刷新次数。
+### -statOption
+这个参数决定了jstat展示的通信信息类型。
+｜ Option | Display |
+|:-       |:-       |
+| class   | 统计class loader的行为 |
+| compiler | 统计HotSpot即时编译器的行为 |
+| gc      | 统计gc堆的行为 |
+| gccapacity | 统计分代与分代空间的容量信息 |
+| gccause  | gc统计信息的汇总，还带有最近与当前的gc事件发生原因 |
+| gcnew    | 新生代行为信息  |
+| gcnewcapacity | 新生代的大小与空间信息 |
+| gcold    | 老年代与永久代的行为信息 |
+| gcoldcapacity | 老年代的大小与空间信息 |
+| gcmetacapacity | 元空间的大小与空间信息 |
+| gcutil   | gc统计信息 |
+| printcompilation | HotSpot 编译方法信息 |
+
+### -h [n]
+每隔多少行展示下表头，如果不设置，只在第一行展示表头。
+### -t
+在第一列展示时间戳字段，代表jvm的启动时间。
+### -JjavaOption
+传输java参数给jstat的java启动器。
+## STATOPTIONS AND OUTPUT
+下面展示了每个-statOption下的输出表格样式。
+### -class
+| Column | Description |
+|:- |:- |
+| Loaded | 加载的class数量 |
+| Bytes | 加载了多少kb的类 |
+| Unloaded | 卸载类的数量 |
+| Bytes | 卸载的类有多少KB |
+| Time   | 执行类加载与卸载花了多少时间 |
+
+![案例](附件/jdk-tools/jstat-class.png)
+### -compiler
+| Column | Description |
+|:- |:- |
+| Compiled | 即时编译的次数 |
+| Failed | 即时编译失败的次数 |
+| Invalid | 即时编译无效的次数 |
+| Time | 即时编译的时间消耗 |
+| FailedType   | 最近一次编译失败的编译类型 |
+| FailedMethod  | 最近一次编译失败的类名与方法 |
+![案例](附件/jdk-tools/jstat-compiler.png)
+### -gc
+| Column | Description |
+|:- |:- |
+| S0C | 0号survivor空间的当前的容量（KB） |
+| S1C | 1号survivor空间的当前的容量 （KB）|
+| S0U | 0号survivor空间的已用的容量（KB） |
+| S1U | 1号survivor空间的已用的容量（KB） |
+| EC   | 当前的eden空间容量（KB） |
+| EU  | 当前的eden空间已用容量（KB） |
+| OC | 当前的老年代（old capacity）空间容量（KB） |
+| OU | 当前的老年代（old capacity）空间已用容量（KB） |
+| MC | 元空间容量（KB） |
+| MU | 元空间的已用的容量（KB） |
+| CCSC | 压缩类空间容量（KB） |
+| CCSU | 压缩类空间的已用的容量（KB） |
+| YGC   | 新生代gc次数 |
+| YGCT  | 新生代GC花费的时间 |
+| FGC | 老年代（full gc）的次数 |
+| FGCT   | 老年代gc花费的时间 |
+| GCT  | 总共的gc花费时间 |
+![案例](附件/jdk-tools/jstat-gc.png)
+### -gccapacity
+| Column | Description |
+|:- |:- |
+| NGCMN | 最小的新生代容量（KB） |
+| NGCMX | 最大的新生代容量 （KB）|
+| NGC | 当前的新生代容量（KB） |
+| S0C | 0号survivor空间的当前的容量（KB） |
+| S1C   | 1号survivor空间的当前的容量（KB） |
+| EC  | 当前的eden空间容量（KB） |
+| OGCMN | 老生代容量下限值（KB） |
+| OGCMX | 老生代容量上限值（KB） |
+| OGC | 当前的老生代容量（KB） |
+| OC | 当前的老年代（old capacity）空间容量（KB） |
+| MCMN   | 元空间容量最小值（KB） |
+| MCMX  | 元空间容量最大值（KB） |
+| CCSMN | 压缩累空间最小容量值（KB） |
+| CCSMX | 压缩类空间最大容量值（KB） |
+| CCSC | 压缩类空间容量（KB） |
+| YGC  | 新生代GC次数 |
+| FGC  | 老生代GC次数 |
+![案例](附件/jdk-tools/jstat-gccapacity.png)
+### -gcutil
+垃圾回收统计数据
+| Column | Description |
+|:- |:- |
+| S0 | 0号survivor已用容量百分比|
+| S1 | 1号survivor已用容量百分比 |
+| E | Eden空间已用容量百分比 |
+| O | 老年代空间已用容量百分比 |
+| M   | 元空间已用容量百分比 |
+| CCS  | 压缩类空间已用容量百分比 |
+| YGC | 新生代GC次数 |
+| YGCT | 新生代GC时间 |
+| FGC | 老生代GC次数 |
+| FGCT | 老生代GC时间 |
+| GCT   | 总共的GC时间 |
+![案例](附件/jdk-tools/jstat-gcutil.png)
+### -gccause
+这个statOption会列出垃圾回收的汇总信息，基本与-gcutil的内容一致，但是包含了最精的垃圾回收事件的原因与当前的垃圾回收事件，相比于-gcutil,这个选项多了2列
+| Column | Description |
+|:- |:- |
+| LGCC  | 最近的垃圾回收事件原因 |
+| GCC  | 当前的垃圾回收事件 |
+![案例](附件/jdk-tools/jstat-gccause.png)
+### -gcnew
+新生代的统计信息
+| Column | Description |
+|:- |:- |
+| S0C | 0号survivor当前容量（KB）|
+| S1C | 1号survivor当前容量（KB） |
+| S0U | 0号survivor已用容量（KB） |
+| S1U | 1号survivor已用容量（KB） |
+| TT   | 占有阈值 |
+| MTT  | 最大的占用阈值 |
+| DSS | 预期的survivor大小（KB） |
+| EC | 当前的eden空间容量（KB） |
+| EU | eden空间使用量（KB） |
+| YGC | 新生代GC次数 |
+| YGCT | 新生代GC时间 |
+![案例](附件/jdk-tools/jstat-gcnew.png)
+### -gcnewcapacity
+新生代空间大小统计数据
+| Column | Description |
+|:- |:- |
+| NGCMN | 新生代容量最小值（KB）|
+| NGCMX | 新生代容量最大值（KB） |
+| NGC | 新生代容量当前值（KB） |
+| S0CMX | 0号survivor容量最大值（KB） |
+| S0C   | 0号survivor容量当前值（KB） |
+| S1CMX  | 1号survivor容量最大值（KB） |
+| S1C | 1号survivor容量当前值（KB） |
+| ECMX | eden空间容量最大值（KB） |
+| EC | eden空间当前容量（KB） |
+| YGC | 新生代GC次数 |
+| FGC | 老生代GC次数 |
+![案例](附件/jdk-tools/jstat-gcnewcapacity.png)
+### -gcold
+老生代与元空间行为统计信息
+| Column | Description |
+|:- |:- |
+| MC | 元空间容量（KB）|
+| MU | 元空间已用（KB） |
+| CCSC | 压缩类空间容量（KB） |
+| CCSU | 压缩类空间已用容量（KB） |
+| OC   | 当前老年代空间容量（KB） |
+| OU  | 当前老年代空间已用容量（KB） |
+| YGC | 新生代GC次数 |
+| FGC | 老生代GC次数 |
+| FGCT | 老生代GC耗时 |
+| GCT | GC总耗时 |
+![案例](附件/jdk-tools/jstat-gcold.png)
+### -gcoldcapacity
+老生代大小统计
+| Column | Description |
+|:- |:- |
+| OGCMN | 老生代容量最小值（KB）|
+| OGCMX| 老生代容量最大值（KB） |
+| OGC | 当前老生代容量（KB） |
+| OC | 当前老生代空间容量（KB） |
+| YGC | 新生代GC次数 |
+| FGC | 老生代GC次数 |
+| FGCT | 老生代GC耗时 |
+| GCT | GC总耗时 |
+![案例](附件/jdk-tools/jstat-gcoldcapacity.png)
+### -gcmetacapacity
+元空间大小信息
+| Column | Description |
+|:- |:- |
+| MCMN | 元空间容量最小值（KB）|
+| MCMX| 元空间容量最大值（KB） |
+| MC | 元空间当前容量（KB） |
+| CCSMN | 压缩类空间容量最小值（KB） |
+| CCSMX | 压缩类空间容量最大值（KB） |
+| YGC | 新生代GC次数 |
+| FGC | 老生代GC次数 |
+| FGCT | 老生代GC耗时 |
+| GCT | GC总耗时 |
+![案例](附件/jdk-tools/jstat-gcmetacapacity.png)
+### -printcompilation
+java的HotSpot虚拟机编译器方法统计信息
+| Column | Description |
+|:- |:- |
+| Compiled | 最近被编译的方法的编译次数 |
+| Size| 最近被编译的方法的编译字节数 |
+| Type | 最近被编译的方法的编译的类型 |
+| Method | 最近编译的方法的类名与方法名，类名使用/分割，方法名是指定类里面的方法，输出的格式与-XX:+PrintCompilation 参数一致 |
+![案例](附件/jdk-tools/jstat-printcompilation.png)
