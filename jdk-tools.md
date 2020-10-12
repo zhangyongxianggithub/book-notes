@@ -262,3 +262,19 @@ java的HotSpot虚拟机编译器方法统计信息
 | Type | 最近被编译的方法的编译的类型 |
 | Method | 最近编译的方法的类名与方法名，类名使用/分割，方法名是指定类里面的方法，输出的格式与-XX:+PrintCompilation 参数一致 |
 ![案例](附件/jdk-tools/jstat-printcompilation.png)
+
+# jstatd
+是jstat daemon也就是jstat的后台进程，守护程序；是java虚拟机的监视器，使远程工具可以方便的访问本地的jvm进程。
+## synopsis
+jstatd [options]
+## Description
+jstatd是一个远程RMI服务器应用，可以监视本地的JVM进程的创建与销毁事件，并且提供RMI接口用于访问jvm进程的一些信息。
+jstatd要求本机上有一个RMI registry，jstatd会通过缺省端口或者指定的端口连接到RMI registry，如果此时没有RMI registry，那么jstatd会内部自己创建一个
+并连接到它。
+## Options
+- -nr jstatd不会自行创建RMI registry；
+- -p port RMI registry端口的位置，或者自己创建的registry绑定的端口；
+- -n rminame 远程RMI服务在registry中注册的名字，缺省的名字是JStatRemoteHost，如果在本机上有多个jstatd后台进程，每个后台进程可以通过这个参数指定一个唯一的名字，
+客户端工具访问jstatd的时候需要在hostid或者vmid部分指定servername；
+- Joption，传输给jstatd的jvm参数。
+## Security
