@@ -149,7 +149,91 @@ EXPLAIN的Extra列是有关于MySQL如何解析查询的额外信息，下面得
 - no matching row in const table (JSON property: message)，对于一个使用连接的查询来说，表是空的，或者经过查询条件过滤后表是空的；
 - No matching rows after partition pruning (JSON property: message)，对于DELETE与UPDATE语句来说，经过分区处理后，发现每有行需要处理；
 - No tables used (JSON property: message)，查询没有FROM子句，或者有FROM DUAL子句，对于INSERT或者REPLACE语句来说，当没有使用SELECT时，EXPLAIN会显示这个值，例如，EXPLAIN INSERT INTO t VALUES(10)会出现，因为它等价于EXPLAIN INSERT INTO t SELECT 10 FROM DUAL；
-- Not exists (JSON property: message)，
+- Not exists (JSON property: message)，MySQL能够对左连接优化，就是当它（这里没搞懂）;
+- Plan isn't ready yet (JSON property: none)，这个值通常出现在EXPLAIN_FOR_CONNECTION语句中，这是因为优化器还没有对连接中的语句创建完查询计划；
+- Range checked for each record (index map: N) (JSON property: message)，MySQL没有发现可用的索引，但是发现了一些索引在知道了前面表的列值的情况下可能会被使用到，对于每个与前面表的行组合来说，MySQL都会检查是否可以使用range或者index_merge的方式来检索行，这可能不是最快的，但是比执行没有索引的连表操作要快很多，适用的条件在8.2.1.2节 Range Optimization与8.2.1.3节 Index Merge Optimization， 索引内部是有编号的，从1开始，按照从小到大的顺序显示，index map value是一个位掩码，指出了哪些索引是候选的索引。
+- Recursive (JSON property: recursive)；
+- Rematerialize (JSON property: rematerialize)
+- Zero limit, 查询有limit 0子句，所以返回的列数是0；
+- Using where with pushed condition，只应用于NDB表；
+- Using where，使用where子句筛选返回的结果行，如果表的连接类型是ALL或者index，并且extra不是Using where，除非你真的想要检测一个表的所有的行，否则，查询可能是有问题的；
+- Using temporary，为了解析查询，MySQL需要创建一个临时表来保存结果，通常有GROUP BY与ORDER BY子句时候比较容易出现；
+- Using sort_union(...), Using union(...), Using intersect(...)，当表的连接类型是index_merge时表示具体的merge算法；
+- Using MRR，读表时使用了对个范围的读优化策略；
+- Using join buffer (Block Nested Loop), Using join buffer (Batched Key Access), Using join buffer (hash join)，
+- Using index for skip scan，扫描被忽略了；
+- Using index for group-by，与Using index类似，代表索引可以用来检索GROUP BY子句或者DISYTINCT子句返回的所有的列，不需要读取表的数据；
+- Using index condition，首先读取索引元组并检测是否需要读取全部的行，在这个模式下，索引信息可以推迟读取全部的行；
+- Using index，列的信息只需要从索引中读取，不需要读取表数据，这个策略只适用与查询使用了索引的部分列的情况，对于InnoDB来说，即使Extra这里没有显示Using index，如果连接类型是index并且key是PRIMARY时，索引也是会被使用到；
+- Using filesort，MySQL必须做一个额外的处理，以便按照指定顺序检索行，排序是通过遍历所有满足where子句的行的排序列，并存储他们与指向行的指针，然后对排序列根据值排序，按照排序列的顺序读取行；
+- unique row not found，对于一个SELECT查询来说，没有行满足主键与唯一索引列的条件；
+- Start temporary, End temporary，使用临时表做半连接；
+- Skip_open_table, Open_frm_only, Open_full_table，当查询INFORMATION_SCHEMA是优化了文件打开；
+- Select tables optimized away
+#### EXPLAIN内容解释
+从输出中的rows字段，你可以判断连接是否足够好，这可以错略的告诉你，SQL语句大约需要检测表的多少行，如果你设置了max_join_size系统变量，explain输出也能告诉你，MySQL是如何选择哪些表来连接，到哪个表终止的。
+下面的例子展示了展示了一个多表联合可以通过EXPLAIN提供的信息进行逐步的优化的，假设你有下面的SQL语句：
+>EXPLAIN SELECT tt.TicketNumber, tt.TimeIn,
+               tt.ProjectReference, tt.EstimatedShipDate,
+               tt.ActualShipDate, tt.ClientID,
+               tt.ServiceCodes, tt.RepetitiveID,
+               tt.CurrentProcess, tt.CurrentDPPerson,
+               tt.RecordVolume, tt.DPPrinted, et.COUNTRY,
+               et_1.COUNTRY, do.CUSTNAME
+        FROM tt, et, et AS et_1, do
+        WHERE tt.SubmitTime IS NULL
+          AND tt.ActualPC = et.EMPLOYID
+          AND tt.AssignedPC = et_1.EMPLOYID
+          AND tt.ClientID = do.CUSTNMBR;
+
+列的类型如下：
+| Table | Column | Data Type |
+|:-|:-|:-|
+| tt | ActualPC | CHAR(10) |
+|tt|AssignedPC|CHAR(10)|
+|tt|ClientID|CHAR(10)|
+|et|EMPLOYID|CHAR(10)|
+|do|CUSTOMER|CHAR(10)|
+
+表有下面的索引
+|Table|Index|
+|:-|:-|
+|tt|ActualPC|
+|tt|AssignedPC|
+|tt|ClientID|
+|et|EMPLOYID(主键)|
+|do|CUSTOMER(主键)|
+在优化前，EXPLAIN输出如下：
+|table|type|possible_keys|key|key_len|ref|rows|Extra|
+|:-|:-|:-|:-|:-|:-|:-|:-|
+|et|ALL|PRIMART|NULL|NULL|NULL|74|NULL|
+|do|ALL|PRIMARY|NULL|NULL|NULL|2135|NULL|
+|et_1|ALL|PRIMARY|NULL|NULL|NULL|74|NULL|
+|tt|ALL|AssignedPC,ClientID,ActualPC|NULL|NULL|NULL|3872|Range checked for each record(index map:0x23)|
+
+因为每个表的连接类型是ALL，这说明MySQL对所有的表都是生成的笛卡尔积表，这会消耗很长时间，这意味着需要检测所有表行数乘积的行数，举例来说，乘积是74\*2135\*74\*3872=45,268,558,720行。
+一个问题是，MySQL本可以使用列上（同样的类型，同样的大小）的索引更有效率的完成连接，如果VARCHAR定义的大小与CHAR一样大，算是同样的类型，tt.ActualPC是CHAR(10)类型，et.EMPLOYID是CHAR(15)类型，所以长度是不匹配的，为了解决长度上的问题，使用ALTER TABLE修改列的长度
+>ALTER TABLE tt MODIFY ActualPC VARCHAR(15);
+
+现在一样长了，使用呢EXPLAIN再次看下优化的效果
+|table|type|possible_keys|key|key_len|ref|rows|Extra|
+|:-|:-|:-|:-|:-|:-|:-|:-|
+|tt|ALL|AssignedPC,ClientPC,ActualPC|NULL|NULL|NULL|3872|Using where|
+|do|ALL|PRIMARY|NULL|NULL|NULL|2135|Range checked for each record (index map: 0x1)|
+|et_1|ALL|PRIMARY|NULL|NULL|NULL|74|Range checked for each record (index map: 0x1)|
+|et|eq_ref|PRIMARY|PRIMARY|15|tt.ACtualPV|1|NULL|NULL|
+
+还可以优化，这样不是最完美的，et的函数远远小于上一次的值，这个SQL执行需要好几秒，第二步的优化还是长度不匹配的问题
+>ALTER TABLE tt MODIFY AssignedPC VARCHAR(15),
+                      MODIFY ClientID   VARCHAR(15);
+
+然后再次查看查询计划：
+|table|type|possible_keys|key|key_len|ref|rows|Extra|
+|:-|:-|:-|:-|:-|:-|:-|:-|
+|tt|ALL|AssignedPC,ClientPC,ActualPC|NULL|NULL|NULL|3872|Using where|
+|do|ALL|PRIMARY|NULL|NULL|NULL|2135|Range checked for each record (index map: 0x1)|
+|et_1|ALL|PRIMARY|NULL|NULL|NULL|74|Range checked for each record (index map: 0x1)|
+|et|ALL|PRIMARY|NULL|NULL|NULL|1|NULL|NULL|
 ### 8.8.3 扩展的EXPLAIN输出
 ### 8.8.4 获取一个有名字的连接的查询计划信息
 ### 8.8.5 估算查询性能
