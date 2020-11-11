@@ -230,10 +230,14 @@ EXPLAIN的Extra列是有关于MySQL如何解析查询的额外信息，下面得
 然后再次查看查询计划：
 |table|type|possible_keys|key|key_len|ref|rows|Extra|
 |:-|:-|:-|:-|:-|:-|:-|:-|
-|tt|ALL|AssignedPC,ClientPC,ActualPC|NULL|NULL|NULL|3872|Using where|
-|do|ALL|PRIMARY|NULL|NULL|NULL|2135|Range checked for each record (index map: 0x1)|
-|et_1|ALL|PRIMARY|NULL|NULL|NULL|74|Range checked for each record (index map: 0x1)|
-|et|ALL|PRIMARY|NULL|NULL|NULL|1|NULL|NULL|
+|et|ALL|PRIMARY|NULL|NULL|NULL|74|NULL|
+|tt|ref|AssignedPC,ClientID,ActualPC|ActualPC|15|et,EMPLOYID|52|Using where|
+|et_1|eq_ref|PRIMARY|PRIMARY|15|tt.AssignedPC|1|NULL|
+|do|eq_ref|PRIMARY|PRIMARY|15|tt.ClientId|1|NULL|
+
+查询已经优化的比较好了。
 ### 8.8.3 扩展的EXPLAIN输出
+EXPLAIN在标准输出之外，也会产生额外的信息，可以通过在EXPLAIN语句之后输入SHOWWARNINGS指令得到，MySQL8.0.12版本之后，SELECT、DELETE、INSERT、REPLACE、UPDATE语句有扩展信息，之前的版本只有SELECT语句才有扩展信息。
+扩展输出中的Message列
 ### 8.8.4 获取一个有名字的连接的查询计划信息
 ### 8.8.5 估算查询性能
