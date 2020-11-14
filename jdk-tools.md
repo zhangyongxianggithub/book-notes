@@ -296,5 +296,32 @@ jstatd会自己安装一个RMISecurityPolicy的实例，这个实例需要一个
 还可以自己指定更严格的安全策略，如果无法很好的配置安全策略，最安全就是只在本地运行jstat与jps而不是网络。
 
 ## Remote Interface
+通过jstatd提供的接口是专有的，受保护的，不建议用户与开发者修改接口定义；
+## Examples
+下面是一些jstatd的例子，jstatd自动启动后台服务器
+- 内部RMI Registry，使用缺省端口1099
 
+    ```bash
+    jstatd -J-Djava.security.policy=all.policy
+    ```
+- 外部RMI Registry
+    ```bash
+    rmiregistry & jstatd -J-Djava.security.policy=all.policy
+    ```
+- 外部RMI Registry，使用端口号2020
+    ```bash
+    rmiregistry 2020 & jstatd -J-Djava.security.policy=all.policy -p 2020
+    ```
+- 外部RMI Registry，使用端口号2020，绑定到AlternateJstatdServerName服务
+    ```bash
+    rmiregistry 2020 & jstatd -J-Djava.security.policy=all.policy -p 2020 -n AlternateJstatdServerName
+    ```
+- 不创建RMI Registry，绑定到已有的Registry，如果没找到，则报错
+    ```bash
+    jstatd -J-Djava.security.policy=all.policy -nr
+    ```
+- 开启RMI日志记录用于监控服务器活动
+    ```bash
+    jstatd -J-Djava.security.policy=all.policy -J-Djava.rmi.server..logCalls=true
+    ```
 
