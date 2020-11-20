@@ -21,3 +21,30 @@ jinfo命令主要的作用是输出JVM进程的配置信息，也可以输出cor
 - -sysprops，打印java系统属性；
 - -h 打印帮助信息；
 - --help 打印帮助信息。
+
+# jhat
+用于分析堆内存的命令
+## 语法
+jhat [options] heap-dump-file
+- options，命令行选项；
+- heap-dump-file，二进制堆的转储文件，对于一个包含多个堆转储的文件来说，可以在文件后面加上#<number>指定分析哪个堆；
+## 描述
+jhat命令分析堆转储文件，并启动一个web服务器，可以用浏览器查看堆内容，jhat命令支持OQL（object query language）查询语言，有点类似SQL，jhat命令会生成OQL帮助，在缺省端口下，路径是http://localhost:7000/oqlhelp
+
+生成java堆转储文件的办法如下：
+- 使用jmap -dump获取运行时的堆转储；
+- 使用jconsole通过HotSpotDiagnosticMXBean获取堆转储；
+- 当虚拟机指定了-XX:+HeapDumpOnOutOfMemoryError选项时，发生了OOM就会自动生成堆转储文件；
+- 使用hprof命令；
+## 选项
+- -stack false｜true，是否开启追踪对象调用栈；
+- -refs false|true，是否追踪对象的引用；
+- -port port-number，指定jhat的http服务器的端口；
+- -exclude exculde-file，排除文件，里面定义了需要排除调的对象成员；
+- -baseline exclude-file，指定一个基线堆文件，用来比较，如果对象出现在2个堆中，则是旧对象，而如果没出现在基线堆中，则是新的对象；
+- -debug int，设置debug级别，级别越高，输出的debug信息就越多；
+- -version jhat版本；
+- -h 显示帮助信息；
+- -help，同-h；
+- -Jflag，向运行jhat命令的JVM进程传入JVM选项标识，比如-J-Xmx512m 设置最大的堆大小是512MB。
+# jmap
