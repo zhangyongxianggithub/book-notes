@@ -69,6 +69,38 @@ jmap命令打印JVM进程/core file/远程debug服务器的共享对象内存映
 - -F force 强制；
 - -h 打印帮助信息；
 - -help 同-h；
-= -Jflag jmap运行的JVM用到的参数。
+- -Jflag jmap运行的JVM用到的参数。
 
+# jsadebugd
+附加到一个JVM进程上，作为一个debug服务器存在。
+## 语法
+jsadebugd pid [server-id]
+jsadebugd executable core [server-id]
+- pid JVM进程ID，一个JVM进程最多只能附加一个debug server；
+- executable java可执行程序；
+- core 核心文件；
+- server-id 当在一个机器上，有多个debug server时，用来标识的ID，是唯一的；
+## 描述
+jsadebugd命令附加到一个JVM进程上并且启动一个debug服务器，远程的客户端比如jstack、jmap、jinfo可以通过RMI连接到这个服务，在启动jsadebugd命令前，启动一个RMI注册中心
+> rmiregistry -J-Xbootclasspath/p:$JAVA_HOME/lib/sajdi.jar
+如果没有可用的RMI注册中心，jsadebugd就会自己启动一个。
 
+# jstack
+打印java进程的线程栈信息
+## 语法
+jstack [options] pid
+jstack [options] executable core
+jstack [options] [server-id@]remote-hostname-or-IP
+- options 命令行选项
+- pid JVM进程ID；
+- executable java可执行程序；
+- core core文件
+- remote-hostname-or-IP 主机名字或者IP地址；
+- server-id 服务器ID
+## 描述
+jstack打印一个JVM进程/corefile/debug服务器的线程栈痕迹，对于每个java的方法帧来说，会打印类的限定名、方法名、字节码索引、行号；当指定-m选项时，jstack命令会打印java方法帧与本地方法帧。
+## 选项
+- -F 强制一个无响应的jstack打印栈转储信息；
+- -l 列出更相信的信息；
+- -m 打印混合的栈帧信息（java & 本地）
+- -h/-help 打印帮助信息
