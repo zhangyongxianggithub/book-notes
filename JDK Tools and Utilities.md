@@ -173,10 +173,73 @@ jar是一个多用途的归档与压测工具，基于ZIP压缩算法与ZLIB压�
 - x, 从JAR归档文件中提取文件。
 ### 命令行选项
 使用下面的选项定制JAR文件如何创建、更新、提取与查看。
-- e, 
+- e, 设置一个Java应用的入口点类，这个选项会创建或者更新清单文件中的Main-Class属性，在创建(c)或者更新(u)JAR文件中可用；比如，下面的命令创建了一个Ji奥做Main.jar的归档文件，Main.jar中包含Main.class文件，并且清单文件中的Main-Class属性被设置为Main。
+>jar cfe Main.jar Main Main.class
 
+java运行时环境（JRE）可以直接运行这个应用
+>java -jar Main.jar
 
+如果入口类在一个包中，然后，可以用点号与斜线作为分隔符来分隔包的名字，比如，如果Main.class在一个叫做mydir的包下，然后入口可以使用下面的2种形式之一指定：
+>jar -cfe Main.jar mydir/Main mydir/Main.class
+>jar -cfe Main.jar mydir/Main mydir/Main/class
 
+注意：同时指定m与e选项时，如果清单文件已经包含了Main-Class属性，这会导致Main-class指定的混乱，这种混乱会导致错误，整个命令运行终止。
+
+- f 设置生成的Jar文件的名字，通过jarfile标识符指定，如果没有f选项，jarfile名字来自于stdin，或者把jar文件的内容输出到stdout；
+- m 从标识符manifest文件中取出名字/值对包含到jar文件的清单内，位置在归档文件中的META-INF/MANIFEST.MF文件内，jar命令把键值对田间到文件清单中，除非键值对已经在文件清单中存在，在这种情况下，jar命令更新属性的值，m选项可以用在c/u归档文件时；你可以添加特定目的的键值对属性到清单文件中，清单文件只缺省保留通用的属性。
+- M 禁止创建清单文件，或者删除已经存在的清单文件；
+- n 当创建JAR文件时，这个选项对归档文件执行归一化操作，以便，让内容不受命令pack200的打包与解包影响，没有这个归一化操作，签名的JAR是无效的；
+- v 生成冗余的运行信息到标准输出；
+- 0 不使用ZIP压缩算法创建/更新JAR文件。
+- -C dir 当创建或者更新JAR文件时，这个选项会指定jar命令临时切换目录到指定的目录下，然后处理file标识符指定的文件，这个操作有点类似于tar命令的-C选项，比如，下面的命令切换到classes目录，并且添加Bar.class文件到my.jar中：
+>jar uf my.jar -C classes Bar.class
+
+下面的命令切换到classes目录中，并且把目录中的全部内容都添加到my.jar中，然后切换回原目录，在切换到bin目录添加Xyz.class文件
+>jar uf my.jar -C classes . -C bin Zyx.class
+
+如果classes目录中包含bar1文件与bar2文件，JAR文件最终会包含下面的内容
+>% jar tf my.jar
+META-INF/
+META_INF/MANIFEST.MF
+bar1
+bar2
+Xyz.class
+- -Joption 设置JRE运行JAR文件使用的JVM选项，JVM选项在java命令参考页内， 比如，-J-Xms48m设置初始内存是48m；
+### 操作数
+jar命令可以识别下面的操作数
+- file，当创建或者更新一个JAR文件时，*file*操作数是应该被加到归档文件内的文件路径或者目录路径，当解压缩或者列出归档文件的内容时，*file*操作数则是归档文件的路径，必须指定一个有效的文件或者目录路径，使用空格隔开多个多个文件或者目录，如果指定了*entrypoint*，*jarfile*，*manifest*参数时，*file*操作数必须在他们之后指定；
+- entrypoint，当创建或者更新一个JAR文件时，*entrypoint*操作数用于指定一个可执行的JAR文件的入口类，如果指定了e选项，则必须指定*entrypoint*
+- jarfile，指定一个文件路径，这个文件就是要被创建、更新、提取、查看的jar文件路径地址，当出现了f选项时，必须指定*jarfile*选项，如果没有指定f选项与*jarfile*那么jar命令会总从stdin读取jar文件名字（提取或者查看），或者输出jar文件内容到stdout（创建或者更新）；
+- manifest，当创建或者更新一个JAR文件时，*manifest*操作数指定一个早已存在的mainfest文件路径，mainfest文件中的内容会出现在MANIFEST.MF中；
+- @arg-file，为了缩短与简化jar命令，你可以把参数与选项写到文件里面，使用@file方式导入文件内容为参数列表，文件内的内容可以是所有的jar命令的命令行选项与参数，除了-J类参数以外，因为这些参数是被传输到JVM启动器的，不支持参数文件，文件中参数可以通过空格或者换行符隔开，文件路径是jar命令运行的时的目录的相对路径。
+### 例子
+![归档当前目录下的所有的文件](附件/jdk-tools/jar-add-allfiles.png)
+## java
+用于启动一个java程序
+### 语法
+java [options] classname [args]
+java [options] -jar filename [args]
+- options，空格分开的命令行选项
+- classname，启动的class名字
+- filename，jar文件名字；
+- args 通过空格分割的传给main()方法的参数；
+### 描述
+java命令用于启动java应用，它是通过启动一个JRE来启动java应用的，启动JRE后，加载特定的的入口类，然后调用类中的main()方法，这个方法必须是public与static的，并且不能有返回值，必须有一个String数组作为方法的参数，方法的生命如下：
+`public static void main(String[] args)`
+java命令可以用来启动一个JavaFX应用，JavaFX应用入口累除了有main方法外，也可以通过继承`javafx.application.Application`实现，在后面的场景中，启动器会构造一个Application类的实例，调用它的init()方法，然后调用start(javafx.stage.Stage)方法；缺省情况下，第一个不是java命令行选项的内容是入口类的限定名或者jar文件的路径；JRE在3类地址中寻找基础环境需要的启动（基础）类或者其他应用程序甬道哦的类：
+- 启动类classpath；
+- 扩展类classpath；
+- 用户的classpath；
+### 命令行选项
+java命令支持非常多的命令行选项，分为以下几个类别。为了记录最新的版本中有哪些命令行选项被废弃或者移除，文档的末尾有以小结记录了变化；boolean类型的命令行选项用来开启/关闭特性，不需要参数值，Boolean类型的-XX选项使用+标记开启特性(-XX:+OptionName)与-号标记关闭特性(-XX:-OptionName);对于需要·参数的命令行选项来说，参数值与命令行选项通过空格、冒号或者等号分隔，或者直接写到命令行选项的后面，如果参数值涉及指定bytes的大小，可以在大小的后面加上k或者K(KB)、m或者M（MB）、g或者G（GB）也可以什么也不加，什么都不加表示的就是byte的大小；如果参数值涉及到百分比，使用从0到1之间的小数表示。
+#### 标准命令行选项（standard options）
+标准命令行选项是标准规范，任何JVM的实现都必须支持，他们定义了通用的行为，比如检测JRE的版本，设置classpath，开启冗余输出等等；
+- -agentlib:libname[=options]
+#### 非标准命令行选项(Non-Standard options)
+非标准命令行选项只是HotSpot虚拟机特有的一些选项，是可以变更的，这些选项以-X开头
+#### 高级的运行时命令行选贤
+高级运行时命令行选项不建议随便使用，通常都是开发者使用的选项，这些选项通常都是用来调节HotSpot JVM的特定区域的操作，这种调节通常因为有着特定的系统需求，并且需要有权限访问系统配置参数，他们也不是规范要求的参数，也是可以变更的，这类选项以-XX开头；
+#### 高级JIT编译器选项
 
 
 
