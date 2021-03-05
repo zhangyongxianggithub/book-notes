@@ -5,7 +5,6 @@
 mysql> SELECT CONCAT(2,' test');
         -> '2 test'
 
-
 # 12.11 类型转换函数与操作符
 主要是3个操作符与函数：
 - BINARY，把一个字符串转换为一个二进制字符串；CONVERT()函数可以通过USING子句转换数据的字符集编码，
