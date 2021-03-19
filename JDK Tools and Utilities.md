@@ -234,11 +234,84 @@ java命令可以用来启动一个JavaFX应用，JavaFX应用入口累除了有m
 java命令支持非常多的命令行选项，分为以下几个类别。为了记录最新的版本中有哪些命令行选项被废弃或者移除，文档的末尾有以小结记录了变化；boolean类型的命令行选项用来开启/关闭特性，不需要参数值，Boolean类型的-XX选项使用+标记开启特性(-XX:+OptionName)与-号标记关闭特性(-XX:-OptionName);对于需要·参数的命令行选项来说，参数值与命令行选项通过空格、冒号或者等号分隔，或者直接写到命令行选项的后面，如果参数值涉及指定bytes的大小，可以在大小的后面加上k或者K(KB)、m或者M（MB）、g或者G（GB）也可以什么也不加，什么都不加表示的就是byte的大小；如果参数值涉及到百分比，使用从0到1之间的小数表示。
 #### 标准命令行选项（standard options）
 标准命令行选项是标准规范，任何JVM的实现都必须支持，他们定义了通用的行为，比如检测JRE的版本，设置classpath，开启冗余输出等等；
-- -agentlib:libname[=options]
+- -agentlib:libname[=options],加载指定的本地库，在库名字后面，可以指定逗号分隔的选项列表；如果指定了`-agentlib:foo`，JVM会尝试在LD_LIBRARY_PATH环境变量指定的目录下加载名叫libfoo.so的本地库，下面的列子是加载堆profiling库`-agentlib:hprof=cpu=samples,interval=20,depth=3`,下面的例子展示了如何加载Java Debug Protocol库，并且监听8000端口`-agentlib:jdwp=transport=dt_socket,server=y,address=8000`；
+- -agentpath:pathname[=options],加载通过绝对路径指定的本地库,这个命令行选项与-agentlib是相同的，区别是需要全路径以及文件名；
+- -client， 选择客户端版本的Java HotSpot VM，64bit的JDK会忽略这个选项，使用服务器版本的JVM；
+- —Dproperty=value,设置一个系统内属性，属性名不能有空白字符，属性值如果有空白字符，需要用双引号包围；
+- -d32，在32位环境中运行应用，如果不支持32位运行环境会报错，缺省情况下，程序都是运行在32bit环境下的，除非系统内是64bit，才会运行在64bit环境下；
+- -d64,在64位环境下运行应用，如果不支持运行64位应用会报错，当前的版本只有服务器版本的HotSpot虚拟机支持64bit，-server选项隐含的包含-d64选项的功能；
+- -diableassertions[:[packagename]...|:classname]
+- -da[:[packagename]...|:classname],禁用断言，如果不指定任何的参数，所有包的所有类的断言都不会被禁止，当指定了packagename与...后，开关只会禁止指定包与其子包下的断言，如果指定了classname，开关会禁止指定类的断言，-diableassertions会应用到所有的类加载器与系统类上，但是如果没有指定包/类参数的时候，这个选项不会禁止系统类的断言，为了明确的开启特定包/类的断言，使用`-enableassertions`命令行选项，2个命令行选项可以同时使用；
+- -disablesystemassertions
+- -dsa, 禁用系统类断言；
+- -enableassertions[:[packagename]...|:classname]
+- -ea[:[packagename]...|:classname],启用断言，缺省断言都是没有开启的，当没有指定包/类的参数时，-ea会启用所有包/类的断言，当指定了packagename...时，这个开关会开启包及其子包的断言，如果参数只是简单的..., 则会开启当前工作目录下的所有类的断言，当指定类时，只会开启指定类的断言；-ea可以应用到所有的类加载器与系统类，但是如果没指定任何参数时，不会应用到系统类，为了明确禁用特定包或类的断言，使用`-disableassertions`命令行选项；
+- -enablesystemassertions
+- -esa，开启系统类的断言；
+- -help
+- -?,显示java命令的用法；
+- -jar filename，执行封装在JAR文件的java应用，file必须是一个包含的清单列表中必须有`Main-Class:classname`属性的jar文件，这个属性定义了java程序的入口点，所以这个属性指定的类必须符合java程序入口的规范；当你使用-jar命令行选项时，JAR文件包含了所有的用户类，其他的用户类路径设置会被忽略；
+- -javaagent:jarpath[=options],加载指定的java程序语言agent；
+- -jre-restrict-search，在版本搜索时包含用户私有的JRE；
+- -no-jre-restrict-search,在版本搜索时排除用户私有的JRE；
+- -server，选择服务器版本的HotSpot虚拟机；
+- -showversion，列出java的版本信息，然后继续执行应用，等价与-verison命令行，但是显示完，不会终止JVM；
+- -splash:imgname, 在屏幕上展示imgname指定的图片文件；
+- -verbose:gc, 显示每次发生GC事件时的详细信息；
+- -verboseL:jni，显示详细的本地方法调用信息或者其他的JNI活动；
+- -version，打印版本信息；
+- -version:release,指定运行应用使用的发布版本，如果没有找到指定的版本，会使用一个最合适的版本；*release*可以指定一个确切的版本或者由空格分隔的版本列表，版本号名字类似下面的格式`1.x.0_u`(这里x是主版本号，u是更新版本号)，指定版本范围的时候通过在版本号后面加上+号指定当前版本号之后的版本，可以使用*号指定模式匹配的版本号；可以通过OR或者AND（&）的逻辑关系组织版本号。
 #### 非标准命令行选项(Non-Standard options)
-非标准命令行选项只是HotSpot虚拟机特有的一些选项，是可以变更的，这些选项以-X开头
+非标准命令行选项只是HotSpot虚拟机特有的一些选项，是可以变更的，这些选项以-X开头。
+- -X 显示所有的可用的-X命令行选项；
+- -Xbatch 禁用后台编译，缺省情况下，JVM启动后台任务编译方法，直到后台编译完成后使用解释器模式运行方法，-Xbatch禁用后台任务后，方法编译变成了前台任务；
+- -Xbootclasspath:path 指定搜索系统启动类的路径、JAR文件或者ZIP文件地址，这些路径通过冒号分割；这些路径中启动类代替了JDK中的启动类，但是不要覆盖rt.jar中的类，这违反了JRE代码证书；
+- -Xbootclasspath/a:path 指定冒号分隔的路径，JAR/ZIP路径，追加到缺省的启动类加载路径后面；
+- -Xbootclasspath/p:path  指定冒号分隔的路径，JAR/ZIP路径，添加到缺省的启动类加载路径前面；
+- -Xcheck:jni JNI函数执行额外的检查，特别是需要检查传递给JNI函数的参数还要在处理JNI请求前检查运行环境数据，碰到的任何无效数据都指明了本地代码的一个问题，JVM在这样的案例中，会不可恢复的终止运行，这个选项会带来性能下降；
+- -Xcomp 在第一次方法调用时强制编译方法，缺省情况下，虚拟机会通过解释执行的方式调用方法来收集一些可帮助编译的信息，客户端模式的虚拟机会执行1000次解释的方法调用后才会编译，服务端模式的虚拟机会执行10000次后才开始编译，指定-Xcomp后，方法第一次调用就会执行编译，这样的代价是损失了一些编译的效率；
+- -Xdebug 什么也不做，提供向后兼容性；
+- -Xdiag 显示额外的诊断信息；
+- -Xfuture 开启严格的类文件格式检查;
+- -Xint 只使用解释的方式运行代码，禁止编译为本地代码，所有的字节码都解释执行，不会使用JIT的方式优化性能；
+- -Xinternalversion 比-version显示更多的细节信息；
+- -Xloggc:filename 设置GC日志信息输出到文件;
+- -Xmaxjitcodesize=size 指定JIT编译代码时的最大代码缓存大小，默认是byte大小，使用k、m等指定大小的单元，默认的大小是240m，如果你指定了- - -XX:-TieredCompilation参数，则默认的大小是48m，这个参数等价于-XX:ReservedCodeCacheSize;
+- -Xmixed 热点方法编译为本地代码执行，而不是解释执行；
+- -Xmn[size] 设置新生代堆的初始与最大大小，堆中的年轻代区域是用来创建新对象的，新生代会更频繁的执行GC，如果新生代设置的太小的话，则会频繁的执行minorGC，如果设置的太大的话，只有fullGC会执行而且会执行很长时间，Oracle官方建议新生代的大小设置为整个堆的1/2与1/4之间；这个命令既设置了新生代的初始值也设置的最大值，-XX:NewSize只设置初始值，-XX:MaxNewSize会设置最大值；
+- -Xms[size] 设置堆的初始大小，这个值必须是1024的倍数，并且大于1M，默认是byte大小，使用k,m等改变单位，如果你没有设置这个选项的话，初始的大小会是新生代+老生代大小的和；
+- -Xmx[size] 指定内存分配池的最大大小，这个值必须是1024的倍数，并且大于2m，后面通过k,m,g的方式指定单元；缺省值根据运行时的系统配置·决定，对于服务端应用来说，-Xms与Xmx通常一样，-Xmx与-XX:MaxHeapSize命令行选项一样；
+- -Xnoclassgc 禁止class的GC操作，这可以节省一些GC时间，可以减少程序运行的中断时间；当你在启动时指定-Xnoclassgc时，程序中的class对象在GC期间是忽略的，此时认为他们应该是一直存活的，这会造成很多内存会被永久性的占用，如果持续增加，可能会造成OOM；
+- -Xprof 简要描述要运行的程序，并且发送描述数据到标准输出，这个命令行选项主要用在程序部署上；
+- -Xrs 减少JVM对操作系统信号的响应，即使JVM突然终止，JVM也可以通过在关闭钩子中运行用户清除代码来有序的关闭Java应用程序；意外终止时，JVM捕捉信号执行关闭钩子脚本，JVM捕捉到SIGHUP、SIGINT、SIGTERM信号时会执行关闭钩子执行；JVM使用类似的机制来实现转储线程堆栈的功能，以进行调试；JVM捕捉到SIGQUIT信号时转储线程堆栈，嵌入JVM的应用程序需要频繁的捕获类似SIGINT、SIHGTERM的信号，捕获的信号会与已经运行的信号处理程序冲突，-Xrs命令行选项可以用来解决这个问题，当指定-Xrs命令行选项时，JVM不会修改SIGINT、SIGTERM、SIGHUP的信号掩码，这些信号的信号处理器不会被安装；指定-Xrs后会带来2个后果：
+   - SIGQUIT线程转储不可用；
+   - 用户负责触发关闭钩子脚本执行，比如执行System.exit();
+- -Xshare:mode 设置类数据共享模式（CDS），mode模式包含如下几种：
+   - auto 尽可能的共享类数据，这是客户端的HotSpot 32位虚拟机的默认值；
+   - on 强制使用类数据共享，如果使用不了则打印错误信息；
+   - off 不使用类数据共享，这是服务端的32位HotSpot虚拟机，64位客户端/服务端虚拟机的默认值；
+   - dump 人工生成CDS归档文件；
+
+- -XshowSettings:category 展示java的设置信息并继续，category的值可能是如下：
+   - all 显示所有种类的设置信息，这是默认值；
+   - locale 显示跟区域设置相关的信息；
+   - properties 显示与系统属性相关的信息；
+   - vm 显示JVM的设置；
+- -Xss[size] 设置线程栈大小(byte),不同平台的缺省值大小不同大部分是320KB，一部分是1024KB，这个选项等价于-XX:ThreadStackSize
+- -Xusealtsigs 使用替代信号代替SIGUSR1与SIGUSR2作为JVM的内部信号，这个选项等价于-XX:+UseAltSigs
+- -Xverify:mode 设置字节码校验的模式，字节码校验主要验证类文件的格式。关闭验证风险很大，由于加载了非法的class文件，可能会出现问题。mode的值可能是以下几种：
+  - remote 验证不是有根加载器加载的字节码文件，这是缺省的模式；
+  - all 开启全面验证；
+  - none 不验证。
 #### 高级的运行时命令行选贤
 高级运行时命令行选项不建议随便使用，通常都是开发者使用的选项，这些选项通常都是用来调节HotSpot JVM的特定区域的操作，这种调节通常因为有着特定的系统需求，并且需要有权限访问系统配置参数，他们也不是规范要求的参数，也是可以变更的，这类选项以-XX开头；
+- -XX:+CheckEndorsedAndExtDirs 开启这个选项后，java命令不能运行使用了包升级覆盖机制与扩展机制的Java应用，这个选项会检测以下的条件：
+    - java.ext.dirs与java.endorsed.dirs系统属性是否被设置；
+    - lib/endorsed 目录存在并且不是空的；
+    - lib/ext 目录含有不是JDK内置的JAR文件；
+    - 系统范围的扩展目录是否含有JAR文件。
+- -XX:+DisableAttachMechanism 开启这个选项后，禁止JVM加载tools，缺省情况下，是不禁用的，所以，你可以使用jcmd、jstack、jmap、jinfo等命令；
+- -XX:ErrorFile=filename 
 #### 高级JIT编译器选项
 
 
