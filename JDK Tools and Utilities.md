@@ -311,7 +311,13 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
     - lib/ext 目录含有不是JDK内置的JAR文件；
     - 系统范围的扩展目录是否含有JAR文件。
 - -XX:+DisableAttachMechanism 开启这个选项后，禁止JVM加载tools，缺省情况下，是不禁用的，所以，你可以使用jcmd、jstack、jmap、jinfo等命令；
-- -XX:ErrorFile=filename 
+- -XX:ErrorFile=[filename] 指定无法恢复的错误发生时日志写入的文件路径，缺省情况下，会在当前的工作目录下创建一个名字类似hs_err_pid[pid].log的文件，这里pid是发生错误的进程ID，下面是一个设置的例子
+>-XX:ErrorFile=./hs_error_pid%p.log 
+使用进程号，通过%p指定；如果文件因为权限问题或者空间问题等原因无法创建时，会到操作系统的临时目录空间创建这个文件，大多数操作系统的临时目录是/tmp
+- -XX:+FailOverToOldVerifier 不知道说了啥；
+- -XX:+FlightRecorder 开启JFR（Java Flight Recorder）的使用，这是一个商业特性，通常与-XX:+UnlockCommercialFeatures选项联合使用，
+- -XX:FlightRecorderOptions=[parameter=value] 设置控制JFR功能的参数；
+- -XX:LargePageSizeInBytes=[size] 设置堆中的大页的最大的大小，
 #### 高级JIT编译器选项
 
 
