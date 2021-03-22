@@ -317,9 +317,58 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 - -XX:+FailOverToOldVerifier 不知道说了啥；
 - -XX:+FlightRecorder 开启JFR（Java Flight Recorder）的使用，这是一个商业特性，通常与-XX:+UnlockCommercialFeatures选项联合使用，
 - -XX:FlightRecorderOptions=[parameter=value] 设置控制JFR功能的参数；
-- -XX:LargePageSizeInBytes=[size] 设置堆中的大页的最大的大小，
+- -XX:LargePageSizeInBytes=[size] 设置堆中的大页的最大的大小，0表示JVM自动选择一个大小；
+- -XX:MaxDirectMemorySize=[size] 设置非阻塞IO分配的直接buffer内存的最大大小，0表示JVM会自动选择一个值；
+- -XX:NativeMemoryTracking=[mode] 指定追踪JVM本地内存使用情况的模式，mode有以下几种：
+   - off 不要记录JVM本地内存的使用情况，这是缺省的行为；
+   - summary 只记录JVM子系统的本地内存使用情况，子系统比如java堆、class、代码或者线程；
+   - detail 包含summary的情况，还会记录CallSite、虚拟内存区域的使用情况；
+- -XX:ObjectAlignmentInBytes=[alignment] 设置对象的内存对齐方式，缺省情况下是8字节，指定的值必须是2的幂，且在8～256之间，这样可以在java堆比较大的情况下使用压缩指针技术，如果这个值变大，那么对象之间的无用空间也会变多，使用压缩指针此时看起来也没什么益处了；
+- -XX:OnError=[string] 当一个无法恢复的错误发生时，运行执行的命令或者分号分隔的多个命令；如果命令包含空格，则命令必须使用引号包起来；
+- -XX:OnOutOfMemoryError=[string] 与上面命令的含义一样，只是这个只有在OutOfMemoryError时才会触发；
+- -XX:+PerfDataSaveToFile 如果开启这个选项后，Java程序结束时会保存jstat的信息，保存在一个名字类似于hsperfdata_<pid>的文件中，使用jstat命令可以查看这个文件中的内容；
+- -XX:-PreferContainerQuotaForCPUCount 如果设置为true，基于CPU的CFS配额（Completely Fair Scheduler）值计算容器CPU的可用性，如果是false，则使用CPU共享值，虚拟机根据可用性计算可用的核的数量。
+- -XX:+PrintCommandLineFlags 打印出现在命令行上的JVM Flags；
+- -XX:+PrintContainerInfo 打印容器的一些信息，比如：
+   - cpuset.cpus:假设是多核CPU，信息是容器使用的CPU的序号，可以是逗号分隔或者使用-指定范围的序号；
+   - cpuset.mems:与上面一样，这是指定使用的内存的序号；
+   - CPU Shares:进程可用的CPU核数；
+   - CPU Quota: 时间片的毫秒数；
+   - CPU Period:CPU在使用完全公平调度器时的调度周期；
+   - OSContainer::active_processor_count: 虚拟机使用的活跃CPU核心数的数量；
+   - Memory Limit:容器可以使用的最大内存大小；
+   - Memory Soft Limit: 容器应该使用的最大内存大小，比上面的值小；
+   - Memory Usage:进程已经使用的内存量；
+   - Maximum Memory Usage: 进程使用的内存的最大大小；
+- -XX:+PrintNMTStatistics 在JVM终止时，打印本地内存的使用情况，前提是必须开启了本地内存追踪（-XX:NativeMemoryTracking）,缺省情况下，这个选项时关闭的，不会打印本地内存使用的记录数据；
+- -XX:+RelaxAccessControlCheck 减少字节码验证器的访问控制检查的次数，缺省情况下，这个选项时关闭的，并且当验证较新版本的字节码时，会被忽略；
+- -XX:+ResourceManagement 启用资源管理器，这是一个商业特性，必须开启商业特性后使用；
+- -XX:ResourceManagementSampleInterval=*value*(milliseconds) 设置资源管理器评测的采样时间间隔，只有在启用资源管理器的情况下可用；
+- -XX:SharedArchiveFile=*path* 共享类的归档文件路径；
+- -XX:SharedClassListFile=*file_name* 指定一个文本文件，里面包含CDS归档文件中的类名，文件的结构是：每行就是写一个类名，使用/代替.;
+- -XX:+ShowMessageBoxOnError 当JVM碰到一个无法恢复的错误时，展示一个对话窗口，这会导致JVM不会终止，使JVM进程处于活动状态，这样可以使用一个调试器链接到这个进程上来查看这个错误的原因，缺省情况下，这个选项时关闭的；
+- -XX:StartFlightRecording=*parameter=value* 开启Java应用的JFR记录，这是一个商业特性，与JFR.start命令等价；
+- -XX:ThreadStackSize=*size* 设置线程栈的大小，等价与-Xss命令行；
+- -XX:+TraceClassLoading 记录类加载的过程；
+- -XX:+TraceClassLoadingPreorder 以类被引用的顺序记录类加载的过程；
+- -XX:+TraceClassResolution 记录常量池的变化；
+- -XX:+TraceClassUnloading 记录类的卸载过程；
+- -XX:+TraceLoaderConstraints 加载器限制记录；
+- -XX:+UnlockCommercialFeatures 开启商业特性
+- -XX:+UseAltSigs 使用替代信号；
+- -XX:+UseAppCDS 开启应用类数据共享；
+- -XX:+UseBiasedLocking 禁止使用偏向锁，在启用了此标志的情况下，某些具有大量无竞争的同步的应用程序可能会实现显着的加速；
+- -XX:-UseCompressedOops 禁止使用压缩指针，缺省情况下，当java堆大小小于32GB时，是可以使用压缩指针的，当禁止使用时，对象引用使用32bit的地址代替64bit的地址，这样能提升性能，这个选项只有在64bit的JVM上工作；
+- -XX:-UseContianerSupport 虚拟机提供自动化的容器检测功能，这意味着，虚拟机会可以检测到docker中的Java进程可用的内存与CPU核数，使用这些信息来分配系统资源，这个选项只在Linux X64平台下，有效；
+- -XX:+UseHugeTLBFS 在linux系统上等价于-XX:+UseLargePages；
+- -XX:+UseLargePages 启用大页内存
+- -XX:+UseMembar 开启线程状态变化时的内存屏障；
+- -XX:+UsePerfData 开启perfdata特性，缺省情况下，这个特性是开启的，这样JVM可以监控与做性能测试；
+- -XX:+UseTransparentHugePages 在Linux系统内上，使用能动态扩缩容的大页，开启后可能会碰到性能问题；
+- -XX:+AllowUserSignalHandlers 允许应用安装信号处理器；
 #### 高级JIT编译器选项
-
+下面的选项控制动态JIT编译
+- -XX:+AggressiveOpts 
 
 
 
