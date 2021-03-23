@@ -369,7 +369,9 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 #### 高级JIT编译器选项
 下面的选项控制动态JIT编译
 - -XX:+AggressiveOpts 开启强力性能优化，在将来的版本中是默认的；
-- -XX:AllocateInstancePrefetchLines=*lines* 
+- -XX:AllocateInstancePrefetchLines=*lines* 设置要在实例分配指针之前预取的行数，缺省情况下，预取的行数是1；
+- -XX:AllocatePrefetchDistance=*size* 设置为预加载对象实例的分配的内存大小，
+- -XX:AllocatePrefetchInstr=*instruction* 
 
 
 
