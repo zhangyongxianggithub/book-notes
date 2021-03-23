@@ -368,7 +368,8 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 - -XX:+AllowUserSignalHandlers 允许应用安装信号处理器；
 #### 高级JIT编译器选项
 下面的选项控制动态JIT编译
-- -XX:+AggressiveOpts 
+- -XX:+AggressiveOpts 开启强力性能优化，在将来的版本中是默认的；
+- -XX:AllocateInstancePrefetchLines=*lines* 
 
 
 
