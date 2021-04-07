@@ -374,15 +374,8 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 - -XX:AllocatePrefetchInstr=*instruction* 
 - -XX:AllocatePrefetchLines=*lines*
 - -XX:AllocatePrefetchStepSize=*size*
-- -XX:
-
-
-
-
-
-
-
-
-
-
-
+- -XX:InitialCodeCacheSize=*size* 设置初始的代码缓存大小，缺省值是500KB，这个值最好不要小于操作系统的最小的内存页大小；
+- -XX:+Inline 开启方法内联功能，为了提升性能，这个选项缺省就是开启的；
+- -XX:InlineSmallCode=*size* 设置内联方法的代码大小上限；
+- -XX:+LogCompilation 记录编译活动的日志到当前工作目录下的hotspot.log文件中，可以使用-XX:LogFile选项指定日志文件的路径；
+- -XX:MaxInlineSize=*size* 
