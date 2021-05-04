@@ -402,4 +402,6 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 - -XX:+UnlockDiagnosticVMOptions 解锁用于分析JVM的所有的选项，缺省是不开启的;
 #### 高级垃圾回收选项
 这些命令行选项主要是用于控制Hotspot虚拟机的垃圾回收执行
-- -XX:ActiveProcessorCount=*x* 
+- -XX:ActiveProcessorCount=*x* 覆盖虚拟机CPU数量，可以用于影响线程池的大小，通常使用线程池的地方都会收到影响；通常VM会根据操作系统的可用CPU数量决定，这个命令行选项通常使用在docker容器中用于多个JVM进程堆CPU资源分片；
+- -XX:+AggressiveHeap 开启Java堆优化，频繁内存分配的长运行任务，会依据RAM与CPU的配置设置最优的参数，缺省情况下是不开启的；
+- -XX:+AlwaysPreTouch 
