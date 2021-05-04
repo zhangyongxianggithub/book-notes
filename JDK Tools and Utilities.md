@@ -378,4 +378,28 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 - -XX:+Inline 开启方法内联功能，为了提升性能，这个选项缺省就是开启的；
 - -XX:InlineSmallCode=*size* 设置内联方法的代码大小上限；
 - -XX:+LogCompilation 记录编译活动的日志到当前工作目录下的hotspot.log文件中，可以使用-XX:LogFile选项指定日志文件的路径；
-- -XX:MaxInlineSize=*size* 
+- -XX:MaxInlineSize=*size* 设置内联的字节码大小的上限，缺省大小是35B
+- -XX:MaxNodeLimit=*nodes* 设置在一个方法编译时使用的node节点的上限数量，缺省是65000
+- -XX:MaxTrivialSize=*size* 设置一个小方法需要内联的字节码大小的上限
+- -XX:+OptimizeStringConcat 开启String拼接操作的优化，缺省默认是开启的，只有HotSpot虚拟机支持这个选项
+- -XX:+PrintAssembly 打印程序运行是的汇编指令，使用disassembler.so库。
+- -XX:+PrintCompilation 每次方法进行jit编译时，向标准输出打印一条冗余信息，这个可以看到具体有哪些方法被jit编译了，缺省，这个选项是关闭的，也可以把编译信息打印到文件中，使用-XX:+LogCompilation
+- -XX:+PrintInlining 打印内联决策的信息
+- -XX:ReservedCodeCacheSize=*size* 
+- -XX:+UseSuperWord 把一些小的操作转换为一些大的操作，缺省情况下是开启的，但是只在HotSpot虚拟机下支持。
+- -XX:+UseSHA512Intrinsics SHA-384与SHA-512加密哈希函数启用内联
+- -XX:+UseSHA256Intrinsics SHA-224与SHA-256加密哈希函数启用内联
+- -XX:+UseSHA这个选项只在SPARC硬件平台下有意义
+- -XX:+UseRTMLocking 
+#### 高级可用性命令行选项
+这些选项用于提供获取系统信息与执行debug的能力
+- -XX:+ExtendedDTraceProbes 开启可能影响性能的额外的dtrace工具探查，缺省情况下，只会开启标准探查
+- -XX:+HeapDumpOnOutOfMemoryError 当OOM发生时，会使用堆分析器（HRPROF）转储JVM堆内存到当前的工作目录下，你可以制定转储文件的目录与文件名，使用-XX:HeapDumPath，缺省情况下，这个命令行选项是不开启的；
+- -XX:HeapDumpPath 设置堆转储文件的path与file name，缺省情况下，目录是当前JVM的工作目录，文件的名字是java_pid*pid*.hprof，pid是JVM的进程号；
+- -XX:LogFile=*path* 设置日志数据存储的目录与文件名，缺省情况下，是当前的工作目录，名字是hotspot.log;
+- -XX:+PrintClassHistogram 用于在JVM收到SIGTERM（Ctrl+C）信号后打印类实例的柱状图，缺省情况下，这个选项是不开启的，这个选项等价与jmap -histo命令与jcmd *pid* GC.class_histogram命令；
+- -XX:+PrintConcurrentLocks 用于在JVM收到SIGTERM（Ctrl+C）信号后打印java.util.concurrent锁，缺省情况下是不开启的，这个选项等价于jstack -l与jcmd *pid* Thread.print -l 命令;
+- -XX:+UnlockDiagnosticVMOptions 解锁用于分析JVM的所有的选项，缺省是不开启的;
+#### 高级垃圾回收选项
+这些命令行选项主要是用于控制Hotspot虚拟机的垃圾回收执行
+- -XX:ActiveProcessorCount=*x* 
