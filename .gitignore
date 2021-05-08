@@ -1,3 +1,6 @@
 /pdf
 /**/.DS_Store
 /**/.*
+!.gitignore
+# 这是一个注释
+
