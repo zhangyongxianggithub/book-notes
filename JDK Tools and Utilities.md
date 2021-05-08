@@ -404,4 +404,48 @@ java命令支持非常多的命令行选项，分为以下几个类别。为了�
 这些命令行选项主要是用于控制Hotspot虚拟机的垃圾回收执行
 - -XX:ActiveProcessorCount=*x* 覆盖虚拟机CPU数量，可以用于影响线程池的大小，通常使用线程池的地方都会收到影响；通常VM会根据操作系统的可用CPU数量决定，这个命令行选项通常使用在docker容器中用于多个JVM进程堆CPU资源分片；
 - -XX:+AggressiveHeap 开启Java堆优化，频繁内存分配的长运行任务，会依据RAM与CPU的配置设置最优的参数，缺省情况下是不开启的；
-- -XX:+AlwaysPreTouch 
+- -XX:+AlwaysPreTouch 在JVM初始化时就预先加载整个堆到内存页中，而不是堆满时才确定所有的内存页，这个选项用于模拟测试虚拟内存的性能等；
+- -XX:+CMSClassUnloadingEnabled 使用CMS垃圾收集器时，开启类卸载功能;
+- -XX:CMSExpAvgFactor=*percent* 一种时间的百分比，其他没看懂
+- -XX:XX:CMSInitiatingOccupancyFraction=*percent* 设置老年代内存占用率的阈值，开启CMS垃圾回收，缺省值是-1；负值表示会使用-XX:CMSTriggerRatio的值；
+- -XX:+CMSScavengeBeforeRemark 在CMS标记阶段之前就尝试清除；
+- -XX:CMSTRiggerRatio=*percent* 设置堆内存占用阈值，超过后会开启CMS垃圾回收，缺省值是80%；
+- -XX:ConcGCThreads=*threads* 用来并发GC的线程数量，缺省值依赖JVM可以使用的CPU数量；
+- -XX:+DisableExplicitGC 禁止使用System.gc()，缺省是关闭的；
+- -XX:+ExplicitGCInvokesConcurrent， 当遇见System.gc()请求时，开启并发GC；
+- -XX:+ExplicitGCInvokesConcurrentAndUnloadsClasses 在GC时允许卸载类；
+- -XX:G1HeapRegionSize=*size* 使用G1回收时，设置堆内的区域大小，通常在1MB～32MB之间；
+- -XX:+G1PrintHeapRegions 当区域被G1回收器分配或者回收时，都打印信息；
+- -XX:G1ReservePercent=*percent* 使用G1回收器时，设置堆内保留的内存比例；
+- -XX:InitialHeapSize=*size* 设置初始的内存分配池的大小；
+- -XX:InitialRAMPercentage=*percent* 没看懂这是啥意思；
+- -XX:InitialSurvivorRatio=*ratio* 设置survivor空间的占的比率；
+- -XX:InitatingHeapOccupancyPercent=*percent* 设置堆内存占用率的阈值以开启GC；
+- -XX:MaxGCPauseMillis=*time* 设置GC的最大停顿时间，这是一个软目标，JVM会尽最大努力做到;
+- -XX:MaxHeapSize=*size* 设置内存分配池的最大大小，这个选项等价于-Xmx；
+- -XX:MaxHeapFreeRatio=*percent* 设置GC后的堆空闲空间比率，超过后，表示堆太大，会收缩堆的大小，默认值是70%;
+- -XX:MaxMetaspaceSize=*size* 
+不看了，太难了
+## javac
+读取Java类文件，并编译成字节码与类文件
+### 语法
+javac [options] [sourcefiles] [classes][@argfiles]
+- options 命令行选项；
+- sourcefiles 第一个或者多个源文件；
+- classes 需要执行注解处理的类；
+- @argfiles 使用文件的形式完成上面的功能;
+### 描述
+javac编译源文件的方式有2🀄种：
+- 少量的源文件，只需要子啊命令行上列出来就可以了;
+- 对于大量的源文件，可以列在文件内，使用@语法加载编译;
+源文件必须要有.java后缀名，类文件必须是.class的后缀名，内部类定义会产生额外的类文件，这些内部类的名字是外部类与内部类名字的组合，MyClass$MyInnerClass.class,如果是匿名内部类，则使用数字序号表示名字.
+源文件在目录中的结构表示了他们的包的体系结构，默认情况下，生成的class文件与源文件在同样的目录下，你可以通过-d制定一个输出目录。
+### 命令行选项
+编译器有很多的标准命令行选项，还有很多的非标准命令行选项，只是面向特定的虚拟机与编译器实现的，并且未来也可能会变更的，非标准选项都是-X开头的
+#### 标准命令行选项
+- -Akey[=value] 指定注解处理器需要用到的命令行选项，javac不会解释处理这些选项，他们是由注解处理器处理的；
+- -cp path or -classpath path 指定用户类文件、注解处理器或者源代码文件的路径，这个会覆盖环境变量指定的CLASSPATH，如果都没有指定，，则是当前的工作目录，如果没有指定-sourcepath，classpath也是源代码文件的处理目录，如果没有指定-processorpath，classpath也是注解处理器的搜索目录
+- -Djava.ext.dirs=*directories* 覆盖jdk默认的扩展类目录;
+- -Djava.endorsed.dirs=*directories* 没看懂是啥意思;
+- -d *directory* 设置.class文件的存储目录，目录必须已经存在，javac不会自动创建目录，但是可以根据类的包结构自动创建表示包结构的目录结构
+- -deprecation 
