@@ -9,7 +9,16 @@ Java归档文件有很多优势：
 - 可移植：jar处理是所有JVM都可以处理的；
 课程包含4节。
 # jar基础
-Jar文件其实是ZIP格式的，
-# 清单文件
+Jar文件其实是ZIP格式的，所以你可以用其来完成数据压缩、归档、解压缩或者解档，jar文件基本就是使用这几个操作，你会意识到使用zip的jar归档文件的好处；为了执行JAR归档文件的基本操作，你需要使用JDK提供的Java归档工具jar；作为这节将要介绍的几个主体的概要与预览，下面的列表总结基本的jar归档文件操作
+
+|操作|命令|
+| :- | :- |
+|创建一个jar归档文件|jar cf jar-file input-file(s)|
+|查看jar文件的内容|jar tf jar-file|
+|解档jar|jar xf jar-file|
+|从jar中解档指定的文件|jar xf jar-file archived-files(s)|
+|运行jar|java -jar app.jar|
+
+# 清单文件1
 # jar签名与验证
 # 使用jar的api
