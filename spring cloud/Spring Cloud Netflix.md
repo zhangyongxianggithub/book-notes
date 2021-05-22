@@ -1,5 +1,17 @@
 这个工程集成了Netflix开源软件，完成了netflix的自动配置并且绑定到Spring环境，可以使用Spring的编程特性开发，通过几个简单的注解，你就可以快速开启相关的功能并配置一些通用的模式，提供的模式包括服务发现、（CB）断路器、智能路由（Zuul）、与客户端负载均衡（Ribbon）。
 # 服务发现：Eureka客户端
+服务发现是微服务架构中的关键部分，手动配置每个服务的客户端或者手动指定某些约定是比较难的并且这种配置或者约定是脆弱的，Eureka是Netflix的服务发现的目录服务器也是各个服务的客户端，目录服务器可以通过配置部署成高可用形式既每个服务器都会复制其他服务器持有的注册的服务信息。
+## 如何接入Eureka客户端
+使用maven包含spring-cloud-starter-netflix-eureka-client的组件
+## 注册
+使用eureka注册服务时，需要提交有关于自身服务的元数据，比如host、port、健康检查url、主页或者其他的细节，eureka目录服务器从每个服务实例中接收到心跳消息，如果超过配置的时间限制则心跳失败，服务实例会从目录中移除。下面的例子是一个简易的使用eureka注册的例子
+![一个简易的例子](spring-cloud-netflix/minimal-eureka-client.png)
+在上面的例子中，defaultZone是一个魔术字符串，也就是一个备选值或者也叫做缺省值，为所有没有指定优先级的client提供默认的注册中心的地址或者接入链接，defaultZone是大小写敏感的，因为serviceUrl属性是一个Map<String,String>，因此，Spring boot中蛇形命名法与驼峰字段的自动转换约定无法应用到defaultZone属性。应用名字（也是服务的ID）、虚拟Host、端口分别来自Enviroment中的${spring.application.name}、${spring.application.name}、${server.port}。eureka不仅将服务注册为一个实例，他也是一个存储注册信息的客户端，它查询注册中心来定位访问的服务地址；实例的行为通过eureka.instance.*的属性配置，只要你配置了spring.application.name值，那么eureka.instance.*的key只需要保持默认值就可以了。可以查看EurekaInstanceConfigBean与EurekaClientConfigBean这2个类，这里面有更多的细节。如果不需要访问其他服务可以禁用服务的client的功能，这样不会拉取注册中心的注册信息，可以通过设置eureka.client.enabled=false，当设置了spring.cloud.discovery.enabled=false时也会关闭eureka的客户端功能。
+## eureka server鉴权
+当serviceUrl的值含有类似证书的字符时，eurekaclient自动会开启HTTP basic认证，如果想要更复杂的控制，你可以创建一个DiscoveryClientOptionalArgs的bean并注入一个ClientFilter类型的bean，这个bean会拦截所有client对server的访问并做你定义的处理。当eurekaserver需要客户端的证书来认证时，客户端的证书与trust store可以通过属性配置，如下：
+![一个简易的例子](spring-cloud-netflix/eureka-server-authentication.png)
+需要设置eureka.client.tls.enabled=true开启客户端的TLS协议，当忽略eureka.client.tls.trust-store时，会使用一个JVM的默认的trust store。如果你想要定制Eureka HTTP Client使用的RestTemplate，你需要创建一个EurekaClientHttpRequestFactorySupplier类型的bean，书写你自己的生成ClientHttpRequestFactory实例的逻辑。
+## 状态页与健康检查
 
 # 服务发现：Eureka服务器
 ## 如何包含Eureka Server
