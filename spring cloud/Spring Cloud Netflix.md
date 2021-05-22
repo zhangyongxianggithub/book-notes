@@ -12,7 +12,7 @@
 ![一个简易的例子](spring-cloud-netflix/eureka-server-authentication.png)
 需要设置eureka.client.tls.enabled=true开启客户端的TLS协议，当忽略eureka.client.tls.trust-store时，会使用一个JVM的默认的trust store。如果你想要定制Eureka HTTP Client使用的RestTemplate，你需要创建一个EurekaClientHttpRequestFactorySupplier类型的bean，书写你自己的生成ClientHttpRequestFactory实例的逻辑。
 ## 状态页与健康检查
-
+一个Eureka实例的状态页与健康检查的缺省路径分别是/info与/heath，都是Spring Boot Actuator应用中的端点提供的位置，
 # 服务发现：Eureka服务器
 ## 如何包含Eureka Server
 包含Eureka Server只需要在你的工程中添加group id=org.springframework.cloud，artifact id=spring-cloud-starter-netflix-eureka-server的starter，如果你的工程使用Thymeleaf作为模板引擎，Eureka server使用的Freemarker模板引擎可能不能正确加载，在这种情况下，有必要人工配置模板加载器：
