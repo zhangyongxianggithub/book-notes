@@ -133,3 +133,62 @@ username = user
 password = 123
 
 ## [inet_http_server]
+开启一个监听TCP的http server，默认是不开启的，注意安全风险
+- port 一个TCP的端口，supervisor监听的端口号，superctl会通过这个端口号使用XML-RPC与superd通信，为了监听所有的地址，使用:9001或者*：9001地址
+- username
+- password
+>[inet_http_server]
+port = 127.0.0.1:9001
+username = user
+password = 123
+## [supervisord]
+有关supervisord的全局设置
+- logfile supervisord活动日志指定，可以用%(here)s表示supervisord.conf文件的目录，如果指定了/dev/stdout，那么需要禁用日志的切片功能，比如logfile_maxbytes=0
+- logfile_maxbytes 一个日志文件最大大小，设置0表示无限大
+- logfile_backups 设置日志文件的保留数量，如果设置0，不会保留历史日志
+- loglevel 日志级别与命令行的功能一致，如果设置为debug模式，子进程的输出也会被记录；
+- pidfile pid文件地址，%(here)s也可以用
+- umask supoervisord进程的掩码
+- nodaemon 进制后台运行
+- silent 不输出日志
+- minfs 可用的文件描述符的最小数量，默认是1024
+- minprocs 可用的进程描述符的最小数量，默认是200，
+- nocleanup 禁止在启动时清理AUTO模式的子进程的日志文件；
+- childlogdir AUTO模式的子进程日志存放日志的地方
+- user 切换用户处理事情
+- directory 当supervisord后台运行时，切换到这个目录，可以使用%(here)s
+- strip_ansi 剥离转义序列
+- environment 一系列的key/value对形式KEY="val",KEY2="val2"，会放置到环境变量中，这个环境变量只能是子进程可以看到，superd自己没有改变，如果包含不是数字或者字母的字符，需要用双引号包含，使用%转义字符。
+- identifier superd进程的标识符，用于RPC接口中，默认是supervisor;
+例子
+>[supervisord]
+logfile = /tmp/supervisord.log
+logfile_maxbytes = 50MB
+logfile_backups=10
+loglevel = info
+pidfile = /tmp/supervisord.pid
+nodaemon = false
+minfds = 1024
+minprocs = 200
+umask = 022
+user = chrism
+identifier = supervisor
+directory = /tmp
+nocleanup = true
+childlogdir = /tmp
+strip_ansi = false
+environment = KEY1="value1",KEY2="value2"
+# [supervisorctl]
+- serveurl, 访问superd使用的URL，比如http://localhost:9001, 对于UNIX socket来说是unix:///absolute/path/to/file.socket,默认是http://localhost:9001
+- username username for authentication
+- password 
+- prompt 交互式shell的提示符,默认是supervisor
+- history_file 记录历史命令的的文件，readline可以读取历史命令重复执行；
+>[supervisorctl]
+serverurl = unix:///tmp/supervisor.sock
+username = chris
+password = 123
+prompt = mysupervisor
+# [program:x]
+配置文件不许包含program块，这样superd知道管理哪些程序，块的名字是program:name的形式，名字是用来标识进程的，以便通过名字管理进程，名字可以通过%{program_name}s字符串被引用，[program:x]代表一个单一的进程组，这个进程组的数量由numprocs与process_name控制，如果配置保持不变，则[program:x]表示的组是x，里面由一个单一的进程也叫做x，主要是为了兼容早起的版本。如果[program:foo]块配置numprocs=3，process_name=%(program_name)s_%(process_num)02d，foo这个进程组就会包含3个进程，分别名字是foo_00,foo_01,foo_02, 这样可以一个配置启动多个进程。
+- command，程序启动时执行的命令，命令可以是绝对路径，也可以是相对路径，如果是相对的，就会使用PATH来搜索命令，程序可以接收参数，可以用双引号把参数包起来，
