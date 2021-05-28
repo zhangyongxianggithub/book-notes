@@ -191,4 +191,71 @@ password = 123
 prompt = mysupervisor
 # [program:x]
 配置文件不许包含program块，这样superd知道管理哪些程序，块的名字是program:name的形式，名字是用来标识进程的，以便通过名字管理进程，名字可以通过%{program_name}s字符串被引用，[program:x]代表一个单一的进程组，这个进程组的数量由numprocs与process_name控制，如果配置保持不变，则[program:x]表示的组是x，里面由一个单一的进程也叫做x，主要是为了兼容早起的版本。如果[program:foo]块配置numprocs=3，process_name=%(program_name)s_%(process_num)02d，foo这个进程组就会包含3个进程，分别名字是foo_00,foo_01,foo_02, 这样可以一个配置启动多个进程。
-- command，程序启动时执行的命令，命令可以是绝对路径，也可以是相对路径，如果是相对的，就会使用PATH来搜索命令，程序可以接收参数，可以用双引号把参数包起来，
+- command，程序启动时执行的命令，命令可以是绝对路径，也可以是相对路径，如果是相对的，就会使用PATH来搜索命令，程序可以接收参数，可以用双引号把参数包起来.
+- process_name Python字符串，组成进程的名字，如果设置了numprocs，需要设置process_name, 字符串中可以包含的变量包括group_name，host_node_name，process_num，program_name与here（superd配置文件的目录），默认的名字是%{program_name}s
+- numprocs 启动程序的多个实例，由numprocs命名，如果numprocs>1， process_name表达式必须包含%{process_num}s，默认值是1
+- numprocs_start 用来定义进程的起始编号，默认是0；
+- priority 程序启动与关闭的优先级，当批量操作时，这个有作用，优先级越低的越先启动，越晚关闭，默认值时999
+- autostart 当=true时，supurd启动时自动启动程序，默认是true
+- startsecs 程序启动后，多少秒之后，可以认定程序启动成功，STARING状态变成RUNNING状态，设置为0后，程序将保持STARTING状态，默认值是1；
+- startretries 最大重试次数，之后会放入FATAL状态，默认值是3；
+- autorestart 指定当进程存在且处于运行态时，是否自动重启一个进程，可以是false、unexpected、true这3个值，如果是false，进程不会自动重启，如果是unexpected,当进程的终止码不是exitcodes里面的值时则重启，如果时true，当进程终止就自动重启进程，默认值时unexpected。
+- exitcodes 程序终止时期望的终止码，autorestart会用到，默认值是0；
+- stopsignal 用来终止程序的信号，可以是TERM、HUP、INT、QUIT、KILL、USR1、USR2，默认值是TERM；
+- stopwaitsecs 进程终止后，superd需要等待OS传递给自己SIGCHLD信号，如果超过时间，siperd会发送信号SIGKILL到终止的进程，默认值是10s；
+- stopasgroup 如果设置为true，superd会发送终止信号到进程组，这意味着killasgroup=true，这对于处于debug模式的程序有帮助，后面没看懂，默认值是false；
+- killasgroup 默认值是false
+- user 指定运行程序的user，superd必须是以root运行的才可以选择用户，如果选择的用户不能切换，则程序运行失败；
+- redirect_stderr 如果是true，则把process的stderr的日志输出到superd的stdout，默认是false;
+- stdout_logfile stdout输出到日志，相当于重定向，如果stdout_logfile未设置或者被设置为AUTO，supervisor会自动选择一个文件位置，如果设置为NONE，则supervisor不会创建log文件，当superd重启时，AUTO模式的日志会被爱删除，可以使用变量默认值是AUTO
+- stdout_logfile_maxbytes 日志文件的最大大小，之后切片，0代表无限大小，默认值是50MB;
+- stdout_logfile_backups 日志文件保留的数量，如果设置为0，不保留历史日志，默认值是10;
+- stdout_capture_maxbytes 不知道啥意思，设置为0关闭process capture mode，默认是0；
+- stdout_events_enabled，如果=true，不知道啥意思;
+- stdout_syslog 如果设置为true，stdout的值会被定向到syslog，默认值是False;
+- stderr_logfile 与stdout的设置基本一致,默认值是AUTO；
+- stderr_logfile_maxbytes；
+- stderr_logfile_backups；
+- stderr_capture_maxbytes;
+- stderr_events_enabled;
+- stderr_syslog;
+- environment 一系列的键值对，形如KEY="val",KEY2="val2"，这个环境变量将会被插入到子进程使用的环境变量中，值可以包含字符串表达式；
+- directory 在执行子进程前，临时切换到这个目录，chdir,默认是不切换；
+- umask 进程的umask码,默认继承于superd
+- serverurl 这个值会作为SUPERVISOR_SERVER_URL的值传递给子进程的环境变量中，进程可以与http server通信，如果提供了，语法与[supervisorctl]块内的serverurl相同，如果设置为AUTO或者未设置，superd会自动使用一个server url，优先使用unix domain socket，默认是AUTO
+>[program:cat]
+command=/bin/cat
+process_name=%(program_name)s
+numprocs=1
+directory=/tmp
+umask=022
+priority=999
+autostart=true
+autorestart=unexpected
+startsecs=10
+startretries=3
+exitcodes=0
+stopsignal=TERM
+stopwaitsecs=10
+stopasgroup=false
+killasgroup=false
+user=chrism
+redirect_stderr=false
+stdout_logfile=/a/path
+stdout_logfile_maxbytes=1MB
+stdout_logfile_backups=10
+stdout_capture_maxbytes=1MB
+stdout_events_enabled=false
+stderr_logfile=/a/path
+stderr_logfile_maxbytes=1MB
+stderr_logfile_backups=10
+stderr_capture_maxbytes=1MB
+stderr_events_enabled=false
+environment=A="1",B="2"
+serverurl=AUTO
+## [include]
+files= files to include
+- files 空格分隔的文件列表，文件可以是绝对路径或者相对路径，如果是相对路径，则相对的是配置文件supervisord.conf的路径，文件可以是一个模式* ？[] 等正则表达式。
+>[include]
+files = /an/absolute/filename.conf /an/absolute/*.conf foo.conf config??.conf
+## [group:x]
