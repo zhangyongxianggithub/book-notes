@@ -12,7 +12,12 @@
 ![一个简易的例子](spring-cloud-netflix/eureka-server-authentication.png)
 需要设置eureka.client.tls.enabled=true开启客户端的TLS协议，当忽略eureka.client.tls.trust-store时，会使用一个JVM的默认的trust store。如果你想要定制Eureka HTTP Client使用的RestTemplate，你需要创建一个EurekaClientHttpRequestFactorySupplier类型的bean，书写你自己的生成ClientHttpRequestFactory实例的逻辑。
 ## 状态页与健康检查
-一个Eureka实例的状态页与健康检查的缺省路径分别是/info与/heath，都是Spring Boot Actuator应用中的端点提供的位置，
+一个Eureka实例的状态页与健康检查的缺省路径分别是/info与/heath，都是Spring Boot Actuator应用中的端点提供的位置，新的版本需要加上/actuator/info，如果你需要变更这些，比如你使用了一个servlet path，下面是2个新的设置
+![eureka实例状态](spring-cloud-netflix/eureka-instance-status.png)
+这2个链接位于客户端存储的元数据中，在某些场景下，需要发送请求到应用。
+## 注册一个安全的eureka应用
+## Eureka客户端刷新
+缺省，EurekaClient是可刷新的，这意味着EurekaClient的属性是可以随时变更并加载的，当一个刷新发生时，客户端会从eureka server解除绑定，服务的实例会有一个短暂的时间内不可用，如果不刷新就不会发生这种情况，eureka.client.refresh.enable=false，eureka提供了对Spring Cloud负载均衡器ZonePreferenceServiceInstanceListSupplier的支持，Eureka实例中的元数据（eureka.instance.metadataMap.zone）中的zone可以用来设置spring.cloud-loadbalancer-zone的值，用来通过zone过滤服务实例，如果没有配置zone设置了spring.cloud.loadbalancer.eureka.approximateZoneFromHostname server的域名会作为zone。
 # 服务发现：Eureka服务器
 ## 如何包含Eureka Server
 包含Eureka Server只需要在你的工程中添加group id=org.springframework.cloud，artifact id=spring-cloud-starter-netflix-eureka-server的starter，如果你的工程使用Thymeleaf作为模板引擎，Eureka server使用的Freemarker模板引擎可能不能正确加载，在这种情况下，有必要人工配置模板加载器：
