@@ -16,6 +16,35 @@
 ![eureka实例状态](spring-cloud-netflix/eureka-instance-status.png)
 这2个链接位于客户端存储的元数据中，在某些场景下，需要发送请求到应用。
 ## 注册一个安全的eureka应用
+## 健康检查
+缺省情况下，Eureka使用客户端你心跳来决定client的状态，除非指定，当前客户服务不会广播应用当前的健康状态，因此，成功注册后，Eureka一直任务应用是UP状态的，可以通过设置eureka的健康检查来改变，启动后会向eureka广播服务的状态
+>eureka:
+  client:
+    healthcheck:
+      enabled: true
+## Eureka的元数据
+花点时间了解下Eureka的元数据是如何工作的，这样你可以应用在你的平台上，有标准的元数据比如hostname、ip地址、端口、状态页与健康检查，这些数据都会发送到注册中心，客户端可以使用这些信息连接到服务，实例注册还可以添加一些额外的元数据信息，这些元数据信息配置在eureka.instance.metadataMap，远程客户端可以访问这些元数据，通常来说，额外的元数据不会改变客户端的行为，除非客户端明确了解元数据的含义。
+Eureke是使用一个ID注册的，Eureke提供这个ID的缺省实现
+>${spring.cloud.client.hostname}:${spring.application.name}:${spring.application.instance_id:${server.port}}
+
+一个例子是`myhost:myappname:8080`,你可以通过设置eureka.instance.instanceId来自定义ID，比如
+>eureka:
+  instance:
+    instanceId: ${spring.application.name}:${vcap.application.instance_id:${spring.application.instance_id:${random.value}}}
+
+## EurekaClient的使用
+如果你的应用是一个Discovery客户端，你可以用它从Eureka服务器发现服务实例，一种办法是使用EurekaClient接口类，如下图
+![使用eureka客户端](spring-cloud-netflix/eureka-client-use.png)
+缺省情况下，EurekaClient使用RestTemplate作为HTTP通讯客户端，如果你想要使用Jersey，你需要加入Jersey的依赖。
+## 本地EurekaClient的替代者
+通常，你用不到原始的EurekaClient接口，常用的是它的包装者，Spring Cloud支持Feign与RestTemplate，你也可以使用org.springframework.cloud.client.discovery.DiscoveryClient，也提供了简单的API来发现Client，如下图：
+![设置多个Zone](spring-cloud-netflix/eureka-raw-client.png)
+## 为什么注册一个服务是这么的慢
+注册过程要涉及到周期性的心跳，心跳间隔是30s，一个服务可用需要服务instance、server与eureka client 在本地的cache中保存的metadata是相同的，你可以通过eureka.instance.leaseRenewalIntervalInSeconds改变周期。
+## Zones
+如果你的Eureka客户端配置了多个Zone，你可能想要拥有相同Zone的可以互相访问，如果没有在访问其他的Zone，可以合理的配置Eureka客户端来达到这样的效果。
+首先，你需要把Eureka server集群配置成多个Zone的，并且它们可以相互复制，接下来，你需要告诉Eureka，你的服务是拿个Zone，你可以通过metadataMap属性的方式配置，比如，service1的Zone是zone1与zone2，你需要设置Eureka的属性如下：
+![设置多个Zone](spring-cloud-netflix/eureka-multi-zone.png)
 ## Eureka客户端刷新
 缺省，EurekaClient是可刷新的，这意味着EurekaClient的属性是可以随时变更并加载的，当一个刷新发生时，客户端会从eureka server解除绑定，服务的实例会有一个短暂的时间内不可用，如果不刷新就不会发生这种情况，eureka.client.refresh.enable=false，eureka提供了对Spring Cloud负载均衡器ZonePreferenceServiceInstanceListSupplier的支持，Eureka实例中的元数据（eureka.instance.metadataMap.zone）中的zone可以用来设置spring.cloud-loadbalancer-zone的值，用来通过zone过滤服务实例，如果没有配置zone设置了spring.cloud.loadbalancer.eureka.approximateZoneFromHostname server的域名会作为zone。
 # 服务发现：Eureka服务器
