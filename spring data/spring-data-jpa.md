@@ -195,3 +195,154 @@ public interface UserRepository extends JpaRepository<User, Long> {
 如果你使用了java8的-parameters功能，可以不用使用@Param
 - 使用SpEL表达式，
 - 修改SQL，
+# JPA仓库
+## 投影
+Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要一句聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
+```java
+class Person {
+
+  @Id UUID id;
+  String firstname, lastname;
+  Address address;
+
+  static class Address {
+    String zipCode, city, street;
+  }
+}
+
+interface PersonRepository extends Repository<Person, UUID> {
+
+  Collection<Person> findByLastname(String lastname);
+}
+```
+现在假设我们只想检索人员的name属性，怎么办呢？
+### 基于接口的投影
+最简单的方式就是接口投影的方式，接口暴漏属性的访问器方法，如下：
+```java
+interface NamesOnly {
+  String getFirstname();
+  String getLastname();
+}
+```
+需要注意的地方是没这里定义的属性访问器方法与聚合根中的属性访问器方法是完全相同的，定义的查询方法如下：
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+
+  Collection<NamesOnly> findByLastname(String lastname);
+}
+```
+查询执行引擎在运行时会为每个条目创建接口的代理实例，对访问器的访问会被转发到目标对象上。投影是可以递归进行的，如果你想要包含Address的信息，可以创建一个Address接口的投影信息，如下：
+```java
+interface PersonSummary {
+
+  String getFirstname();
+  String getLastname();
+  AddressSummary getAddress();
+
+  interface AddressSummary {
+    String getCity();
+  }
+}
+```
+方法调用是，目标实例的address属性被获取并且被包装到一个投影代理里面。投影接口的访问器方法与聚合根的属性访问器完全匹配的投影接口叫做封闭式投影，上面的例子就是封闭式投影。如果你使用封闭式投影，Spring Data可以优化查询执行，因为我们知道所有的属性都会被包装到投影接口代理中，更多的信息，可以看参考文档。
+不匹配的叫做开放式投影，投影接口的访问器方法必须使用@Value注解标注，如下：
+```java
+interface NamesOnly {
+  @Value("#{target.firstname + ' ' + target.lastname}")
+  String getFullName();
+  …
+}
+```
+聚合根就是target变量，开放式投影不能使用查询优化。@Value中的表达式不要太复杂。你不太可能想要String的编程，对于简单的表达式，可以借助default方法的方式完成。
+```java
+interface NamesOnly {
+
+  String getFirstname();
+  String getLastname();
+
+  default String getFullName() {
+    return getFirstname().concat(" ").concat(getLastname());
+  }
+}
+```
+这种方式你只能选择投影接口暴漏出来的方法实现拼接逻辑，还有另外一种方法更灵活一些，在一个定义的SpringBean中实现拼接逻辑，然后通过SpEL表达式调用这段逻辑，如下：
+```java
+@Component
+class MyBean {
+
+  String getFullName(Person person) {
+    …
+  }
+}
+
+interface NamesOnly {
+
+  @Value("#{@myBean.getFullName(target)}")
+  String getFullName();
+  …
+}
+```
+需要注意SpEL是如何引用myBean并调用getFullName(...)方法的，投影接口的方法也可以有参数，并在表达式中使用，表达式中通过args[0,1,2]的方式引用
+```java
+interface NamesOnly {
+
+  @Value("#{args[0] + ' ' + target.firstname + '!'}")
+  String getSalutation(String prefix);
+}
+```
+投影接口里面的访问器方法可以返回null安全的数据，支持的null包装类型如下
+- java.util.Optional
+- com.google.common.base.Optional
+- scala.Option
+- io.varr.control.Option
+如下：
+```java
+interface NamesOnly {
+
+  Optional<String> getFirstname();
+}
+```
+### 基于类的投影
+另一种定义投影的方式是使用DTO，里面包含要被检索的属性，与投影接口的使用方法差不多，区别就是DTO方式不会产生代理，也不支持嵌套的投影，下面是DTO的例子
+```java
+class NamesOnly {
+
+  private final String firstname, lastname;
+
+  NamesOnly(String firstname, String lastname) {
+
+    this.firstname = firstname;
+    this.lastname = lastname;
+  }
+
+  String getFirstname() {
+    return this.firstname;
+  }
+
+  String getLastname() {
+    return this.lastname;
+  }
+
+  // equals(…) and hashCode() implementations
+}
+```
+可以使用Lombok的@Value避免模板代码的生成
+### 动态投影
+到目前为止，我们已经使用投影类型作为返回类型与返回集合的元素类型，然而，你可能想要实际运行时决定返回的类型（返回的是动态），为了使用动态投影，代码如下：
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+
+  <T> Collection<T> findByLastname(String lastname, Class<T> type);
+}
+```
+这种方式，方法获取聚合根时会自动应用类型投影
+```java
+void someMethod(PersonRepository people) {
+
+  Collection<Person> aggregates =
+    people.findByLastname("Matthews", Person.class);
+
+  Collection<NamesOnly> aggregates =
+    people.findByLastname("Matthews", NamesOnly.class);
+}
+```
