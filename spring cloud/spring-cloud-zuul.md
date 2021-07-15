@@ -112,3 +112,29 @@ zuul:
 Zuul使用的HTTP客户端是Apache HTTP客户端，而不是RestClient，为了使用RestClient或者okhttp3，设置
 ribbon.restclient.enabled=true,ribbon.okhttp.enabled=true;如果你想要自定义Apache HTTP client或者OK HTTP客户端，提供一个ClosableHttpClient或者OkHttpClient的bean。
 # Cookies 与Sensitive Headers
+可以在系统中的服务间共享headers，但是你可能不想要敏感的header从下游系统暴漏给外部系统，你可以指定一些忽略的headers，作为路由配置得一部分，Cookies就是敏感的headers，如果是浏览器访问网关，下游服务的cookies可能会给用户造成困恼，因为它们混杂在一起，看起来是来自于同一个地方。如果你关系你的服务的设计，
+如果您仔细设计您的服务（例如，如果只有一个下游服务设置 cookie），您也许可以让它们从后端一直流到调用者。 此外，如果您的代理设置了 cookie，并且您的所有后端服务都是同一系统的一部分，那么简单地共享它们是很自然的（例如，使用 Spring Session 将它们链接到某个共享状态）。 除此之外，由下游服务设置的任何 cookie 可能对调用者没有用，因此建议您（至少）将 Set-Cookie 和 Cookie 设置为不属于您的域的路由的敏感标头 . 即使对于属于您的域的路由，在让 cookie 在它们和代理之间流动之前，请尝试仔细考虑它的含义。
+```yml
+zuul:
+  routes:
+    users:
+      path: /myusers/**
+      sensitiveHeaders: Cookie,Set-Cookie,Authorization
+      url: https://downstream
+```
+sensitiveHeaders是一个黑名单，结果就是这会让Zuul发送除了ignored外的所有的header，如果想要传递cookie等到后端服务，必须设置这个列表为空，
+```yml
+ zuul:
+  routes:
+    users:
+      path: /myusers/**
+      sensitiveHeaders:
+      url: https://downstream
+```
+# ignored Headers
+除了路由敏感标头之外，您还可以为在与下游服务交互期间应丢弃的值（请求和响应）设置一个名为 zuul.ignoredHeaders 的全局值。 默认情况下，如果 Spring Security 不在类路径中，则这些为空。 否则，它们将被初始化为 Spring Security 指定的一组众所周知的“安全”标头（例如，涉及缓存）。 这种情况下的假设是下游服务也可能添加这些标头，但我们想要来自代理的值。 当 Spring Security 在类路径上时，为了不丢弃这些众所周知的安全标头，您可以将 zuul.ignoreSecurityHeaders 设置为 false。 如果您在 Spring Security 中禁用了 HTTP Security 响应标头并希望下游服务提供值，那么这样做会很有用。
+# 管理endpints
+如果@EnableZuuProxy中有Spring Boot Actuator，则会有2个end pints
+- Routes， 返回路由信息，？format=details返回详细的路由信息。如果是POST会刷新路由信息。
+- Filters
+# 本地转发
