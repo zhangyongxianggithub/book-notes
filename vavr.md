@@ -293,3 +293,186 @@ Function3<String, String, String, String> function3 =
 - Currying
 - Memoization
 ### Composition
+你可以组合函数，从数学的角度来说，函数组合就是一种函数处理另一个函数结果以产生第三个值的用法，比如：函数f，X->Y与函数g: Y->Z,可以组合产生一个新的函数h:g(f(x)),产生了映射X->Z。也可以使用andThen实现函数组合。
+```java
+Function1<Integer, Integer> plusOne = a -> a + 1;
+Function1<Integer, Integer> multiplyByTwo = a -> a * 2;
+
+Function1<Integer, Integer> add1AndMultiplyBy2 = plusOne.andThen(multiplyByTwo);
+
+then(add1AndMultiplyBy2.apply(2)).isEqualTo(6);
+```
+或者使用compose
+```java
+Function1<Integer, Integer> add1AndMultiplyBy2 = multiplyByTwo.compose(plusOne);
+
+then(add1AndMultiplyBy2.apply(2)).isEqualTo(6);
+```
+### Lifting
+您可以将偏函数提升为返回 Option 结果的全函数。 术语偏函数来自数学。 从 X 到 Y 的偏函数的定义是，定义函数 f: 对于 X 的某个子集 X′ 存在X′ → Y，这个函数来源于f: X → Y ，但是不要求，每个X
+的元素都有对应的Y。这意味着偏函数仅适用于某些输入值。 如果使用不允许的输入值调用该函数，则通常会引发异常。
+下面的divide方法就是一个偏函数，只接受非0值。
+```java
+Function2<Integer, Integer, Integer> divide = (a, b) -> a / b;
+```
+我们把divide函数提升为对所有值都有效的全函数。
+```java
+Function2<Integer, Integer, Option<Integer>> safeDivide = Function2.lift(divide);
+
+// = None
+Option<Integer> i1 = safeDivide.apply(1, 0); 
+
+// = Some(2)
+Option<Integer> i2 = safeDivide.apply(4, 2);
+```
+下面的函数sum是一个只接受整数的偏函数
+```java
+int sum(int first, int second) {
+    if (first < 0 || second < 0) {
+        throw new IllegalArgumentException("Only positive integers are allowed"); 
+    }
+    return first + second;
+}
+```
+我们可以使用方法引用的方式提升为全函数
+```java
+Function2<Integer, Integer, Option<Integer>> sum = Function2.lift(this::sum);
+
+// = None
+Option<Integer> optionalResult = sum.apply(-1, 2);
+```
+### Partial application
+局部计算可以让你从一个新的Function中派生出新的Function，这个是通过固定参数来实现的，你可以固定一个或者更多的参数，固定参数的数量定义了新函数的元组数，也就是`new arity=(original arity- fixed parameters)；参数的范围是从左向右的。
+```java
+Function2<Integer, Integer, Integer> sum = (a, b) -> a + b;
+Function1<Integer, Integer> add2 = sum.apply(2); 
+
+then(add2.apply(4)).isEqualTo(6);
+```
+下面的Function5的例子演示的更好一些
+```java
+Function5<Integer, Integer, Integer, Integer, Integer, Integer> sum = (a, b, c, d, e) -> a + b + c + d + e;
+Function2<Integer, Integer, Integer> add6 = sum.apply(2, 3, 1); 
+
+then(add6.apply(4, 3)).isEqualTo(13);
+```
+局部计算与Currying是不同的。
+### 柯里化求值
+柯里化求值就是固定一个参数的值来局部应用函数，比如一个Function1的函数柯里化后返回结果也是Function1。
+当一个Function2被柯里化后，得到的结果与Function2被局部计算后的结果是一样的。因为得到的都是1-arity 函数。
+```java
+Function2<Integer, Integer, Integer> sum = (a, b) -> a + b;
+Function1<Integer, Integer> add2 = sum.curried().apply(2); 
+
+then(add2.apply(4)).isEqualTo(6);
+```
+你可能注意到了，除了使用到了.curried（）调用外，其他部分与局部计算是一样的，当函数的元组数大于2时，与局部计算的区别就出来了.
+```java
+Function3<Integer, Integer, Integer, Integer> sum = (a, b, c) -> a + b + c;
+final Function1<Integer, Function1<Integer, Integer>> add2 = sum.curried().apply(2);
+
+then(add2.apply(4).apply(3)).isEqualTo(9);
+```
+### 记忆表
+记忆表可以理解为缓存，一个记忆函数只会执行一次，以后的调用直接返回结果，可以看下面的例子
+```java
+Function0<Double> hashCache =
+        Function0.of(Math::random).memoized();
+
+double randomValue1 = hashCache.apply();
+double randomValue2 = hashCache.apply();
+
+then(randomValue1).isEqualTo(randomValue2);
+```
+## Values
+在函数式设置中，我们将值视为一种范式，一种无法进一步求值的表达式。 在 Java 中，我们通过将对象的状态设为 final 并将其称为不可变来表达这一点。
+Vavr 的函数值抽象了不可变对象。 通过在实例之间共享不可变内存来添加高效的写入操作。 我们得到的是免费的线程安全！
+### Option
+是用来表达可选值的一元容器类型，Option的实例要么是Some的实例要么是None的实例。
+```java
+// optional *value*, no more nulls
+Option<T> option = Option.of(...);
+```
+如果你用过java8的Optional类，它们之间存在一个非常大的不同点，对null值调用.map会返回的一个empty的optional,vavr的Option会返回一个Some(null)的Option实例。
+```java
+Optional<String> maybeFoo = Optional.of("foo"); 
+then(maybeFoo.get()).isEqualTo("foo");
+Optional<String> maybeFooBar = maybeFoo.map(s -> (String)null)  
+                                       .map(s -> s.toUpperCase() + "bar");
+then(maybeFooBar.isPresent()).isFalse();
+```
+使用Vavr的Option，上面的例子会抛出NullPointerException
+```java
+Option<String> maybeFoo = Option.of("foo"); 
+then(maybeFoo.get()).isEqualTo("foo");
+try {
+    maybeFoo.map(s -> (String)null) 
+            .map(s -> s.toUpperCase() + "bar"); 
+    Assert.fail();
+} catch (NullPointerException e) {
+    // this is clearly not the correct approach
+}
+```
+看起来Vavr的实现不是特别好，但是事实上并不是这样的——相反，它符合一元容器类型在调用 .map 时维护计算上下文的要求。 就选项而言，这意味着在 Some 上调用 .map 将导致 Some，而在 None 上调用 .map 将导致 None 。 在上面的 Java Optional 示例中，上下文从 Some 更改为 None。
+看起来Option好像没什么用，但是它强制你关注可能出现的null值并处理它们而不是默默的接受，正确处理null值出现的方式就是使用flatMap。
+```java
+Option<String> maybeFoo = Option.of("foo"); 
+then(maybeFoo.get()).isEqualTo("foo");
+Option<String> maybeFooBar = maybeFoo.map(s -> (String)null) 
+                                     .flatMap(s -> Option.of(s) 
+                                                         .map(t -> t.toUpperCase() + "bar"));
+then(maybeFooBar.isEmpty()).isTrue();
+```
+```java
+Option<String> maybeFoo = Option.of("foo"); 
+then(maybeFoo.get()).isEqualTo("foo");
+Option<String> maybeFooBar = maybeFoo.flatMap(s -> Option.of((String)null)) 
+                                     .map(s -> s.toUpperCase() + "bar");
+then(maybeFooBar.isEmpty()).isTrue();
+```
+### Try
+Try也是一个一元容器类型，用来表示计算单元可能会抛出异常，也有能返回成功值，有些类似Either，但是语法上是完全不同的，Try的实例要么是Success，要么是Failure。
+```java
+// no need to handle exceptions
+Try.of(() -> bunchOfWork()).getOrElse(other);
+```
+```java
+import static io.vavr.API.*;        // $, Case, Match
+import static io.vavr.Predicates.*; // instanceOf
+
+A result = Try.of(this::bunchOfWork)
+    .recover(x -> Match(x).of(
+        Case($(instanceOf(Exception_1.class)), t -> somethingWithException(t)),
+        Case($(instanceOf(Exception_2.class)), t -> somethingWithException(t)),
+        Case($(instanceOf(Exception_n.class)), t -> somethingWithException(t))
+    ))
+    .getOrElse(other);
+```
+### Lazy
+Lazy是一个一元容器类型，表示一个延迟计算值，相比于Supplier，Lazy是记忆化的，只计算一次。
+```java
+Lazy<Double> lazy = Lazy.of(Math::random);
+lazy.isEvaluated(); // = false
+lazy.get();         // = 0.123 (random generated)
+lazy.isEvaluated(); // = true
+lazy.get();         // = 0.123 (memoized)
+```
+### Either
+Either表示2个可能值之中的一个，一个Either要么是左面的值，要么是右面的值，要么表示两种可能类型的值。 一个要么是左要么是右。 如果给定的Either 是Right 并投影到Left，则Left 操作对Right 值没有影响。 如果给定的Either 是Left 并投影到Right，则Right 操作对Left 值没有影响。 如果将左投影到左或将右投影到右，则操作会产生效果。
+下面的例子：一个compute()函数，Either要么返回Integer的类型，要么返回错误的message，按照惯例，成功的值是右值，失败的值是左值。
+```java
+Either<String,Integer> value = compute().right().map(i -> i * 2).toEither();
+```
+### Future
+Future是一个在未来某个点可用的计算计算结果，所有的操作都是非阻塞的，隐含的executorService被用来执行异步的处理器，一个Future有2种状态，待定或者完成。
+- 待定：计算在执行，只有待定状态的future可以完成或者取消；
+- 完成：计算完成了或者失败了，或者被取消了。
+Future上可以注册回调接口，这些回调只要Future完成了就会被调用，注册在已完成的Future上的回调会立即执行，回调可能在另外的线程执行，这取决于潜在的ExecutorService，注册在被取消的Future上的回调回执行错误的回调行为。
+```java
+// future *value*, result of an async calculation
+Future<T> future = Future.of(...);
+```
+### Validation
+Validation 控件是一个应用函子，可以把很多错误累积起来。 当尝试组合一元容器数据时，组合过程将在第一次遇到错误时短路。 但是“验证”将继续处理组合函数，累积所有错误。 这在验证多个字段时特别有用，比如 Web 表单，并且您想知道遇到的所有错误，而不是一次一个。 
+
+
