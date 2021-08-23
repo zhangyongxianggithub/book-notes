@@ -237,4 +237,59 @@ List.of('a', 'b', 'c').zipWithIndex();
 # Getting started
 使用maven的方式
 # 使用指南
-Vavr
+Vavr中包含一些设计良好的基本类型，这些类型基本是java中没有的或者不太完善的，比如Tuple、Value与lambda。
+在Vavr中，所有的内容主要由下面的部分组成
+![](vavr/vavr-architecture.png)
+## 元组
+java里面没有元组类型，一个元组包含固定数量的元素，这些元素被当成一个整体看待，与数组或者线性表不同，一个元组可以持有不同类型的元素，但是元组是不可变的，元组类型有Tuple1、Tuple2、Tuple3.。。。，现在最多有8元组。
+### 创建元组
+```java
+// (Java, 8)
+Tuple2<String, Integer> java8 = Tuple.of("Java", 8); 
+
+// "Java"
+String s = java8._1; 
+
+// 8
+Integer i = java8._2; 
+```
+### 组件映射
+使用Function
+```java
+// (vavr, 1)
+Tuple2<String, Integer> that = java8.map(
+        s -> s.substring(2) + "vr",
+        i -> i / 8
+);
+```
+### 使用mapper映射
+```java
+// (vavr, 1)
+Tuple2<String, Integer> that = java8.map(
+        (s, i) -> Tuple.of(s.substring(2) + "vr", i / 8)
+);
+```
+### 转换元组
+```java
+// "vavr 1"
+String that = java8.apply(
+        (s, i) -> s.substring(2) + "vr " + i / 8
+);
+```
+## Functions
+函数式编程就是值与值的转换，java8提供了Function与BiFunction类型，Vavr提供了0->8个参数的Function类型，名字类似于Function[n]，如果你需要一个Function抛出检查异常，可以是使用CheckedFunction[n]，下面的lambda表达式创建了一个Function，计算2个数的和
+```java
+// sum.apply(1, 2) = 3
+Function2<Integer, Integer, Integer> sum = (a, b) -> a + b;
+```
+也可以使用静态的工厂方法Function3.of(....)等，从方法引用创建Function。
+```java
+Function3<String, String, String, String> function3 =
+        Function3.of(this::methodWhichAccepts3Parameters);
+```
+事实上，Vavr函数式接口是java8函数式接口的变体，提供的特性有：
+- 组合
+- Lifting
+- Currying
+- Memoization
+### Composition
