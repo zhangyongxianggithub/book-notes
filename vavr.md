@@ -474,5 +474,220 @@ Future<T> future = Future.of(...);
 ```
 ### Validation
 Validation 控件是一个应用函子，可以把很多错误累积起来。 当尝试组合一元容器数据时，组合过程将在第一次遇到错误时短路。 但是“验证”将继续处理组合函数，累积所有错误。 这在验证多个字段时特别有用，比如 Web 表单，并且您想知道遇到的所有错误，而不是一次一个。 
+下面的例子
+```java
+PersonValidator personValidator = new PersonValidator();
 
+// Valid(Person(John Doe, 30))
+Validation<Seq<String>, Person> valid = personValidator.validatePerson("John Doe", 30);
 
+// Invalid(List(Name contains invalid characters: '!4?', Age must be greater than 0))
+Validation<Seq<String>, Person> invalid = personValidator.validatePerson("John? Doe!4", -1);
+```
+有效的值包含在validation.Valid中，校验的errors包含在Validation.Invalid中，下面的例子是一个把不同的校验结果组合成一个Validation实例的例子
+```java
+class PersonValidator {
+
+    private static final String VALID_NAME_CHARS = "[a-zA-Z ]";
+    private static final int MIN_AGE = 0;
+
+    public Validation<Seq<String>, Person> validatePerson(String name, int age) {
+        return Validation.combine(validateName(name), validateAge(age)).ap(Person::new);
+    }
+
+    private Validation<String, String> validateName(String name) {
+        return CharSeq.of(name).replaceAll(VALID_NAME_CHARS, "").transform(seq -> seq.isEmpty()
+                ? Validation.valid(name)
+                : Validation.invalid("Name contains invalid characters: '"
+                + seq.distinct().sorted() + "'"));
+    }
+
+    private Validation<String, Integer> validateAge(int age) {
+        return age < MIN_AGE
+                ? Validation.invalid("Age must be at least " + MIN_AGE)
+                : Validation.valid(age);
+    }
+
+}
+```
+如果验证成功，输入的数据是有效的，那么会创建一个Person的对象
+```java
+class Person {
+
+    public final String name;
+    public final int age;
+
+    public Person(String name, int age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "Person(" + name + ", " + age + ")";
+    }
+
+}
+```
+## Collections
+我们付出了很大的努力设计java下的符合函数式编程思想的集合库，其中最重要的特点就是不变性。Java的Stream在集合上添加了计算单元，Vavr中不需要这些模板代码。
+新集合都实现了Iterable，所以都是可迭代的。
+```java
+// 1000 random numbers
+for (double random : Stream.continually(Math::random).take(1000)) {
+    ...
+}
+```
+TraversableOnce接口含有大量的操作函数，它的API类似于java.util.stream.Stream但是更成熟。
+### List
+Vavr的List是一个LinkedList，所有的变更方法都会创建一个新的实例，大多数的操作都是线性时间的，连续的操作一个接着一个的执行。
+```java
+Arrays.asList(1, 2, 3).stream().reduce((i, j) -> i + j);
+IntStream.of(1, 2, 3).sum();
+```
+```java
+// io.vavr.collection.List
+List.of(1, 2, 3).sum();
+```
+### stream
+io.vavr.collection.Stream 是由Lazy Linked List实现的，值只有在需要的时候才计算，因为是懒加载的，大多数的操作都在常量事件内完成。
+由于其惰性，大多数操作都是在恒定时间内执行的。 操作通常是中间的，并在单次通过中执行。流的惊人之处在于我们可以使用它们来表示（理论上）无限长的序列。
+```java
+// 2, 4, 6, ...
+Stream.from(1).filter(i -> i % 2 == 0);
+```
+### 性能
+下表是顺序操作的时间复杂度
+||head()|tail()|get(int)|update(int,T)|prepend(T)|append(T)|
+|:---|:---|:---|:---|:---|:---|:---|
+|**Array**|const|linear|const|const|linear|linear|
+|**CharSeq**|const|linear|const|linear|linear|linear|
+|**Iterator**|const|const|-|-|-|-|
+|**List**|const|const|linear|linear|const|linear|
+|**Queue**|const|const^a^|linear|linear|const|const|
+|**PriorityQueue**|const|const^a^|linear|linear|const|const|
+|**Stream**|const|const|linear|linear|const^lazy^|const^lazy^|
+|**Vector**|const^eff^|const^eff^|const^eff^|const^eff^|const^eff^|const^eff^|
+Map/Set操作的时间复杂度
+||contains/Key|add/put|remove|min|
+|:---|:---|:---|:---|:---|
+|**HashMap**|const^eff^|const^eff^|const^eff^|linear|
+|**HashSet**|const^eff^|const^eff^|const^eff^|linear|
+|**LinkedHashMap**|const^eff^|linear|linear|linear|
+|**LinkedHashMap**|const^eff^|linear|linear|linear|
+|**Tree**|log|log|long|log|
+|**TreeMap**|log|log|log|log|
+|**TreeSet**|log|log|log|log|
+- const,代表常量时间
+- const^a^,大部分是常量时间，少数的操作会时间比较长;
+- const^eff^,平均常量时间，依赖hash key的分布;
+- const^lazy^,
+## 属性检查
+属性检查是一个特别强大的功能，用于测试属性内的具体值，在单元测试中使用，io.vavr:vavr-test模块中包含了属性测试。
+```java
+Arbitrary<Integer> ints = Arbitrary.integer();
+
+// square(int) >= 0: OK, passed 1000 tests.
+Property.def("square(int) >= 0")
+        .forAll(ints)
+        .suchThat(i -> i * i >= 0)
+        .check()
+        .assertIsSatisfied();
+```
+## 模式匹配
+Scala内置了模式匹配的功能，语法类似于java的switch
+```scala
+val s = i match {
+  case 1 => "one"
+  case 2 => "two"
+  case _ => "?"
+}
+```
+*match*是一个表达式，它得到一个结果。提供的内容有：
+- 命名参数`case i: Int->"Int"+i`;
+- 对象解包`case Some(i)->i`;
+- 条件判断`case Some(i) if i > 0 -> "Positive"+i`;
+- 多个条件`case "-h" | "--help" -> displayHelp`;
+- 穷举的编译时间检查。
+模式匹配是一个很重要的特性，可以避免写很多的if-then-else分支逻辑。
+### Java中的基本的模式匹配
+Vavr提供了类似Scala模式匹配的API`import static io.vavr.API.*;`,下面包含了Match、Case与原子的模式
+- $() 通配符模式
+- $(value) 相等模式
+- $(predicate) 条件模式
+上面的scala的例子表示为Java的形式：
+```java
+String s = Match(i).of(
+    Case($(1), "one"),
+    Case($(2), "two"),
+    Case($(), "?")
+);
+```
+我们使用大写的Case写法，是为了与java的case做区分。
+- Exhaustiveness，$()模式就是全部匹配，类似于switch中的default，因为如果没有任何匹配会抛出一个MatchError的异常，使用$()就不会抛出这个异常了，因为我们不能执行Scala那样的详细的检查，所以我们可以选择返回可选值.
+```java
+Option<String> s = Match(i).option(
+    Case($(0), "zero")
+);
+```
+- Syntactic Sugar，就像上面演示的，Case可以匹配条件表达式
+```java
+Case($(predicate), ...)
+```
+我们内置了很多的条件表达式
+```java
+import static io.vavr.Predicates.*;
+```
+上面的例子使用条件表达式的形式可以表示为：
+```java
+String s = Match(i).of(
+    Case($(is(1)), "one"),
+    Case($(is(2)), "two"),
+    Case($(), "?")
+);
+```
+如果有多个条件，可以表示为
+```java
+Case($(isIn("-h", "--help")), ...)
+```
+匹配会产生一个值，这是一个副作用，我们可以通过函数操作这个值
+```java
+Match(arg).of(
+    Case($(isIn("-h", "--help")), o -> run(this::displayHelp)),
+    Case($(isIn("-v", "--version")), o -> run(this::displayVersion)),
+    Case($(), o -> run(() -> {
+        throw new IllegalArgumentException(arg);
+    }))
+);
+```
+使用了run函数，run必须是lambda的形式运行。
+- 命名参数，
+```java
+Number plusOne = Match(obj).of(
+    Case($(instanceOf(Integer.class)), i -> i + 1),
+    Case($(instanceOf(Double.class)), d -> d + 1),
+    Case($(), o -> { throw new NumberFormatException(); })
+);
+```
+### 模式
+在Vavr中，我们使用模式定义一个特定类型的实例的组成部分，模式可以与Match API配合使用。
+- 预定义的模式，内置的模式在包`import static io.vavr.Patterns.*;`中，例如，我们可以使用如下的Try的结果匹配
+```java
+Match(_try).of(
+    Case($Success($()), value -> ...),
+    Case($Failure($()), x -> ...)
+);
+```
+- 用户自定义模式
+```java
+import io.vavr.match.annotation.*;
+
+@Patterns
+class My {
+
+    @Unapply
+    static <T> Tuple1<T> Optional(java.util.Optional<T> optional) {
+        return Tuple.of(optional.orElse(null));
+    }
+}
+```
