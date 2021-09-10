@@ -571,6 +571,106 @@ SeaweedFS内部使用GRPC通信，你可以使用这些GRPC的APIs，
 ## 使用SeaweedFS的项目
 lua-resty-weedfs，nginx后端，文件会使用ffmpeg与graphicsmagick处理;
 # SeaweedFS Java Client
+之前存在几个Java的客户端，但实际上，SeaweedFS早就支持兼容Hadoop的文件系统，这里是SeaweedFS的JavaAPI实现
+[https://github.com/chrislusf/seaweedfs/tree/master/other/java/examples/src/main/java/com/seaweedfs/examples](https://github.com/chrislusf/seaweedfs/tree/master/other/java/examples/src/main/java/com/seaweedfs/examples)
+## 创建jar包
+```shell
+$cd $GOPATH/src/github.com/chrislusf/seaweedfs/other/java/client
+$ mvn install
+```
+maven的形式如下：
+```xml
+<dependency>
+  <groupId>com.github.chrislusf</groupId>
+  <artifactId>seaweedfs-client</artifactId>
+  <version>1.6.4</version>
+</dependency>
+```
+你也可以从mven的仓库中直接下载最新的版本。
+记住：当创建一个FilerClient对象的时候，默认的grpc端口是18888，当启动filer时，
+`weed filer -port=8888`，8888就是默认的http端口。
+```java
+  FilerClient filerClient = new FilerClient("localhost", 18888);
+```
+## 读文件
+```java
+ FilerClient filerClient = new FilerClient("localhost", 18888);
+  SeaweedInputStream seaweedInputStream = new SeaweedInputStream(filerClient, "/test.zip");
+  // next, you can use seaweedInputStream as a normal InputStream
+```
+## 写文件
+```java
+  FilerClient filerClient = new FilerClient("localhost", 18888);
+  SeaweedOutputStream seaweedOutputStream = new SeaweedOutputStream(filerClient, "/test/"+filename);
+  // next, you can use seaweedOutputStream as a normal OutputStream
+
+```
+## 观察文件变更
+```java
+        FilerClient filerClient = new FilerClient("localhost", 18888);
+
+        long sinceNs = (System.currentTimeMillis() - 3600 * 1000) * 1000000L;
+
+        Iterator<FilerProto.SubscribeMetadataResponse> watch = filerClient.watch(
+                "/buckets",
+                "exampleClientName",
+                sinceNs
+        );
+
+        System.out.println("Connected to filer, subscribing from " + new Date());
+
+        while (watch.hasNext()) {
+            FilerProto.SubscribeMetadataResponse event = watch.next();
+            FilerProto.EventNotification notification = event.getEventNotification();
+            if (!event.getDirectory().equals(notification.getNewParentPath())) {
+                // move an entry to a new directory, possibly with a new name
+                if (notification.hasOldEntry() && notification.hasNewEntry()) {
+                    System.out.println("moved " + event.getDirectory() + "/" + notification.getOldEntry().getName() + " to " + notification.getNewParentPath() + "/" + notification.getNewEntry().getName());
+                } else {
+                    System.out.println("this should not happen.");
+                }
+            } else if (notification.hasNewEntry() && !notification.hasOldEntry()) {
+                System.out.println("created entry " + event.getDirectory() + "/" + notification.getNewEntry().getName());
+            } else if (!notification.hasNewEntry() && notification.hasOldEntry()) {
+                System.out.println("deleted entry " + event.getDirectory() + "/" + notification.getOldEntry().getName());
+            } else if (notification.hasNewEntry() && notification.hasOldEntry()) {
+                System.out.println("updated entry " + event.getDirectory() + "/" + notification.getNewEntry().getName());
+            }
+        }
+
+```
+##  标准文件操作
+```java
+  FilerClient filerClient = new FilerClient("localhost", 18888);
+
+  List<FilerProto.Entry> entries = filerClient.listEntries("/");
+
+  for (FilerProto.Entry entry : entries) {
+      System.out.println(entry.toString());
+  }
+
+  filerClient.mkdirs("/new_folder", 0755);
+  filerClient.touch("/new_folder/new_empty_file", 0755);
+  filerClient.touch("/new_folder/new_empty_file2", 0755);
+  filerClient.rm("/new_folder/new_empty_file", false, true);
+  filerClient.rm("/new_folder", true, true);
+
+```
+## 高级用法
+```java
+  // load existing entry
+  FilerProto.Entry entry = filerClient.lookupEntry("/some/dir","entryName");
+
+  // change the attribute
+  FilerProto.Entry.Builder entryBuilder = FilerProto.Entry.newBuilder(entry);
+  FilerProto.FuseAttributes.Builder attrBuilder = FilerProto.FuseAttributes.newBuilder(entry.getAttributes());
+  attrBuilder.setMtime(...)
+
+  // save the new entry
+  entryBuilder.setAttributes(attrBuilder);
+  filerClient.updateEntry("/some/dir", entryBuilder.build());
+```
+# 复制
 
 
 
