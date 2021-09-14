@@ -1,3 +1,4 @@
+[TOC]
 # 前言
 Spring data jpa实现了JPA（Java Persistence API），简化了数据库应用的开发工作。
 # Spring Data如何工作
@@ -195,6 +196,99 @@ public interface UserRepository extends JpaRepository<User, Long> {
 如果你使用了java8的-parameters功能，可以不用使用@Param
 - 使用SpEL表达式，
 - 修改SQL，
+## 存储过程
+## 规格
+JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
+```java
+public interface CustomerRepository extends CrudRepository<Customer, Long>, JpaSpecificationExecutor<Customer> {
+}
+```
+接口提供了很多的使用spec查询的方法，例如，`findAll`方法
+```java
+List<T> findAll(Specification<T> spec);
+```
+Specification接口定义如下：
+```java
+public interface Specification<T> {
+  Predicate toPredicate(Root<T> root, CriteriaQuery<?> query,
+            CriteriaBuilder builder);
+}
+```
+Specification常用来做可扩展的谓词集合，这样不需要定义单独的查询方法
+```java
+public class CustomerSpecs {
+
+
+  public static Specification<Customer> isLongTermCustomer() {
+    return (root, query, builder) -> {
+      LocalDate date = LocalDate.now().minusYears(2);
+      return builder.lessThan(root.get(Customer_.createdAt), date);
+    };
+  }
+
+  public static Specification<Customer> hasSalesOfMoreThan(MonetaryAmount value) {
+    return (root, query, builder) -> {
+      // build query here
+    };
+  }
+}
+```
+上面的`Customer_`类型是一个元模型，是使用JPA元模型生成器生成的，所以，表达式`Customer_.createdAt`表示`Customer`有一个Date类型的createdAt属性，除此以外，还有表示业务逻辑的谓词断言创建的可执行的Specification，使用Specification可以执行查询，如下：
+```java
+List<Customer> customers = customerRepository.findAll(isLongTermCustomer());
+```
+为什么不为这个查询创建一个查询方法，使用单一的Specification确实看起来没有多大收益，但是当有多个Specification组合起来查询时，它能表示的条件是普通的查询无法实现的，看下面的例子：
+```java
+MonetaryAmount amount = new MonetaryAmount(200.0, Currencies.DOLLAR);
+List<Customer> customers = customerRepository.findAll(
+  isLongTermCustomer().or(hasSalesOfMoreThan(amount)));
+```
+## QBE查询方式
+QBE是一个用户友好的查询方式，可以动态的创建查询，事实上，QBE查询方式对底层查询SQL来说，是透明的。QBE的API包含3个部分
+- Probe:领域对象的实际实例；
+- ExampleMatcher:特定字段的匹配规则，多个Example之间可以复用;
+- Example: 一个包含Example与ExampleMatcher的Example，用来创建查询；
+下面的场景适合使用QBE
+- 在静态或者动态的限制下查询数据;
+- 领域对象需要频繁的重构，为了防止对现有的查询产生冲击;
+- 独立与底层数据存储的API。
+QBE的限制
+- 不支持嵌套类或者分组类的限制条件，比如`firstname = ?0 or (firstname = ?1 and lastname = ?2)`;
+- 对string来说只支持starts/contains/ends/regex匹配，其他类型只支持精确匹配。
+在使用QBE前，你需要又个领域对象，比如下面的
+```java
+public class Person {
+
+  @Id
+  private String id;
+  private String firstname;
+  private String lastname;
+  private Address address;
+
+  // … getters and setters omitted
+}
+```
+上面的事例展示了一个简单的领域对象，你可以使用它创建一个Example，默认情况下，对于null的字段会被忽略，string执行精确匹配；QBE构造查询条件是通过是否null来判断的，如果是基本类型，不可能是null，所以是一直包含在查询条件中的，下面的例子展示了构造Example的例子
+```java
+Person person = new Person();                         
+person.setFirstname("Dave");                          
+Example<Person> example = Example.of(person);         
+```
+你可以通过ExampleMatcher来自定义匹配的规则，下面是一个例子:
+```java
+Person person = new Person();                          
+person.setFirstname("Dave");                           
+
+ExampleMatcher matcher = ExampleMatcher.matching()     
+  .withIgnorePaths("lastname")                         
+  .withIncludeNullValues()                             
+  .withStringMatcher(StringMatcher.ENDING);            
+
+Example<Person> example = Example.of(person, matcher); 
+```
+## 事务
+## Locking
+## 签名
 # JPA仓库
 ## 投影
 Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要一句聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
