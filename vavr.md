@@ -695,8 +695,8 @@ Match(_try).of(
 );
 ```
 这里的根模式就是Success与Failure，它们被析构成Tuple2与Error，拥有正确的范型。
-
 - 用户自定义模式
+有时候想要解构其他类型的对象，Vavr提供了2个编译期的注解@Patterns与@Unapply，这2个注解可以帮助实现声明式方式的解构，想要开启这2个注解，需要加入vavr-match这个maven的包。模式也可以在没有代码生成器的情况下直接被实现，
 ```java
 import io.vavr.match.annotation.*;
 
