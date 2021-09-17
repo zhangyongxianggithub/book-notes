@@ -624,17 +624,18 @@ String s = Match(i).of(
 );
 ```
 我们使用了大写的Case写法，是为了与java的case做区分。因为这个是关键字。
-- Exhaustiveness，上面的例子中$()模式就是全部匹配，类似于switch中的default，因为如果没有任何匹配代码会抛出一个MatchError的异常，使用$()就不会抛出这个异常了，因为我们不能执行Scala那样的详细的检查，所以我们可以选择返回可选值.
+- Exhaustiveness，上面的例子中$()模式就是全部匹配，类似于switch中的default，因为如果没有任何项匹配，程序就会抛出一个MatchError类型的异常，使用$()就不会抛出这个异常了，因为我们不能执行Scala那样的详细的检查，所以我们可以选择返回可选值.
 ```java
 Option<String> s = Match(i).option(
     Case($(0), "zero")
 );
 ```
-- Syntactic Sugar，就像上面演示的，Case可以匹配条件表达式
+- 语法糖
+就像上面演示的，Case可以匹配模式
 ```java
 Case($(predicate), ...)
 ```
-我们内置了很多的条件表达式
+我们内置了很多的谓词对象可以进行条件判断
 ```java
 import static io.vavr.Predicates.*;
 ```
@@ -646,11 +647,12 @@ String s = Match(i).of(
     Case($(), "?")
 );
 ```
-如果有多个条件，可以表示为
+如果有多个条件，可以表示为一种集合的形式
 ```java
 Case($(isIn("-h", "--help")), ...)
 ```
-匹配会产生一个值，这是一个副作用，我们可以通过函数操作这个值
+- 执行的副作用
+匹配的行为就像一个表达式，它产生一个值，为了执行一些额外的操作，我们需要一个返回void的帮助函数run来执行一些其他的处理操作。
 ```java
 Match(arg).of(
     Case($(isIn("-h", "--help")), o -> run(this::displayHelp)),
@@ -660,8 +662,9 @@ Match(arg).of(
     }))
 );
 ```
-使用了run函数，run必须是lambda的形式运行。
-- 命名参数，
+使用了run函数，run必须是lambda的形式运行。run函数如果没有正确的使用，就回容易出错，我们正考虑在未来的版本中遗弃这个功能，并提供一些更好的API。
+- 命名参数
+Vavr借助lambda可以提供命名参数的功能，如下：
 ```java
 Number plusOne = Match(obj).of(
     Case($(instanceOf(Integer.class)), i -> i + 1),
@@ -669,15 +672,30 @@ Number plusOne = Match(obj).of(
     Case($(), o -> { throw new NumberFormatException(); })
 );
 ```
+到目前为止，我们使用原子模式直接匹配值。 如果原子模式匹配，则从模式的上下文中推断出匹配对象的正确类型。下面我们会看下回溯模式的用法，可以执行深度匹配。
+- 对象解构
+在java中，我们使用构造函数来实例化类，我们认为，对象解构就是把对象分解为多个组合部分的过程。一个构造函数的作用是使用参数返回一个类的实例，一个惜构函数的作用是相反的，接收一个实例对象，返回对象的组成部分，我们说一个对象被unapplied。
+对象析构并不一定是一个必须的操作，也可以通过其他的形式得到实例的组成部分。
+
 ### 模式
-在Vavr中，我们使用模式定义一个特定类型的实例的组成部分，模式可以与Match API配合使用。
-- 预定义的模式，内置的模式在包`import static io.vavr.Patterns.*;`中，例如，我们可以使用如下的Try的结果匹配
+在Vavr中，我们使用模式定义一个特定类型的实例的如何分解，这样的惜构模式可以与Match API配合使用。
+- 预定义的模式
+很多内置的模式在包`import static io.vavr.Patterns.*;`中，例如，我们可以使用如下的Try的结果匹配
 ```java
 Match(_try).of(
     Case($Success($()), value -> ...),
     Case($Failure($()), x -> ...)
 );
 ```
+如果没有适当的编译器支持，这是不切实际的，因为生成的方法的数量呈指数级增长。 当前的 API 做出了妥协，即所有模式都匹配，但只分解了根模式。
+```java
+Match(_try).of(
+    Case($Success(Tuple2($("a"), $())), tuple2 -> ...),
+    Case($Failure($(instanceOf(Error.class))), error -> ...)
+);
+```
+这里的根模式就是Success与Failure，它们被析构成Tuple2与Error，拥有正确的范型。
+
 - 用户自定义模式
 ```java
 import io.vavr.match.annotation.*;
