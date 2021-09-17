@@ -595,7 +595,7 @@ Property.def("square(int) >= 0")
         .assertIsSatisfied();
 ```
 ## 模式匹配
-Scala内置了模式匹配的功能，语法类似于java的switch
+Scala内置了模式匹配的功能，这是比java优势的一个地方，基本语法类似于java的switch
 ```scala
 val s = i match {
   case 1 => "one"
@@ -607,11 +607,11 @@ val s = i match {
 - 命名参数`case i: Int->"Int"+i`;
 - 对象解包`case Some(i)->i`;
 - 条件判断`case Some(i) if i > 0 -> "Positive"+i`;
-- 多个条件`case "-h" | "--help" -> displayHelp`;
+- 条件组合`case "-h" | "--help" -> displayHelp`;
 - 穷举的编译时间检查。
 模式匹配是一个很重要的特性，可以避免写很多的if-then-else分支逻辑。
 ### Java中的基本的模式匹配
-Vavr提供了类似Scala模式匹配的API`import static io.vavr.API.*;`,下面包含了Match、Case与原子的模式
+Vavr提供了类似Scala模式匹配的API`import static io.vavr.API.*;`,这个包包含了Match、Case与原子的模式匹配的一些相关的静态方法。
 - $() 通配符模式
 - $(value) 相等模式
 - $(predicate) 条件模式
@@ -623,8 +623,8 @@ String s = Match(i).of(
     Case($(), "?")
 );
 ```
-我们使用大写的Case写法，是为了与java的case做区分。
-- Exhaustiveness，$()模式就是全部匹配，类似于switch中的default，因为如果没有任何匹配会抛出一个MatchError的异常，使用$()就不会抛出这个异常了，因为我们不能执行Scala那样的详细的检查，所以我们可以选择返回可选值.
+我们使用了大写的Case写法，是为了与java的case做区分。因为这个是关键字。
+- Exhaustiveness，上面的例子中$()模式就是全部匹配，类似于switch中的default，因为如果没有任何匹配代码会抛出一个MatchError的异常，使用$()就不会抛出这个异常了，因为我们不能执行Scala那样的详细的检查，所以我们可以选择返回可选值.
 ```java
 Option<String> s = Match(i).option(
     Case($(0), "zero")

@@ -30,7 +30,7 @@ zuul:
       path: /myusers/**
       serviceId: users_service
 ```
-上面的例子意味着/myusers下面的http请求都会被转发到哦users_service服务，path必须是ant风格的，/myusers/*只会匹配一级路径,/myusers/**会匹配全部的路径。后端的位置可以使用serviceId或者url指定，比如：
+上面的例子意味着/myusers下面的http请求都会被转发到users_service服务，path必须是ant风格的，/myusers/*只会匹配一级路径,/myusers/**会匹配全部的路径。后端的位置可以使用serviceId或者url指定，比如：
 ```yml
 zuul:
   routes:
@@ -90,7 +90,7 @@ public PatternServiceRouteMapper serviceRouteMapper() {
 }
 ```
 上面的例子意味着serviceId=myusers-v1的请求会被映射到路径/v1/myusers/**，任何正则表达式都可以，但是只用命名组会出现在servicePattern与routePattern中,如果servicePattern与serviceId不匹配，会使用默认的行为。
-为了给所有的映射加前缀，设置属性zuul.prefix=/api，默认情况下，前缀在转发时，都被移除了，可以设置zull.stripPrefix关闭这个行为，页可以关闭自动去除服务级别的前缀的行为，如下：
+为了给所有的映射加前缀，设置属性zuul.prefix=/api，默认情况下，前缀在转发时，都被移除了，可以设置zull.stripPrefix关闭这个行为，也可以关闭自动去除服务级别的前缀的行为，如下：
 ```yml
  zuul:
   routes:
@@ -99,7 +99,7 @@ public PatternServiceRouteMapper serviceRouteMapper() {
       stripPrefix: false
 ```
 zuul.stripPrefix只会移除zuul.prefix定义的前缀，不会移除path中的前缀。
-zuul.routes中的实体实际是ZuulProperties类型的对象，里面有一个retryable的标志，设置为true可以让Ribbon的客户端自动重试失败的请求。默认情况下，X-Forwarded-Host的header会被添加到转发的请求中，想要关闭它，zuul.addProxyHeaders=false,缺省情况下，路径中的prefix会被忽略，但是转发的请求中X-Forwarded-Prefix会带有移除的前缀，如果你设置了一个默认的路由/，@EnableZuulProxy的应用可以作为一个单体服务器，比如设置了zuul.route.home: /，所有的请求都会饿发送到home服务。
+zuul.routes中的实体实际是ZuulProperties类型的对象，里面有一个retryable的标志，设置为true可以让Ribbon的客户端自动重试失败的请求。默认情况下，X-Forwarded-Host的header会被添加到转发的请求中，想要关闭它，zuul.addProxyHeaders=false,缺省情况下，路径中的prefix会被忽略，但是转发的请求中X-Forwarded-Prefix会带有移除的前缀，如果你设置了一个默认的路由/，@EnableZuulProxy的应用可以作为一个单体服务器，比如设置了zuul.route.home: /，所有的请求都会发送到home服务。
 如果需要更细粒度的忽略控制，你可以指定一个需要忽略的模式，这些模式会在路由位置处理的开始时考虑，这意味着此时路径上还有前缀，模式需要考虑前缀的情况，下面的例子是创建模式的例子
 ```yml
 zuul:
