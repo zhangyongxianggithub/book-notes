@@ -34,7 +34,7 @@ try {
 
 ```
 每当 callable 的结果为 null、抛出 IOException 或从 call() 方法抛出任何其他 RuntimeException 时，这将重试。 它会在尝试重试 3 次后停止并抛出包含有关上次失败尝试的信息的 RetryException。 如果有任何其他异常从 call() 方法中弹出，它会被包装并重新抛出为 ExecutionException异常。
-下面的例子创建了一个永久重试的Retryer，每次失败后，增加指数级增长的时间间隔，最终达到最大重试间隔
+下面的例子创建了一个永久重试的Retryer，每次失败后，增加指数级增长的时间间隔，最终达到最大重试间隔(指数退避算法)
 ```java
 Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
         .retryIfExceptionOfType(IOException.class)
