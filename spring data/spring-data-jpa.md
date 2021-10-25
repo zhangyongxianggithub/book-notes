@@ -286,6 +286,63 @@ ExampleMatcher matcher = ExampleMatcher.matching()
 
 Example<Person> example = Example.of(person, matcher); 
 ```
+上面的例子是过程
+- 创建一个领域对象实例
+- 设置领域对象实例的属性
+- 创建一个ExampleMatcher，匹配所有的设置的值，在这个阶段就可用了;
+- 创建一个ExampleMatcher，忽略lastname属性;
+- 创建一个ExampleMatcher，忽略lastname属性，包含所有的null值;
+- 创建一个ExampleMatcher，忽略lastname属性,包含所有的null值,字符串执行后缀匹配;
+- 创建一个使用上述领域对象与ExampleMatcher的Example.
+默认情况下，ExampleMatcher会匹配probe中设置的所有的值，也就是and条件，如果你想执行or条件，使用ExampleMatcher.matchingAny();你可以单独指定属性的行为，比如firstname、lastname、或者其他内嵌的属性，你可以调整它的匹配选项、大小写敏感等。例子如下：
+```java
+ExampleMatcher matcher = ExampleMatcher.matching()
+  .withMatcher("firstname", endsWith())
+  .withMatcher("lastname", startsWith().ignoreCase());
+}
+```
+还有一种配置匹配选项的方式是使用lambda，这种方式会使用回调的方式然实现者自定义匹配逻辑，你不需要定义Matcher对象，因为配置选项已经在配置实例里面，例子如下：
+```java
+ExampleMatcher matcher = ExampleMatcher.matching()
+  .withMatcher("firstname", match -> match.endsWith())
+  .withMatcher("firstname", match -> match.startsWith());
+}
+```
+Example创建的查询使用混合起来的设置，默认的匹配设置可以设置在ExampleMatcher级别，单独属性的设置会设置到特定的属性路径上，ExampleMatcher级别上的设置会被属性路径的设置继承，除非明确指定匹配规则，则会使用属性自己的设置，下面的表格展示了不同呢ExampleMatcher的设置的作用域。
+|Setting|Scope|
+|:---:|:---:|
+|null处理|ExampleMatcher|
+|String匹配|ExampleMatcher或者属性|
+|igoring properties|属性|
+|Case Sensitivity|ExampleMatcher或者属性|
+|Value Transformation|属性|
+在Spring Data JPA中，你可以在普通的Repository中使用QBE，比如：
+```java
+public interface PersonRepository extends JpaRepository<Person, String> { … }
+
+public class PersonService {
+
+  @Autowired PersonRepository personRepository;
+
+  public List<Person> findPeople(Person probe) {
+    return personRepository.findAll(Example.of(probe));
+  }
+}
+```
+属性描述符可以是属性的名字，或者是属性的.号分隔名字。
+下面的表格中是不同的StringMatcher选项，你可以使用它们，下面是一个在firstname上的例子
+|Matching|Logical Result|
+|:---|:---|
+|DEFAULT(cs)|firstname=?0|
+|DEFAULT(ci)|LOWER(firstname)=LOWER(?0)|
+|EXACT(cs)|firstname=?0|
+|EXACT(ci)|LOWER(firstname) = LOWER(?0)|
+|STARTING (case-sensitive)|firstname like ?0 + '%'|
+|STARTING (case-insensitive)|LOWER(firstname) like LOWER(?0) + '%'|
+|ENDING (case-sensitive)|firstname like '%' + ?0|
+|ENDING (case-insensitive)|LOWER(firstname) like '%' + LOWER(?0)|
+|CONTAINING (case-sensitive)|firstname like '%' + ?0 + '%'|
+|CONTAINING (case-insensitive)|LOWER(firstname) like '%' + LOWER(?0) + '%'|
 ## 事务
 ## Locking
 ## 签名
