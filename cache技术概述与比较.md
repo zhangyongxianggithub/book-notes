@@ -19,7 +19,6 @@ Caffeine是一个高性能的、近乎最佳命中率的缓存库，Caffeine是�
 - 手动加载
 ## EhCache
 ## Map
-## JetCache
 # 分布式缓存
 ## redis
 ## memcached
@@ -36,3 +35,4 @@ tair提供快速访问内存（MDB引擎）/持久化（LDB引擎）存储服务
 - 数据存储，因为支持数据本地存储，可以支持离线数据；
 - 黑白名单；
 - 分布式锁。
+## JetCache
