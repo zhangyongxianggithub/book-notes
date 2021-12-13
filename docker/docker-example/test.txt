@@ -1,0 +1,172 @@
+package com.baidu.acg.iidp.provider.runtime.service.impl;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
+import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.concurrent.ListenableFutureCallback;
+
+import com.baidu.acg.iidp.provider.runtime.domain.InstanceSettingMessage;
+import com.baidu.acg.iidp.provider.runtime.domain.model.InstanceMenuDO;
+import com.baidu.acg.iidp.provider.runtime.domain.model.InstanceSetting;
+import com.baidu.acg.iidp.provider.runtime.domain.model.QInstanceSetting;
+import com.baidu.acg.iidp.provider.runtime.domain.repositories.InstanceSettingRepository;
+import com.baidu.acg.iidp.provider.runtime.service.ApplicationUrlGenerator;
+import com.baidu.acg.iidp.provider.runtime.service.CommonService;
+import com.baidu.acg.iidp.provider.runtime.service.InstanceMenuService;
+import com.baidu.acg.iidp.provider.runtime.service.InstanceResourceService;
+import com.baidu.acg.iidp.provider.runtime.service.InstanceSettingService;
+import com.querydsl.core.BooleanBuilder;
+
+import lombok.extern.slf4j.Slf4j;
+
+import static com.baidu.acg.iidp.provider.runtime.common.enums.InstanceSettingStatusEnum.DRAFT;
+import static com.baidu.acg.iidp.provider.runtime.common.enums.InstanceSettingStatusEnum.PUBLISHMENT;
+import static com.baidu.acg.iidp.provider.runtime.domain.InstanceSettingMessage.makeOffline;
+import static com.baidu.acg.iidp.provider.runtime.domain.InstanceSettingMessage.makeOnline;
+import static com.baidu.acg.iidp.provider.runtime.service.UserHelper.currentEnterpriseId;
+import static java.util.Objects.requireNonNull;
+import static org.apache.commons.collections4.CollectionUtils.isNotEmpty;
+
+/**
+ * @NAME: zhangyongxiang
+ * @Author: zhangyongxiang@baidu.com
+ * @Date 2021/9/14 2:28 下午
+ * @Version 1.0
+ * @Description:
+ **/
+@Slf4j
+@Transactional(rollbackFor = Exception.class)
+@Service
+public class InstanceSettingServiceImpl implements InstanceSettingService {
+    
+    private final InstanceSettingRepository instanceSettingRepository;
+    
+    private final InstanceMenuService instanceMenuService;
+    
+    private final InstanceResourceService instanceResourceService;
+    
+    private final KafkaTemplate<String, InstanceSettingMessage> kafkaTemplate;
+    
+    private final CommonService instanceMenuCommonService;
+    
+    private final ApplicationUrlGenerator applicationUrlGenerator;
+    
+    public InstanceSettingServiceImpl(
+            final InstanceSettingRepository instanceSettingRepository,
+            final InstanceMenuService instanceMenuService,
+            final InstanceResourceService instanceResourceService,
+            final KafkaTemplate<String, InstanceSettingMessage> kafkaTemplate,
+            @Qualifier("instanceMenuServiceImpl") final CommonService instanceMenuCommonService,
+            final ApplicationUrlGenerator applicationUrlGenerator) {
+        this.instanceSettingRepository = instanceSettingRepository;
+        this.instanceMenuService = instanceMenuService;
+        this.instanceResourceService = instanceResourceService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.instanceMenuCommonService = instanceMenuCommonService;
+        this.applicationUrlGenerator = applicationUrlGenerator;
+    }
+    
+    @Override
+    public Optional<InstanceSetting> publish(final Long settingId) {
+        return findInstanceSetting(settingId).map(setting -> {
+            final List<InstanceMenuDO> draftMenus = instanceMenuService
+                    .getDraftInstanceMenus(settingId).stream()
+                    .filter(menu -> menu.getStatus() == DRAFT)
+                    .peek(menu -> menu.setStatus(PUBLISHMENT))
+                    .collect(Collectors.toList());
+            if (isNotEmpty(draftMenus)) {
+                instanceMenuService.saveAll(draftMenus);
+            }
+            instanceResourceService.publishResource(settingId);
+            setting.setStatus(PUBLISHMENT);
+            setting.setPublishedAddress(
+                    applicationUrlGenerator.generateUrl(setting));
+            setting.setLastPublishTime(LocalDateTime.now());
+            final InstanceSetting result = instanceSettingRepository
+                    .save(setting);
+            createApplication(result);
+            return result;
+        });
+        
+    }
+    
+    private void createApplication(
+            final InstanceSetting publishedInstanceSetting) {
+        final List<InstanceMenuDO> menus = instanceMenuCommonService
+                .getCompleteInstanceMenus(
+                        publishedInstanceSetting.getSettingId(), PUBLISHMENT);
+        kafkaTemplate
+                .sendDefault(
+                        String.valueOf(publishedInstanceSetting.getSettingId()),
+                        makeOnline(publishedInstanceSetting, menus))
+                .addCallback(
+                        new ListenableFutureCallback<SendResult<String, InstanceSettingMessage>>() {
+                            @Override
+                            public void onFailure(@NonNull final Throwable ex) {
+                                log.error("publish application {} failed",
+                                        publishedInstanceSetting, ex);
+                            }
+                            
+                            @Override
+                            public void onSuccess(
+                                    final SendResult<String, InstanceSettingMessage> result) {
+                                log.error(
+                                        "publish application {} successfully, {}",
+                                        publishedInstanceSetting, result);
+                            }
+                        });
+    }
+    
+    @Override
+    public Optional<InstanceSetting> getBack(final Long settingId) {
+        return findInstanceSetting(settingId)
+                .filter(setting -> setting.getStatus() == PUBLISHMENT)
+                .map(setting -> {
+                    setting.setStatus(DRAFT);
+                    setting.setPublishedAddress(null);
+                    final InstanceSetting result = instanceSettingRepository
+                            .save(setting);
+                    kafkaTemplate
+                            .sendDefault(String.valueOf(setting.getSettingId()),
+                                    makeOffline(setting))
+                            .addCallback(
+                                    new ListenableFutureCallback<SendResult<String, InstanceSettingMessage>>() {
+                                        @Override
+                                        public void onFailure(
+                                                @NonNull final Throwable ex) {
+                                            log.error(
+                                                    "get back application {} failed",
+                                                    setting, ex);
+                                        }
+                                        
+                                        @Override
+                                        public void onSuccess(
+                                                final SendResult<String, InstanceSettingMessage> result) {
+                                            log.error(
+                                                    "get back application {} successfully, {}",
+                                                    setting, result);
+                                        }
+                                    });
+                    return result;
+                });
+    }
+    
+    @Override
+    public Optional<InstanceSetting> findInstanceSetting(final Long settingId) {
+        final BooleanBuilder builder = new BooleanBuilder();
+        builder.and(QInstanceSetting.instanceSetting.settingId.eq(settingId)
+                .and(QInstanceSetting.instanceSetting.isDeleted.isFalse())
+                .and(QInstanceSetting.instanceSetting.tenantId
+                        .eq(currentEnterpriseId())));
+        return instanceSettingRepository
+                .findOne(requireNonNull(builder.getValue()));
+    }
+}
