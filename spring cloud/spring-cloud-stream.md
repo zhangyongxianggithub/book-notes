@@ -240,5 +240,53 @@ public static class SinkFromConsumer {
 }
 ```
 ### Suppliers(Sources)
-Function与Consumer
+Function与Consumer是的触发时机是非常清晰明了了的；它们是基于发送给他们绑定的destination的数据触发的，换句话说，它们是传统的事件驱动的组件。
+然而，Supplier的触发方式是完全不同呢的，因为根据定义，它是数据的源头，它没有订阅任何输入的destination，因此，必须通过其他的机制触发；也存在一个Supplier实现的问题，Supplier的实现还存在一个问题，就是它是命令式（imperative）还是反应式（reactive）的会与supplier的触发方式直接相关。
+考虑下面的例子：
+```java
+@SpringBootApplication
+public static class SupplierConfiguration {
 
+	@Bean
+	public Supplier<String> stringSupplier() {
+		return () -> "Hello from Supplier";
+	}
+}
+```
+前面的例子中的Supplier的bean在每次调用get()方法的时候都会返回一个字符串，然而，谁调用get方法呢？什么时候调用get方法呢？框架提供了一个默认的polling机制（这回答了who的问题），这个轮训机制会触发supplier的调用，并且默认情况下，每秒就会触发一次（回答了触发的时机），换句话说，上面的配置每秒就会产生一条消息，并且，每条消息都会被发送到output的destination中，想要了解更多的轮训机制的细节或者需要定制轮训的一些机制，可以仔细阅读Polling Configuration Propeties章节.
+考虑一个不同的例子:
+```java
+@SpringBootApplication
+public static class SupplierConfiguration {
+
+    @Bean
+    public Supplier<Flux<String>> stringSupplier() {
+        return () -> Flux.fromStream(Stream.generate(new Supplier<String>() {
+            @Override
+            public String get() {
+                try {
+                    Thread.sleep(1000);
+                    return "Hello from Supplier";
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        })).subscribeOn(Schedulers.elastic()).share();
+    }
+}
+```
+前面的Supplier bean采用了reactive的编程模式；与命令式的supplier不同，假设get方法的调用产生的是连续的消息流而不是一个单一的消息的话，它只会被触发一次。框架会识别到这种编程方式的不同并确保这样的supplier只会被触发一次。
+然而，想象一个场景，你想从数据源拉取一些数据，并返回有限数量的数据流来表示结果集，reactive的编程模式对于这样的Supplier是完美的匹配机制，然而，由于结果集的有限的特性，这样的Supplier仍然需要周期性的调用。考虑下面的产生有限流的例子
+```java
+@SpringBootApplication
+public static class SupplierConfiguration {
+
+	@PollableBean
+	public Supplier<Flux<String>> stringSupplier() {
+		return () -> Flux.just("hello", "bye");
+	}
+}
+```
+bean本身被PollableBean注解（@Bean注解的子集）修饰，这个注解会通知框架，虽然Supplier是reactive的，但是仍然需要polled。
+@PollableBean注解中有个splittable属性，这个属性会通知注解处理器，组件产生的结果必须被分片，因为这个属性默认是true，这意味着框架将拆分返回发送每个项目作为单独的消息。 如果这不是他想要的行为，您可以将其设置为 false，此时供应商将简单地返回生成的 Flux 而不会拆分它。
+到目前为止，Supplier因为没有外部的事件驱动，所以是通过一个完全不同的poller机制推动的，这样可能具有一些无法预测的多线程的行为，虽然大多数时候线程机制的细节与函数的下游执行无关，但在某些情况下可能会出现问题，尤其是对于可能对线程亲和性有一定期望的集成框架。 例如，Spring Cloud Sleuth 依赖于存储在线程本地的跟踪数据。 对于这些情况，我们通过 StreamBridge 有另一种机制，用户可以在其中更好地控制线程机制。 您可以在将任意数据发送到输出（例如外部事件驱动源）部分中获得更多详细信息。
