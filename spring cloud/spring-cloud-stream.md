@@ -290,3 +290,75 @@ public static class SupplierConfiguration {
 bean本身被PollableBean注解（@Bean注解的子集）修饰，这个注解会通知框架，虽然Supplier是reactive的，但是仍然需要polled。
 @PollableBean注解中有个splittable属性，这个属性会通知注解处理器，组件产生的结果必须被分片，因为这个属性默认是true，这意味着框架将拆分返回发送每个项目作为单独的消息。 如果这不是他想要的行为，您可以将其设置为 false，此时供应商将简单地返回生成的 Flux 而不会拆分它。
 到目前为止，Supplier因为没有外部的事件驱动，所以是通过一个完全不同的poller机制推动的，这样可能具有一些无法预测的多线程的行为，虽然大多数时候线程机制的细节与函数的下游执行无关，但在某些情况下可能会出现问题，尤其是对于可能对线程亲和性有一定期望的集成框架。 例如，Spring Cloud Sleuth 依赖于存储在线程本地的跟踪数据。 对于这些情况，我们通过 StreamBridge 有另一种机制，用户可以在其中更好地控制线程机制。 您可以在将任意数据发送到输出（例如外部事件驱动源）部分中获得更多详细信息。
+### Consumer(Reactive)
+Reactive消费者有点特别，因为它有一个void的返回类型，leaving framework with no reference to subscribe to。你不需要写`Consumer<Flux<?>>`，而是写`Function<Flux<?>, Mono<Void>>`，在流的最后调用then操作。
+```java
+public Function<Flux<?>, Mono<Void>>consumer() {
+	return flux -> flux.map(..).filter(..).then();
+}
+```
+因为没有写Consumer，所以你需要记得订阅输入的Flux。
+### Polling配置属性
+下面是poll机制的相关的配置属性，这些属性都是以spring.cloud.stream.poller开头的：
+- fixedDelay: 默认poller的固定的延迟，默认是1000ms;
+- maxMessagesPerPoll: 默认poller每次轮询拉取的最大的消息数量，默认是1L
+- cron: Cron Trigger的Cron表达式，默认是none
+- initialDelay: 周期行的触发器的初始延迟，默认是0;
+- timeUnit: 延迟的单位，默认是ms
+比如`--spring.cloud.stream.poller.fixed-delay=2000`的设置表示poller的间隔是2s。
+这些属性在3.2版本被遗弃了，转而使用Spring Integration的相关的配置，可以看`org.springframework.boot.autoconfigure.integration.IntegrationProperties.Poller`中细节。
+### sending arbitrary data to an output（外部事件驱动源）
+存在一些场景，实际的数据源可能是一些外部的系统，而不是binder，比如，数据产生的来源是一个REST API；我们如何为这样的数据源与函数式编程机制建立桥？SCS提供了2种机制，让我们详细了解下。
+对于这2种机制，我们都是用一个标准的MVC API，通过StreamBridge机制将输入的请求转换成消息流。
+```java
+@SpringBootApplication
+@Controller
+public class WebSourceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(WebSourceApplication.class, "--spring.cloud.stream.source=toStream");
+	}
+
+	@Autowired
+	private StreamBridge streamBridge;
+
+	@RequestMapping
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public void delegateToSupplier(@RequestBody String body) {
+		System.out.println("Sending " + body);
+		streamBridge.send("toStream-out-0", body);
+	}
+}
+```
+这里，我们注入了一个StreamBridge类型的bean，这个bean可以让我们发送数据到output的binding，记住，前面的例子没有定义任何的源supplier；框架不需要事先就创建source binding；在函数式配置的应用中，binding都是启动时触发创建的；这样做也是OK的，这是因为，StreamBridge将会初始化不存在的output binding的创建工作（如有必要，自动配置destination），初始化是在第一次调用send(...)操作时发生，完成后会缓存binding，用于后续的复用（可以阅读[StreamBridge and Dynamic Destinations](https://docs.spring.io/spring-cloud-stream/docs/3.2.1/reference/html/spring-cloud-stream.html#_streambridge_and_dynamic_destinations)得到更详细的信息）。
+然而，如果你想要在启动时就预先创建output binding，你可以使用`spring.cloud.stream.source`属性，你可以声明你的source的名字，提供的名字将会被作为创建一个source binding的触发器，所以在前面的那个例子里面，output binding的名字是toStream-out-0是与binding名字约定规则是一致的，你可以使用;号来表示多个source，比如`spring.cloud.stream.source=foo;bar`。
+同时，streamBridge.send(...)方法发送的Object就是要发送的数据，这意味着，你可以发送POJO或者Message对象，发送的过程与使用Function或者Supplier的方式的发送过程是一致的，也就是说，output的类型转换，分区等都是一样的得到处理。
+### StreamBridge and Dynamic Destinations
+StreamBridge也可以用在这样的场景，output 的destination事先不知道是哪个。下面是一个例子
+```java
+@SpringBootApplication
+@Controller
+public class WebSourceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(WebSourceApplication.class, args);
+	}
+
+	@Autowired
+	private StreamBridge streamBridge;
+
+	@RequestMapping
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public void delegateToSupplier(@RequestBody String body) {
+		System.out.println("Sending " + body);
+		streamBridge.send("myDestination", body);
+	}
+}
+```
+正如你在前面的例子中看到的，这个例子与上上一个例子差不多，这个没有提供`spring.cloud.stream.source`属性，这里我们发送数据到myDestination，这个binding还不存在，因此这样的名字会被认为是动态destination。
+Caching 动态的destination可能会造成内存泄漏，因为动态的destination可能非常多，为了控制这个，我们提供的自清除机制，默认去的缓存的大小是10个，这意味着，如果动态destination的大小超过10，那么超过的动态destination会被清除。你可以使用`spring.cloud.stream.dynamic-destination-cache-size`属性来设置cache的大小。
+### StreamBridge中的Output Content Type
+如果有必要，你可以提供自己的content type，send的重载方法可以设置content type，如果你发送Message类型的数据，它的content type将会是一致的.
+### StreamBridge中使用特定的binder类型
+SCS支持多种binder，比如，你可以从kafka接收数据或者发送数据到RabbitMQ。
+对于多个binders场景的更多的信息，
