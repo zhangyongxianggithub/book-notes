@@ -538,5 +538,23 @@ JSON 值的比较发生在两个级别。 第一级比较基于比较值的 JSON
      - 另一方面，如果查询比较两个包含数字的 JSON 列，则无法提前知道数字是整数还是双精度数。 为了在所有行中提供最一致的行为，MySQL 将近似值数字转换为精确值数字。 结果排序是一致的，并且不会丢失精确值数字的精度;
  - 任何的json值与NULL值的比较，结果都是UNKNOWN。
 JSON 和非 JSON 值的比较，根据下表中的规则将非 JSON 值转换为 JSON，然后按照前面描述的方法比较值。
-
+## JSON与非JSON值的转换
+下表总结了 MySQL 在 JSON 值和其他类型的值之间进行转换时遵循的规则：
+|other type|other type as json|json as other type|
+|:---|:---|:---|
+|JSON|No change|No change|
+|utf8 字符串类型(utf8mb4,utf8,ascii)|被解析为json|json被序列化为一个utf8mb4的字符串|
+|其他字符串类型|其他字符串编码被隐式的转换为utf8mb4字符串，然后以utf8字符串的方式处理|json被序列化为一个utf8mb4的字符串，然后转换为其他的编码格式，结果可能是一个乱码|
+|NULL|json类型的NULL|NULL|
+|几何类型|||
+|其他类型|一个包含单个标量值的json文档|如果json文档包含一个单个的变量值，并且这个标量值可以转换为目标类型，否则返回null|
+JSON 值的 ORDER BY 和 GROUP BY 根据以下原则工作:
+- 标量 JSON 值的排序使用与前面讨论相同的规则;
+- 对于升序，SQL本身的NULL值在所有JSON值之前排序，包括JSON null类型的值；对于降序排序，SQL本身的NULL在所有JSON值之后排序，包括 JSON null JSON本身的null类型的值;
+- JSON 值的排序键受 max_sort_length 系统变量的值约束，因此仅在第一个 max_sort_length 字节之后不同的键比较相等;
+- 当前不支持对非标量值进行排序，并且会出现警告;
+对于排序，将 JSON 标量转换为其他一些本机 MySQL 类型可能是有益的。 例如，如果名为 jdoc 的列包含具有由 id 键和非负值组成的成员的 JSON 对象，则使用此表达式按 id 值排序 `ORDER BY CAST(JSON_EXTRACT(jdoc, '$.id') AS UNSIGNED)`
+如果恰好有一个生成的列被定义为使用与 ORDER BY 中相同的表达式，则 MySQL 优化器会识别出这一点并考虑将索引用于查询执行计划。 请参阅第 8.3.11 节，“生成的列索引的优化器使用”。
+## JSON值的聚合操作
+对于 JSON 值的聚合，SQL NULL 值与其他数据类型一样被忽略。 非 NULL 值转换为数字类型并聚合，MIN()、MAX() 和 GROUP_CONCAT() 除外。 对于数字标量的 JSON 值，转换为数字应该会产生有意义的结果，尽管（取决于值）可能会发生截断和精度损失。 转换为许多其他 JSON 值可能不会产生有意义的结果。
 
