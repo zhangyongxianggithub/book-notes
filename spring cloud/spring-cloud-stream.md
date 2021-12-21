@@ -1,3 +1,4 @@
+[TOC]
 # 前言
 ## SDI（spring data integration）的简短的历史
 数据整合开始于Spring Integration项目，它可以使用Spring编程模型提供的一致的开发体验来构造企业级的整合应用，这种整合遵循一定的模式，按照模式，可以连接很对外部的系统，比如数据库，消息中心或者其他的系统。
@@ -361,4 +362,72 @@ Caching 动态的destination可能会造成内存泄漏，因为动态的destina
 如果有必要，你可以提供自己的content type，send的重载方法可以设置content type，如果你发送Message类型的数据，它的content type将会是一致的.
 ### StreamBridge中使用特定的binder类型
 SCS支持多种binder，比如，你可以从kafka接收数据或者发送数据到RabbitMQ。
-对于多个binders场景的更多的信息，
+对于多个binders场景的更多的信息，请阅读[Binder](https://docs.spring.io/spring-cloud-stream/docs/3.2.1/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-binders)章节，尤其是[Multiple Binders on the Classpath](https://docs.spring.io/spring-cloud-stream/docs/3.2.1/reference/html/spring-cloud-stream.html#multiple-binders)
+在多个Binder的应用中，假如你想要使用StreamBridge，你必须告诉StreamBridge，你要使用哪个binder，因此send方法有2个变体
+```java
+public boolean send(String bindingName, @Nullable String binderType, Object data)
+
+public boolean send(String bindingName, @Nullable String binderType, Object data, MimeType outputContentType)
+```
+正如你看到的，方法上有一个额外的参数，binderType，这个参数指定使用那个binder来创建动态绑定。当指定了`spring.cloud.stream.source`属性或者binding已经创建的情况下，binderType是没有作用的。
+#### 使用channel拦截器
+因为StreamBridge使用一个MessageChannel来创建output binding，因此当你使用StreamBridge发送数据时，你可以激活channel拦截器；由应用程序决定在StreamBridge上应用哪些channel拦截器，SCS不会将所有检测到的channel拦截器都注入到StreamBridge中，除非它们被 `@GlobalChannelInterceptor(patterns = "*")`注释；让我们假设在应用中，存在下面2个不同的StreamBridge的bindings。
+- `streamBridge.send("foo-out-0", message);`
+- `streamBridge.send("bar-out-0", message);`
+现在，如果您想在两个 StreamBridge 绑定上应用通道拦截器，那么您可以声明以下 GlobalChannelInterceptor bean
+```java
+@Bean
+@GlobalChannelInterceptor(patterns = "*")
+public ChannelInterceptor customInterceptor() {
+    return new ChannelInterceptor() {
+        @Override
+        public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        }
+    };
+}
+```
+如果你不想要上面的全局的方式，想要binding有自己的拦截器，你可以声明以下的bean
+```java
+@Bean
+@GlobalChannelInterceptor(patterns = "foo-*")
+public ChannelInterceptor fooInterceptor() {
+    return new ChannelInterceptor() {
+        @Override
+        public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        }
+    };
+}
+```
+```java
+@Bean
+@GlobalChannelInterceptor(patterns = "bar-*")
+public ChannelInterceptor barInterceptor() {
+    return new ChannelInterceptor() {
+        @Override
+        public Message<?> preSend(Message<?> message, MessageChannel channel) {
+        }
+    };
+}
+```
+您可以灵活地定义模式的级别或根据您的业务需求进行定制。
+通过这种方法，应用程序能够决定在 StreamBridge 中注入哪些拦截器，而不是应用所有可用的拦截器。
+### Reactive函数式支持
+因为Spring Cloud Function是在Reactor项目的基础上创建的，在实现Supplier、Function、Consumer时，你不需要做太多的工作，就可以使用reactive编程模型。比如下面的代码:
+```java
+@SpringBootApplication
+public static class SinkFromConsumer {
+	@Bean
+	public Function<Flux<String>, Flux<String>> reactiveUpperCase() {
+		return flux -> flux.map(val -> val.toUpperCase());
+	}
+}
+```
+### 函数式组合
+使用函数式编程模型，您还可以从函数式组合中受益，您可以从一组简单的函数中动态组合成复杂的处理程序。 作为示例，让我们将以下函数 bean 添加到上面定义的应用程序中
+```java
+@Bean
+public Function<String, String> wrapInQuotes() {
+	return s -> "\"" + s + "\"";
+}
+```
+修改`spring.cloud.function.definition`属性，
