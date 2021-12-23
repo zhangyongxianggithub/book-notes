@@ -430,4 +430,262 @@ public Function<String, String> wrapInQuotes() {
 	return s -> "\"" + s + "\"";
 }
 ```
-修改`spring.cloud.function.definition`属性，
+如果想要使用函数组合成新的函数，需要修改`spring.cloud.function.definition`属性，比如想要组合toUpperCase与wrapInQuotes这2个函数，为了支持组合的功能，Spring Cloud Function依赖`|`(pipe)管道运算符，所以，为了完成设置，我们的属性看起来如下:
+```properties
+spring.cloud.function.definition=toUpperCase|wrapInQuotes
+```
+函数式组合支持带来的优势就是，开发者可以组合reactive与imperative的函数在一起。
+函数组合的结果是一个单一的函数，这个函数的名字可能很长并且含义模糊比如类似这样`foo|bar|baz|xyz`....，当需要用这个函数的名字做其他的一些属性配置的时候会特别的不方便，在[可描述的绑定名字](https://docs.spring.io/spring-cloud-stream/docs/3.2.1/reference/html/spring-cloud-stream.html#_functional_binding_names)章节对这种情况的处理提供了帮助。比如，如果你想要为`toUpperCase|wrapInQuotes`这个函数名字指定一个描述性的名字，我们可以设置如下的属性：
+```properties
+spring.cloud.stream.function.bindings.toUpperCase|wrapInQuotes-in-0=quotedUpperCaseInput
+spring.cloud.stream.bindings.quotedUpperCaseInput.destination=myDestination
+```
+#### 函数式组合与切面关注
+函数组合允许您通过将函数分解为一组简单且可单独管理/可单独测试的组件来降低复杂性，这些组件在运行时人统一的表示为一个组件，从而有效地解决复杂性问题。 但这并不是唯一的好处。您还可以使用组合来解决某些非功能性的切面问题，例如内容填充。 例如，假设您有一条可能缺少某些标头的传入消息，或者某些标头未处于您的业务功能所期望的准确状态。 您现在可以实现一个单独的功能来解决这些问题，然后将其与主要业务功能组合在一起。
+```java
+@SpringBootApplication
+public class DemoStreamApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(DemoStreamApplication.class,
+				"--spring.cloud.function.definition=enrich|echo",
+				"--spring.cloud.stream.function.bindings.enrich|echo-in-0=input",
+				"--spring.cloud.stream.bindings.input.destination=myDestination",
+				"--spring.cloud.stream.bindings.input.group=myGroup");
+
+	}
+
+	@Bean
+	public Function<Message<String>, Message<String>> enrich() {
+		return message -> {
+			Assert.isTrue(!message.getHeaders().containsKey("foo"), "Should NOT contain 'foo' header");
+			return MessageBuilder.fromMessage(message).setHeader("foo", "bar").build();
+		};
+	}
+
+	@Bean
+	public Function<Message<String>, Message<String>> echo() {
+		return message -> {
+			Assert.isTrue(message.getHeaders().containsKey("foo"), "Should contain 'foo' header");
+			System.out.println("Incoming message " + message);
+			return message;
+		};
+	}
+}
+```
+虽然很简单，但此示例演示了一个函数如何使用附加标头（非功能性问题）丰富传入的 Message，因此另一个函数 - echo - 可以从中受益。 echo 函数保持干净，只关注业务逻辑。 您还可以看到使用 spring.cloud.stream.function.bindings 属性来简化组合绑定名称。
+### 多个输入与输出参数的函数
+从spring-cloud-stream的3.0.0版本开始支持具有多个输入和/或多个输出（返回值）的函数。 这实际上意味着什么以及它针对的是什么类型的使用场景？
+- 大数据: 想象一下，您正在处理的数据源是任意类型的，并且包含各种类型的数据元素（例如订单、交易等），您实际上需要对其进行整理。
+- 数据聚合: 可能需要您合并来自2个以上输入流的数据元素。
+上面仅描述了几个用例，在这几个用例中，您都需要使用单个函数来消费和/或生成多个数据流，这就是我们在这里要解决的使用场景。
+另外，请注意此处对流概念的强调略有不同。 假设是： 这样的函数（多个输入参数/多个输出参数）只有在它们可以访问实际数据流（而不是单个元素）时才有价值。 为此需要依赖Project Reactor（即 Flux 和 Mono）提供的抽象，而这些抽象已经在类路径上可用它们是作为spring-cloud-functions的依赖引入的.
+另一个重要的方面是多个输入/多个输出的表示方式，虽然java提供了很多表示多个事情这样的抽象类比如容器类队列等，但是这些抽象定义缺少在Spring Cloud Stream上下文中很重要的信息，比如：
+- 边界
+- 参数数量
+- 类型信息
+比如，Collection类型或者数组类型，只是定义了一个类型的多个值并且所有的值都会向上擦除为Object类型，这回影响Spring Cloud Stream的透明类型转换特性。
+所以，为了实现这些需求，最开始Spring Cloud Stream依赖Reactor提供的Tuple抽象支持来完成函数签名，现在使用更加灵活的方式。
+让我们看下面的例子
+```java
+@SpringBootApplication
+public class SampleApplication {
+
+	@Bean
+	public Function<Tuple2<Flux<String>, Flux<Integer>>, Flux<String>> gather() {
+		return tuple -> {
+			Flux<String> stringStream = tuple.getT1();
+			Flux<String> intStream = tuple.getT2().map(i -> String.valueOf(i));
+			return Flux.merge(stringStream, intStream);
+		};
+	}
+}
+```
+上面的例子展示了一个函数，这个函数有2个输入的参数，一个输出的参数，所以根据定义，2个输入的bindings的名字分别是`gather-in-0`与`gather-in-1`，输出的binding是名字的转换也是一致的，是`gather-out-0`。知道binding的名字可以设置binding的属性，比如，下面的属性会定义`gather-in-0`的content-type：
+```properties
+spring.cloud.stream.bindings.gather-in-0.content-type=text/plain
+```
+下面的代码
+```java
+@SpringBootApplication
+public class SampleApplication {
+
+	@Bean
+	public static Function<Flux<Integer>, Tuple2<Flux<String>, Flux<String>>> scatter() {
+		return flux -> {
+			Flux<Integer> connectedFlux = flux.publish().autoConnect(2);
+			UnicastProcessor even = UnicastProcessor.create();
+			UnicastProcessor odd = UnicastProcessor.create();
+			Flux<Integer> evenFlux = connectedFlux.filter(number -> number % 2 == 0).doOnNext(number -> even.onNext("EVEN: " + number));
+			Flux<Integer> oddFlux = connectedFlux.filter(number -> number % 2 != 0).doOnNext(number -> odd.onNext("ODD: " + number));
+
+			return Tuples.of(Flux.from(even).doOnSubscribe(x -> evenFlux.subscribe()), Flux.from(odd).doOnSubscribe(x -> oddFlux.subscribe()));
+		};
+	}
+}
+```
+上面的示例的代码是上上面代码的相反的形式。可以使用下面的代码测试
+```java
+@Test
+public void testSingleInputMultiOutput() {
+	try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
+			TestChannelBinderConfiguration.getCompleteConfiguration(
+					SampleApplication.class))
+							.run("--spring.cloud.function.definition=scatter")) {
+
+		InputDestination inputDestination = context.getBean(InputDestination.class);
+		OutputDestination outputDestination = context.getBean(OutputDestination.class);
+
+		for (int i = 0; i < 10; i++) {
+			inputDestination.send(MessageBuilder.withPayload(String.valueOf(i).getBytes()).build());
+		}
+
+		int counter = 0;
+		for (int i = 0; i < 5; i++) {
+			Message<byte[]> even = outputDestination.receive(0, 0);
+			assertThat(even.getPayload()).isEqualTo(("EVEN: " + String.valueOf(counter++)).getBytes());
+			Message<byte[]> odd = outputDestination.receive(0, 1);
+			assertThat(odd.getPayload()).isEqualTo(("ODD: " + String.valueOf(counter++)).getBytes());
+		}
+	}
+}
+```
+### 应用中的多个函数
+应用中可能存在多个消息处理器，比如下面的代码:
+```java
+@SpringBootApplication
+public class SampleApplication {
+
+	@Bean
+	public Function<String, String> uppercase() {
+		return value -> value.toUpperCase();
+	}
+
+	@Bean
+	public Function<String, String> reverse() {
+		return value -> new StringBuilder(value).reverse().toString();
+	}
+}
+```
+在上面的例子中，我们定义了2个函数uppercase与reverse，首先，正如在前面提到的，如果存在多个的函数定义时，自动监测机制不会起作用，那么就会存在混乱或者冲突的情况，我们需要通过属性`spring.cloud.function.definition`来解决冲突，这个属性指定了我们想要绑定到外部消息系统的真正的函数处理器，如果存在多个消息处理器，使用;分隔符。
+使用下面的代码测试
+```java
+@Test
+public void testMultipleFunctions() {
+	try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
+			TestChannelBinderConfiguration.getCompleteConfiguration(
+					ReactiveFunctionConfiguration.class))
+							.run("--spring.cloud.function.definition=uppercase;reverse")) {
+
+		InputDestination inputDestination = context.getBean(InputDestination.class);
+		OutputDestination outputDestination = context.getBean(OutputDestination.class);
+
+		Message<byte[]> inputMessage = MessageBuilder.withPayload("Hello".getBytes()).build();
+		inputDestination.send(inputMessage, "uppercase-in-0");
+		inputDestination.send(inputMessage, "reverse-in-0");
+
+		Message<byte[]> outputMessage = outputDestination.receive(0, "uppercase-out-0");
+		assertThat(outputMessage.getPayload()).isEqualTo("HELLO".getBytes());
+
+		outputMessage = outputDestination.receive(0, "reverse-out-1");
+		assertThat(outputMessage.getPayload()).isEqualTo("olleH".getBytes());
+	}
+}
+```
+### 批量消费者
+如果使用支持批量监听的 MessageChannelBinder，并且该功能启用时，您可以将 spring.cloud.stream.bindings.<binding-name>.consumer.batch-mode 设置为 true 以启用批量消息功能，传递给函数一个List。
+```java
+@Bean
+public Function<List<Person>, Person> findFirstPerson() {
+    return persons -> persons.get(0);
+}
+```
+### 批量生产者
+您还可以通过返回一组 Messages 在生产者端使用批处理的概念，这有效地提供了一种相反的效果，其中集合中的每条消息都将由绑定器单独发送。
+```java
+@Bean
+public Function<String, List<Message<String>>> batch() {
+	return p -> {
+		List<Message<String>> list = new ArrayList<>();
+		list.add(MessageBuilder.withPayload(p + ":1").build());
+		list.add(MessageBuilder.withPayload(p + ":2").build());
+		list.add(MessageBuilder.withPayload(p + ":3").build());
+		list.add(MessageBuilder.withPayload(p + ":4").build());
+		return list;
+	};
+}
+```
+### Spring Integration flow as functions（这里不知道怎么翻译）
+### 使用轮询式的消费者
+## 错误处理器
+在本节中，我们将解释框架提供的错误处理机制背后的一般思想。 我们将使用 Rabbit binder 作为示例，因为各个binder为各自的自有的特性（例如 Kafka binder）机制定义了不同的属性集。错误发生时，Spring Cloud Stream提供了几种灵活的机制来处理它；记住，错误处理依赖binder的实现机制还有使用的编程模型。
+当消息处理器抛出一个异常时，它会传播到binder实现中，随后binder传播异常到消息系统，然后框架会尝试重新消费消息，重新消费消息使用Spring Retry提供的RetryTemplate对象来实现，默认的重试次数是3次。重试之后的处理依赖消息系统的机制，有的系统可能丢弃消息，可能重新发送到队列中等待再次处理或者发送消息到DLQ；Rabbit与kafka都支持这些处理方式，然儿，其他的binder可能不支持，所以你需要参考自定义binder的文档说明，来了解bidner对错误处理的支持机制。但是请记住，reactive函数不应被视为消息处理器，因为它并不处理消息，而是提供了一种将框架提供的流（即 Flux）与用户提供的流连接的方法。 从另一种角度来看它是 - 为每个消息调用消息处理程序（即命令式函数），而在reactive函数在初始化期间仅调用一次来连接两个流定义，此时框架有效地移交任何和所有控制到反应式 API。为什么这很重要？ 这是因为您在本节后面阅读的有RetryTemplate、丢弃失败消息、重试、DLQ 和配置属性的任何内容都仅适用于消息处理程序（即命令式函数）。Reactive API提供了一个功能强大的库，这可以帮助您处理各种错误，这些错误处理机制会比简单的消息处理程序情况复杂得多，因此请使用它们，例如 public final Flux<T> retryWhen （重试 retrySpec）； 您可以在 reactor.core.publisher.Flux 中找到
+```java
+@Bean
+public Function<Flux<String>, Flux<String>> uppercase() {
+	return flux -> flux
+			.retryWhen(Retry.backoff(3, Duration.ofMillis(1000)))
+			.map(v -> v.toUpperCase());
+}
+```
+### 丢弃失败的消息
+没有特殊配置的情况下，消息系统会丢弃处理失败的消息，这种处理机制在大多数的场景下都是不可接受的，我们需要一些恢复机制来避免消息丢失.
+### DLQ-Dead Letter Queue
+最常用的机制是DLQ机制，DLQ机制会把失败的消息发送到一个特殊的destination：*Dead Letter Queue*，当配置了DLQ后，失败的消息会被发送到这个特殊的destination中以便执行后续的处理。考虑下面的例子
+```java
+@SpringBootApplication
+public class SimpleStreamApplication {
+
+	public static void main(String[] args) throws Exception {
+		SpringApplication.run(SimpleStreamApplication.class,
+		  "--spring.cloud.function.definition=uppercase",
+		  "--spring.cloud.stream.bindings.uppercase-in-0.destination=uppercase",
+		  "--spring.cloud.stream.bindings.uppercase-in-0.group=myGroup",
+		  "--spring.cloud.stream.rabbit.bindings.uppercase-in-0.consumer.auto-bind-dlq=true"
+		);
+	}
+
+	@Bean
+	public Function<Person, Person> uppercase() {
+		return personIn -> {
+		   throw new RuntimeException("intentional");
+	      });
+		};
+	}
+}
+```
+提醒一下，在此示例中，属性 uppercase-in0 对应于输入destination绑定的名称, consumer表明它是消费者有关的属性。当使用DLQ机制的时候，必须提供group属性来正确的命名DLQ的destination，通常group都是与destination属性一起使用的。除了设置了一些标准属性，我们也设置了`auto-bind-dlq`属性命令binder为`uppercase-in-0`这个binding创建并配置DLQDestination，这样，RabbitMQ会额外创建一个名字为`uppercase.myGroup.dlq`的队列。
+一旦配置后，所有失败的消息都会转发到这个destination中，保留原始的消息以便进一步的处理。
+```text
+. . . .
+x-exception-stacktrace:	org.springframework.messaging.MessageHandlingException: nested exception is
+      org.springframework.messaging.MessagingException: has an error, failedMessage=GenericMessage [payload=byte[15],
+      headers={amqp_receivedDeliveryMode=NON_PERSISTENT, amqp_receivedRoutingKey=input.hello, amqp_deliveryTag=1,
+      deliveryAttempt=3, amqp_consumerQueue=input.hello, amqp_redelivered=false, id=a15231e6-3f80-677b-5ad7-d4b1e61e486e,
+      amqp_consumerTag=amq.ctag-skBFapilvtZhDsn0k3ZmQg, contentType=application/json, timestamp=1522327846136}]
+      at org.spring...integ...han...MethodInvokingMessageProcessor.processMessage(MethodInvokingMessageProcessor.java:107)
+      at. . . . .
+Payload: blah
+```
+你可以设置不重试，失败马上转发到DLQ，需要设置以下的属性
+```properties
+spring.cloud.stream.bindings.uppercase-in-0.consumer.max-attempts=1
+```
+### Retry Template
+在本节中，我们将介绍与重试功能配置相关的配置属性。RetryTemplate 是 Spring Retry 库的一部分。虽然涵盖RetryTemplate 的所有功能超出了本文档的讲述范围，但我们将提及以下与 RetryTemplate 相关的消费者的属性.
+- maxAttempts: 处理消息的重试次数;
+- backOffInitialInterval: 重试的初始间隔;
+- backOffMaxInterval: 重试的最大的间隔;
+- backOffMultiplier: 重试间隔增长的系数;
+- defaultRetryable: 如果抛出的异常不在retryableExceptions属性里面的异常是否要重试，默认是true;
+- retryableExceptions: 这是一个map，异常的class名字是key，值是一个boolean，指定会或不会重试的那些异常（和子类）
+虽然上述设置足以满足大多数自定义要求，但它们可能无法满足某些复杂的要求，此时您可能需要提供自己的 RetryTemplate 实例。 为此，将其配置为应用程序配置中的 bean。 应用程序提供的实例将覆盖框架提供的实例。 此外，为了避免冲突，您必须将要由绑定器使用的 RetryTemplate 实例限定为 @StreamRetryTemplate。 例如，
+```java
+@StreamRetryTemplate
+public RetryTemplate myRetryTemplate() {
+    return new RetryTemplate();
+}
+```
+正如你在上面的例子中看到的，你不需要用@Bean注解，使用@StreamRetryTemplate注解就可以了。
+
+
