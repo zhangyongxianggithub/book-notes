@@ -688,4 +688,9 @@ public RetryTemplate myRetryTemplate() {
 ```
 正如你在上面的例子中看到的，你不需要用@Bean注解，使用@StreamRetryTemplate注解就可以了。
 
-
+如果你想要使用自定义的RetryTemplate，你可以通过消费者属性指定自定义retryTemplate类型Bean的名字
+```java
+spring.cloud.stream.bindings.<foo>.consumer.retry-template-name=<your-retry-template-bean-name>
+```
+# Binders
+# Spring Cloud Alibaba RocketMQ Binder
