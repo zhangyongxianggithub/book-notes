@@ -694,3 +694,124 @@ spring.cloud.stream.bindings.<foo>.consumer.retry-template-name=<your-retry-temp
 ```
 # Binders
 # Spring Cloud Alibaba RocketMQ Binder
+RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
+- 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
+- @RocketMQTransactionListener 注解用来处理事务消息的坚挺与回查;
+- @RocketMQMessageListener注解用来消费消息;
+RocketMQ Binder的核心类RocketMQMessageChannelBinder实现了Spring Cloud Stream的规范，内部会构建RocketMQInBoundChannelAdapter与RocketMQMessageHandler。RocketMQMessageHandler会基于Binding配置构造RocketMQTemplate，RocketMQTemplate内部吧spring-messaging模块内org.springframework.messaging.Message消息转换成RocketMQ的消息类org.apache.rocketmq.common.message.Message，然后发送出去。
+RocketMQInboundChannelAdapter也会基于Binding配置构造RocketMQListenerBindingContainer，RocketMQListenerBindingContainer内部会启动RocketMQ Consumer接收消息。支持在Header中设置相关的key
+```java
+MessageBuilder builder = MessageBuilder.withPayload(msg)
+    .setHeader(RocketMQHeaders.TAGS, "binder")
+    .setHeader(RocketMQHeaders.KEYS, "my-key")
+    .setHeader("DELAY", "1");
+Message message = builder.build();
+output().send(message);
+```
+RcoketMQ支持MessageSource，如下：
+```java
+@SpringBootApplication
+@EnableBinding(MQApplication.PolledProcessor.class)
+public class MQApplication {
+
+  private final Logger logger =
+  	  LoggerFactory.getLogger(MQApplication.class);
+
+  public static void main(String[] args) {
+    SpringApplication.run(MQApplication.class, args);
+  }
+
+  @Bean
+  public ApplicationRunner runner(PollableMessageSource source,
+  	    MessageChannel dest) {
+    return args -> {
+      while (true) {
+        boolean result = source.poll(m -> {
+          String payload = (String) m.getPayload();
+          logger.info("Received: " + payload);
+          dest.send(MessageBuilder.withPayload(payload.toUpperCase())
+              .copyHeaders(m.getHeaders())
+              .build());
+        }, new ParameterizedTypeReference<String>() { });
+        if (result) {
+          logger.info("Processed a message");
+        }
+        else {
+          logger.info("Nothing to do");
+        }
+        Thread.sleep(5_000);
+      }
+    };
+  }
+
+  public static interface PolledProcessor {
+
+    @Input
+    PollableMessageSource source();
+
+    @Output
+    MessageChannel dest();
+
+  }
+
+}
+```
+RocketMQ Binder的配置属性
+```properties
+spring.cloud.stream.rocketmq.binder.name-server=127.0.0.1:9876
+# name=srv地址
+spring.cloud.stream.rocketmq.binder.access-key=null
+# 阿里云账号ak
+spring.cloud.stream.rocketmq.binder.secret-key=null
+# 阿里云账号sk
+spring.cloud.stream.rocketmq.binder.enable-msg-trace=true
+# 是否为Producer与Consumer开启消息轨迹功能
+spring.cloud.stream.rocketmq.binder.customized-trace-topic=RMQ_SYS_TRACE_TOPIC
+# 消息轨迹开启后存储的 topic 名称
+
+```
+Rocket MQ Consumer属性
+```properties
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.enable=true
+# 是否启用Consumer
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.tags=''
+# Consumer基于TAGS订阅，多个tag以||分隔
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.sql=''
+# Connsumer基于SQL订阅
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.broadcasting=false
+# Consumer 是否是广播消费模式。如果想让所有的订阅者都能接收到消息，可以使用广播模式
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.orderly=false
+# Consumer 是否同步消费消息模式
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.delayLevelWhenNextConsume=0
+# -1,不重复，直接放入死信队列
+# 0,broker 控制重试策略
+# >0,client 控制重试策略
+spring.cloud.stream.rocketmq.bindings.<channelName>.consumer.suspendCurrentQueueTimeMillis=1000
+# 同步消费消息模式下消费失败后再次消费的时间间隔
+
+```
+RocketMQ Producer属性，这些属性都以`spring.cloud.stream.rocketmq.bindings.<channelName>.producer.`开头
+```properties
+enable=true
+# 是否启用 Producer
+group=''
+# Producer group name。
+maxMessageSize=8249344
+# 消息发送的最大字节数
+transactional=false
+# 是否发送事务消息
+sync=false
+# 是否使用同步得方式发送消息。
+vipChannelEnabled=true
+# 是否在 Vip Channel 上发送消息
+sendMessageTimeout=3000
+# 发送消息的超时时间(毫秒)
+compressMessageBodyThreshold=4096
+# 消息体压缩阀值(当消息体超过 4k 的时候会被压缩)
+retryTimesWhenSendFailed=2
+# 在同步发送消息的模式下，消息发送失败的重试次数
+retryTimesWhenSendAsyncFailed=2
+# 在异步发送消息的模式下，消息发送失败的重试次数。
+retryNextServer=false
+# 消息发送失败的情况下是否重试其它的 broker。
+```
