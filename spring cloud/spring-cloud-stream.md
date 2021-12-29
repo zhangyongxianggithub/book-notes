@@ -693,6 +693,71 @@ public RetryTemplate myRetryTemplate() {
 spring.cloud.stream.bindings.<foo>.consumer.retry-template-name=<your-retry-template-bean-name>
 ```
 # Binders
+# 配置选项
+SCS支持通用的配置选项，也支持Binder/Binding的配置选项，有的binder还支持额外的配置选项，这些是与特定的中间件的特性有关系的。配置选项支持任何以Spring Boot的方式加载属性的形式加载，包括应用参数、环境变量、YAML、或者属性文件。
+## Binding属性
+这些属性的属性类是`org.springframework.cloud.stream.config.BindingServiceProperties`主要有以下几个
+- spring.cloud.stream.instanceCount=1: 应用部署的实例的个数，在生产者这里分片时需要设置，当`autoRebalanceEnabled=false`时，消费者这里必须设置;
+- spring.cloud.stream.instanceIndex: 实例的编号，从0到instanceCount-1，当`autoRebalanceEnabled=false`时用于确定分区的信息;
+- spring.cloud.stream.dynamicDestinations='': 可以动态绑定的destination列表;
+- spring.cloud.stream.defaultBinder='': 默认使用的binder;
+- spring.cloud.stream.overrideCloudConnectors=false: cloud的profile激活时用的;
+- spring.cloud.stream.bindingRetryInterval=30: 重试创建binding的间隔，秒为单位，比如，当binder不支持当前的binding或者broker下线时，=0，会以失败处理。
+## Binding属性
+binding属性的格式是`spring.cloud.stream.bindings.<bindingName>.<property>=<value>`,其中的bindingName表示binding的名字。比如下面的函数
+```java
+@Bean
+public Function<String, String> uppercase() {
+	return v -> v.toUpperCase();
+}
+```
+会产生2个binding，uppercase-in-0与uppercase-out-0。为了避免重复的设置，SCS提供了所有的binding都可以使用的属性`spring.cloud.stream.default.<property>=<value>`与`spring.cloud.stream.default.<producer|consumer>.<property>=<value>`.
+如果想要避免扩展的binding属性的重复配置，配置扩展通用属性`spring.cloud.stream.<binder-type>.default.<producer|consumer>.<property>=<value>`。
+## Common Binding属性
+这些属性的类是`org.springframework.cloud.stream.config.BindingProperties`，下面的属性对于input与output的binding都是可用的，下面的属性以`spring.cloud.stream.bindings.<bindingName>.`开头，默认值以`spring.cloud.stream.default`开头。
+- destination: binding的目的地地址，通常是中间件的消息管道，如果binding是input类型的，那么destination可以标识多个，以逗号隔开；如果没有设置，会使用binding的名字;
+- group=null: binding的消费者组，只会对input类型的binding有效;
+- contentType=application/json: binding的内容类型;
+- binder=null: binding使用的bidner;
+## Consumer属性
+属性类`org.springframework.cloud.stream.binder.ConsumerProperties`，下面的属性支队input类型的binding有效，必须以`spring.cloud.stream.bindings.<bindingName>.consumer.`开头，比如`spring.cloud.stream.bindings.input.consumer.concurrency=3`。默认值可以使用`spring.cloud.stream.default.consumer`设置。
+- autoStartup=true: Consumer是否需要自动启动;
+- concurrency=1: consumer的并发数量;
+- partitioned=false: consumer是否从一个分区的生产者种接收数据;
+- headerMode: 当设置成none时，关闭header的解析功能，当消息中间件不原生支持header但还是需要header的功能时，特别有效;设置成headers，它使用消息中间件内置的header机制，设置成embeddedHeaders，它把header信息嵌入到消息的payload中;
+- maxAttempts=3: 如果处理失败，重新处理消息的次数（包含第一次），设置成1等于不重试;
+- backOffInitialInterval=1000: 重试的初始的回退时间;
+- backOffMaxInterval=10000: 最大的回退时间;
+- backOffMultiplier=2.0: 因子;
+- defaultRetryable=true: 当发生不在retryableExceptions里面出现的异常时，是否需要重试;
+- instanceCount=-1: 当设置的值>=0,会覆盖`spring.cloud.stream.instanceCount`的数值，如果是负数直接使用`spring.cloud.stream.instanceCount`的值;
+- instanceIndex=-1: 当设置为大于等于零的值时，它允许自定义此使用者的实例索引（如果与 spring.cloud.stream.instanceIndex 不同）。 当设置为负值时，它默认为 spring.cloud.stream.instanceIndex。 如果提供了 instanceIndexList，则忽略。 有关更多信息，请参阅实例索引和实例计数；
+- instanceIndexList='': 一个应用可以消费多个分区;
+- retryableExceptions='': 键中的 Throwable 类名称和值中的布尔值的映射。 指定将或不会重试的那些异常（和子类）。 另请参阅 defaultRetriable。 示例：spring.cloud.stream.bindings.input.consumer.retryable-exceptions.java.lang.IllegalStateException=false;
+- useNativeDecoding=false: 设置为true时，入站消息由客户端库直接反序列化，必须进行相应配置（例如，设置合适的Kafka生产者值反序列化器）。 使用此配置时，入站消息解组不基于绑定的 contentType。 使用本机解码时，生产者有责任使用适当的编码器（例如，Kafka 生产者值序列化器）来序列化出站消息。 此外，当使用本机编码和解码时，headerMode=embeddedHeaders 属性将被忽略，并且标题不会嵌入到消息中。 请参阅生产者属性 useNativeEncoding;
+- multiplex=false: 设置为 true 时，底层绑定器将在同一输入绑定上使用多个destination;
+
+
+# Apache Kafka Binder
+## 用法
+为了使用Apache Kafka Binder，你需要添加`spring-cloud-stream-binder-kafka`依赖，如下面的maven所示
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-stream-binder-kafka</artifactId>
+</dependency>
+```
+还有一个可以替代的方式，使用starter,如下:
+```xml
+<dependency>
+  <groupId>org.springframework.cloud</groupId>
+  <artifactId>spring-cloud-starter-stream-kafka</artifactId>
+</dependency>
+```
+## overview
+下面是一个kafka如何操作的简单的草图
+![kafka](spring-cloud-stream/kafka.png)
+
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
