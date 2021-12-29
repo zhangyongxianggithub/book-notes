@@ -757,7 +757,173 @@ public Function<String, String> uppercase() {
 ## overview
 下面是一个kafka如何操作的简单的草图
 ![kafka](spring-cloud-stream/kafka.png)
+Apache Kafka Binder实现将每个destination映射成一个Apache Kafka topic；consumer group直接映射为Apache Kafka中同样的概念，Patitioning也是直接映射为Kafka的分区。
+binder当前使用的kafka-clients的版本是2.3.1，这个客户端向前兼容(可以看Kafka的官方文档)，但是一些新版本的特性可能不能使用，比如，当与0.11.x.x之前版本的broker通信时，native headers是不支持的，同时0.11.x.x也不支持autoAddPartitions属性。
+## 配置选项
+本节主要讲述Apache Kafka Binder的配置选项；对于一些通用的配置选项，可以看核心文档中的[binding properties](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#binding-properties)部分。
+### Kafka Binder属性
+|属性名|描述|默认值|
+|:---|:---|:---|
+|spring.cloud.stream.kafka.binder.brokers|kafka binder连接的broker列表|localhost|
+|spring.cloud.stream.kafka.binder.defaultBrokerPort|brokers属性里面可以带有或者不带端口号比如`host1,host2:port2`，当broker没有配置端口号时，这个属性设置默认的端口号|9092|
+|spring.cloud.stream.kafka.binder.configuration|Key/Value map, 通用的客户端的属性，会被binder创建的所有的客户端使用，未知的属性会被过滤掉，这里的属性会替换boot中设置的属性值|Empty Map|
+|spring.cloud.stream.kafka.binder.consumerProperties|任意的consumer客户端的属性配置，支持已知的或者未知的消费者属性，属性会覆盖boot中的配置，与上面的configuration中的属性|Empty map|
+|spring.cloud.stream.kafka.binder.headers|自定义header，这些header会被binder传输，只有在kafka-clients的版本<0.11.0.0时需要，新的版本内置支持headers|empty|
+|spring.cloud.stream.kafka.binder.healthTimeout|获取分区信息的等待时间，秒为单位，如果超过则报告一个down|10|
+|spring.cloud.stream.kafka.binder.requiredAcks|需要的ack数量，参考kafka文档中的生产者的acks属性|1|
+|spring.cloud.stream.kafka.binder.minPartitionCount|只有在设置了autoCreateTopics与autoAddPartitions的时候才有效，binder配置的全局的最小分区数，这个数量可以被生产者的partitionCount替代或者生产者的instanceCount*concurrency设置，取最大值|1|
+|spring.cloud.stream.kafka.binder.producerProperties|生产者的属性|Empty map|
+|spring.cloud.stream.kafka.binder.replicationFactor|如果autoCreateTopics=true，此时自动创建的主题的复制因子，可以被binding覆盖；如果你使用的是 2.4之前的 Kafka broker 版本，那么这个值应该至少设置为1。从 3.0.8 版本开始，binder 使用 -1 作为默认值，这表明 broker的'default.replication.factor ' 属性将用于确定副本的数量。 请咨询您的 Kafka 管理员，看看是否已经存在最小复制因子的策略，如果存在，那么通常情况下，default.replication.factor就是最小复制因子，这个属性应使用 -1，除非您需要 复制因子大于最小值|-1|
+|spring.cloud.stream.kafka.binder.autoCreateTopics|如果设置为 true，则binder会自动创建新主题。 如果设置为 false，则binder依赖于已配置的主题。 在后一种情况下，如果主题不存在，则bidner将无法启动; 此设置独立于broker的 auto.create.topics.enable 设置，不会对其产生影响。 如果服务器设置为自动创建主题，它们可以作为元数据检索请求的一部分创建，默认代理设置。|true|
+|spring.cloud.stream.kafka.binder.autoAddPartitions|如果设置为 true，则binder会根据需要创建新分区。 如果设置为 false，则binder依赖于已配置的主题的分区大小。 如果目标主题的分区总数小于预期值，则绑定器无法启动。|false|
+|spring.cloud.stream.kafka.binder.transaction.transactionIdPrefix|在binder中启用事务。 请参阅 Kafka 文档中的 transaction.id 和 spring-kafka 文档中的 Transactions。 启用事务后，单个生产者属性将被忽略，所有生产者都使用 spring.cloud.stream.kafka.binder.transaction.producer.* 属性|null(no transaction)|
+|spring.cloud.stream.kafka.binder.transaction.producer.*|事务绑定器中生产者的全局生产者属性。 查看 spring.cloud.stream.kafka.binder.transaction.transactionIdPrefix 和 Kafka Producer Properties 以及所有 binders 支持的一般生产者属性|See individual producer properties.|
+|spring.cloud.stream.kafka.binder.headerMapperBeanName|KafkaHeaderMapper 的 bean 名称，用于将 spring-messaging 标头映射到 Kafka 标头和从 Kafka 标头映射。 例如，如果您希望在对标头使用 JSON 反序列化的 BinderHeaderMapper bean 中自定义受信任的包，请使用此选项。 如果使用此属性的绑定器无法使用此自定义 BinderHeaderMapper bean，则绑定器将在回退到绑定器创建的默认 BinderHeaderMapper 之前查找名称为 kafkaBinderHeaderMapper 的头映射器 bean，其类型为 BinderHeaderMapper。|none|
+|spring.cloud.stream.kafka.binder.considerDownWhenAnyPartitionHasNoLeader|当topic上的任意一个分区没有leader时设置binder的health flag=down|false|
+|spring.cloud.stream.kafka.binder.certificateStoreDirectory|当truststore或keystore证书位置以类路径(classpath:... ) 的形式给出时，binder会将资源从 JAR 文件内的类路径位置复制到文件系统上的某个位置。对于节点通信证书（ssl.truststore.location 和 ssl.keystore.location）和用于模式注册的证书（schema.registry.ssl.truststore.location 和 schema.registry.ssl.keystore.location）都是如此。请记住，必须在 spring.cloud.stream.kafka.binder.configuration... 下提供truststore和keystore类路径位置。比如设置spring.cloud.stream.kafka.binder.configuration.ssl.truststore.location、`spring.cloud.stream.kafka.binder.configuration.schema.registry.ssl.truststore.location等。文件会被移动到这个属性值指定的位置下，该位置必须是文件系统上运行应用程序的进程可写的现有目录。如果未设置此值且证书文件是类路径资源，则它将被移动到 System.getProperty("java.io.tmpdir") 返回的系统临时目录。如果此值存在，但在文件系统上找不到该目录或该目录不可写，也是如此。|none|
+### Kafka消费者属性
+为了避免重复的设置，Spring Cloud Stream 支持通用配置，格式为`spring.cloud.stream.kafka.default.consumer.<property>=<value>`.
+下面的属性只对Kafka消费者起作用，必须是`spring.cloud.stream.kafka.bindings.<channelName>.consumer.`开头。
+|属性名|描述|默认值|
+|:---|:---|:---|
+|admin.configuration|自 2.1.1 版起，此属性已被弃用，取而代之的是 topic.properties，并且将在未来版本中删除对它的支持。||
+|admin.replicas-assignment|从 2.1.1 版本开始，不推荐使用此属性以支持 topic.replicas-assignment，并且将在未来版本中删除对它的支持。||
+|admin.replication-factor|从 2.1.1 版本开始，不推荐使用此属性以支持 topic.replication-factor，并且将在未来版本中删除对它的支持。||
+|autoRebalanceEnabled|当为真时，主题分区会在消费者组的成员之间自动重新平衡。 如果为 false，则根据 spring.cloud.stream.instanceCount 和 spring.cloud.stream.instanceIndex 为每个消费者分配一组固定的分区。 这需要在每个启动的实例上正确设置 spring.cloud.stream.instanceCount 和 spring.cloud.stream.instanceIndex 属性。 在这种情况下， spring.cloud.stream.instanceCount 属性的值通常必须大于 1|true|
+|ackEachRecord|当 autoCommitOffset设置为true时，此设置命令是否在处理每个记录后直接提交偏移量；默认情况下，在处理完由 consumer.poll() 返回的一批记录中的所有记录后，才会提交偏移量。 轮询返回的记录数可以通过 max.poll.records Kafka 属性控制，该属性通过消费者配置属性设置。 将此设置为 true 可能会导致性能下降，但这样做会降低发生故障时重新传送记录的可能性。 另外，请参阅 binder的requiredAcks 属性，该属性也会影响提交偏移量的性能。 从 3.1 开始弃用这个属性，转而使用 ackMode。 如果未设置ackMode 且未启用批处理模式，则将使用 ackMode=RECORD|false|
+|autoCommitOffset|从3.1版本开始，这个属性被弃用，转而使用ackMode代替，这个属性控制当一个消息处理后是否自动提交偏移量，如果设置为false，消费的消息的header中会出现一个类型org.springframework.kafka.support.Acknowledgment的值，key=kafka_acknowledgment，应用可能会使用这个header来确认消息（提交偏移量）,案例程序中有详细的使用方式，当设置为false时，kafka binder设置ack模式=org.springframework.kafka.listener.AbstractMessageListenerContainer.AckMode.MANUAL，应用程序负责确认记录，提交偏移量|true|
+|ackMode|藐视容器使用的ack模式，这是一个AckMode类型的枚举值，如果ackEachRecord=true并且消费者不是批量模式，ackMode=RECORD，否则使用这个属性提供的ack模式||
+|autoCommitOnError|在轮询式的消费者方式中，如果设置=true，发生错误会自动提交偏移量，如果么有设置或者设置为false，将不会自动提交偏移量，记住，这个属性只会对轮询式的消费者起作用|false|
+|resetOffsets|是否重置偏移量到startOffset提供的值，当提供了KafkaBindingRebalanceListener，必须设置为false，可以看[Using a KafkaBindingRebalanceListener.](https://docs.spring.io/spring-cloud-stream-binder-kafka/docs/3.2.1/reference/html/spring-cloud-stream-binder-kafka.html#rebalance-listener)|false|
+|startOffset|新的消费者组开始消费的偏移量，允许的值：ealiest与latest，如果明确设置了binding的消费者名字，startOffset被设置为earliest，对于匿名的消费者组，被设置为latest|null(earliest)|
+|enableDlq|当设置为true时，启用消费者的DLQ行为，默认情况下，造成错误的消息会被转发到一个名字叫做error.<destination>.<group>的topic中，DLQ主题名字可以通过dlqName配置，或者通过定一个一个DlqDestinationResolver类型的bean来配置，这对于想要重放消息的场景是非常好的，同时可能重放整个原始topic的消息可能会比较麻烦，就重放几条错误消息可能是非常方便的，可以参考[Dead-Letter Topic Processing](https://docs.spring.io/spring-cloud-stream-binder-kafka/docs/3.2.1/reference/html/spring-cloud-stream-binder-kafka.html#kafka-dlq-processing)这个获取更多的信息，从2.0版本开始，发送到DLQ主题的消息被增强了，会额外携带以下的header，x-original-topic、x-exception-message、x-exception-stacktrace，他们的值都是byte[], 默认情况下，失败的记录会被发送到dlq主题中与原始的消息同样的分区，可以参考[Dead-Letter Topic Partition Selection](https://docs.spring.io/spring-cloud-stream-binder-kafka/docs/3.2.1/reference/html/spring-cloud-stream-binder-kafka.html#dlq-partition-selection)来改变这一行为，当destinationIsPattern=true不能开启DLQ|false|
+|dlpPartitions|当enableDlq=true时，并可这个属性没有设置，默认的行为是dql分区与原始的主题的分区数一样，而且同样的消息发送到同样的分区中，这个行为可以改变，如果属性设置=1，并且没有DqlParitionFunction定义的话，所有的消息都会写入到分区0中，如果>1, 你必须提供一个DlqPartitionFunction类型的bean，真正的分区数，是有binder的minPartitionCount属性控制的|none|
+|configuration|通用 Kafka 消费者属性的键/值对进。 除了拥有 Kafka 消费者属性外，其他配置属性也可以在这里传递。 例如应用程序需要的一些属性，例如 spring.cloud.stream.kafka.bindings.input.consumer.configuration.foo=bar。 bootstrap.servers 属性不能在这里设置； 如果您需要连接到多个集群，请使用多粘合剂支持。|Empty map|
+|dlqName|dlq主题的名字，没有指定就是error.<destination>.<group>|null|
+|dlqProducerProperties|使用它，可以设置特定于 DLQ 的生产者属性。 所有通过 kafka 生产者属性可用的属性都可以通过这个属性设置。 当在消费者上启用原生解码（即 useNativeDecoding: true）时，应用程序必须为 DLQ 提供相应的键/值序列化器。 这必须以 dlqProducerProperties.configuration.key.serializer 和 dlqProducerProperties.configuration.value.serializer 的形式提供。|Default Kafka producer properties.|
+|standardHeaders|指示input适配器填充哪些标准标头。 允许的值：none、id、timestamp 或所有。 如果使用本机反序列化并且接收消息的第一个组件需要 id（例如配置为使用 JDBC 消息存储的聚合器），则很有用。|none|
+|converterBeanName|实现 RecordMessageConverter 的 bean 的名称。 在入站通道适配器中用于替换默认的 MessagingMessageConverter|null|
+|idleEventInterval|指示最近未收到任何消息的事件之间的间隔（以毫秒为单位）。 使用 ApplicationListener<ListenerContainerIdleEvent> 接收这些事件。 有关用法示例，请参阅示例：暂停和恢复消费者。|30000|
+|destinationIsPattern|正则表达式|false|
+|topic.properties|创建新的topic使用的属性|none|
+|topic.replicas-assignment|副本分配的 Map<Integer, List<Integer>> ，键是分区，值是分配。 在配置新主题时使用。 请参阅 kafka-clients jar 中的 NewTopic Javadocs。|none|
+|topic.replication-factor|因子|none|
+|pollTimeout|轮询式的消费者轮询的超时时间||5s
+|transactionManager|KafkaAwareTransactionManager 的 Bean 名称，用于覆盖此绑定的绑定器的事务管理器。 如果要将另一个事务与 Kafka 事务同步，通常需要使用 ChainedKafkaTransactionManager。 为了实现记录的一次性消费和生产，消费者和生产者绑定都必须使用相同的事务管理器进行配置。|none|
+|txCommitRecovered||true|
+|commonErrorHandlerBeanName|指定每个消费者使用的commonErrorHandler，当配置后，这个handler的优先级是最高的，比binder的其他的错误处理器优先级都高，这是一个处理错误的很快捷的方式；如果应用不想要使用ListenerContainerCustomizer自定义配置，。可以给binder设置一个错误处理器|none|
+### Resetting Offsets
+当一个应用启动时，分配的分区的初始的偏移量依赖于2个属性`startOffset`与`resetOffsets`；如果`resetOffsets=false`，底层会使用kafka本身的`auto.offset.reset`配置，如果分区内没有binding的消费者组提交的偏移量，这个值通常是earliest或者是latest；默认情况下，明确指定了group的binding会使用earliest，匿名消费者组的bindings会使用latest，这些默认值可以通过设置`startOffset`属性改变，binding第一次启动时，没有提交的偏移量，还有一种没有偏移脸的情况是，偏移量过期被丢弃了，2.1版本之后的kafka server默认的偏移量的过期时间是没有任何消费者存在的情况最多保留7天，可以参考`offsets.retention.minutes`属性确定保留的时间。当`resetOffsets=true`时，binder会从头开始消费分区的消息；下面是2个场景
+- 从包含键/值对的压缩主题中消费。 将 resetOffsets 设置为 true 并将 startOffset 设置为最早； 绑定将在所有新分配的分区上执行 seekToBeginning;
+- 从包含事件的主题中消费，您只对在此绑定运行时发生的事件感兴趣。 将 resetOffsets 设置为 true 并将 startOffset 设置为最新； 绑定将在所有新分配的分区上执行 seekToEnd;
+对topic偏移量的更多的控制，可以看[Using a KafkaBindingRebalanceListener](https://docs.spring.io/spring-cloud-stream-binder-kafka/docs/3.2.1/reference/html/spring-cloud-stream-binder-kafka.html#rebalance-listener)，当提供了listener，resetOffsets应该被设置为true，否则会造成error.
+### 批量消费
+## 使用一个KafkaBindingRebanceListener
+应用在分配分区时，可能想要自己设置消费的起始的偏移量，或者在消费者上执行其他的一些操作，从2.1版本后，你可以在应用的上下文中提供一个KafkaBindingRebalanceListener,它将会被注入到Kafka的消费者的bindings中；如下:
+```java
+public interface KafkaBindingRebalanceListener {
 
+	/**
+	 * Invoked by the container before any pending offsets are committed.
+	 * @param bindingName the name of the binding.
+	 * @param consumer the consumer.
+	 * @param partitions the partitions.
+	 */
+	default void onPartitionsRevokedBeforeCommit(String bindingName, Consumer<?, ?> consumer,
+			Collection<TopicPartition> partitions) {
+
+	}
+
+	/**
+	 * Invoked by the container after any pending offsets are committed.
+	 * @param bindingName the name of the binding.
+	 * @param consumer the consumer.
+	 * @param partitions the partitions.
+	 */
+	default void onPartitionsRevokedAfterCommit(String bindingName, Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {
+
+	}
+
+	/**
+	 * Invoked when partitions are initially assigned or after a rebalance.
+	 * Applications might only want to perform seek operations on an initial assignment.
+	 * @param bindingName the name of the binding.
+	 * @param consumer the consumer.
+	 * @param partitions the partitions.
+	 * @param initial true if this is the initial assignment.
+	 */
+	default void onPartitionsAssigned(String bindingName, Consumer<?, ?> consumer, Collection<TopicPartition> partitions,
+			boolean initial) {
+
+	}
+
+}
+```
+当您提供重新平衡侦听器时，您不能将 resetOffsets 使用者属性设置为 true。
+## Retry与DLQ处理
+默认情况下，当你配置retry（maxAttempts）与enableDlq时，这些功能会在binder中执行，侦听器容器或 Kafka 消费者不参与。在某些情况下，最好将此功能移至侦听器容器，例如： 
+- 重试和延迟的总和将超过使用者的 max.poll.interval.ms 属性，可能会导致分区重新平衡;
+- 你想要发送DL到不同的kafka集群中;
+- 你想要体检retry listener到错误处理器;
+ 为了把这些功能从binder转移到contianer这里来，需要定义一个ListenerContainerWithDlqAndRetryCustomizer类型的bean，这个接口有以下的方法：
+ ```java
+ /**
+ * Configure the container.
+ * @param container the container.
+ * @param destinationName the destination name.
+ * @param group the group.
+ * @param dlqDestinationResolver a destination resolver for the dead letter topic (if
+ * enableDlq).
+ * @param backOff the backOff using retry properties (if configured).
+ * @see #retryAndDlqInBinding(String, String)
+ */
+void configure(AbstractMessageListenerContainer<?, ?> container, String destinationName, String group,
+        @Nullable BiFunction<ConsumerRecord<?, ?>, Exception, TopicPartition> dlqDestinationResolver,
+        @Nullable BackOff backOff);
+
+/**
+ * Return false to move retries and DLQ from the binding to a customized error handler
+ * using the retry metadata and/or a {@code DeadLetterPublishingRecoverer} when
+ * configured via
+ * {@link #configure(AbstractMessageListenerContainer, String, String, BiFunction, BackOff)}.
+ * @param destinationName the destination name.
+ * @param group the group.
+ * @return true to disable retrie in the binding
+ */
+default boolean retryAndDlqInBinding(String destinationName, String group) {
+    return true;
+}
+ ```
+ 目标解析器和 BackOff 是从绑定属性（如果已配置）创建的。 然后，您可以使用这些来创建自定义错误处理程序和死信发布者； 例如：
+ ```java
+ @Bean
+ListenerContainerWithDlqAndRetryCustomizer cust(KafkaTemplate<?, ?> template) {
+    return new ListenerContainerWithDlqAndRetryCustomizer() {
+
+        @Override
+        public void configure(AbstractMessageListenerContainer<?, ?> container, String destinationName,
+                String group,
+                @Nullable BiFunction<ConsumerRecord<?, ?>, Exception, TopicPartition> dlqDestinationResolver,
+                @Nullable BackOff backOff) {
+
+            if (destinationName.equals("topicWithLongTotalRetryConfig")) {
+                ConsumerRecordRecoverer dlpr = new DeadLetterPublishingRecoverer(template),
+                        dlqDestinationResolver);
+                container.setCommonErrorHandler(new DefaultErrorHandler(dlpr, backOff));
+            }
+        }
+
+        @Override
+        public boolean retryAndDlqInBinding(String destinationName, String group) {
+            return !destinationName.contains("topicWithLongTotalRetryConfig");
+        }
+
+    };
+}
+ ```
+ ## Dead-Letter topic Processing
+ ### Dead-Letter Topic Partition Selection
+ 
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
