@@ -923,7 +923,115 @@ ListenerContainerWithDlqAndRetryCustomizer cust(KafkaTemplate<?, ?> template) {
  ```
  ## Dead-Letter topic Processing
  ### Dead-Letter Topic Partition Selection
- 
+默认情况下，处理失败的消息会被发送的DL主题中的同样编号的分区中，这意味着，DL主题的分区数必须不少于原始主题的分区数；为了改变这个行为，添加一个DlqPartitionFunction类型的bean到应用的上下文中，只需要一个就可以，DlqPartitionFunction函数的参数是消费者组、失败的ConsumerRecord、与exception异常；下面的例子，你可以一直路由的0分区
+```java
+@Bean
+public DlqPartitionFunction partitionFunction() {
+    return (group, record, ex) -> 0;
+}
+```
+如果将消费者的 dlqPartitions 属性设置为 1（并且binder的 minPartitionCount 等于 1），则无需提供 DlqPartitionFunction； 框架将始终使用分区 0。如果将消费者的 dlqPartitions 属性设置为大于 1 的值（或binder的 minPartitionCount 大于 1），则必须提供 DlqPartitionFunction bean，即使分区数与 原始主题的分区数相同。可以自定义DLQ主题的名字，需要创建一个DlqDEstinationResolver类型的bean，当binder检测到这个bean，会优先使用这个bean来生成DLQ的主题，如果没有，会使用dlqName属性；如果什么都没发现，使用error.<destination>.<group>，下面是一个例子
+```java
+@Bean
+public DlqDestinationResolver dlqDestinationResolver() {
+    return (rec, ex) -> {
+        if (rec.topic().equals("word1")) {
+            return "topic1-dlq";
+        }
+        else {
+            return "topic2-dlq";
+        }
+    };
+}
+```
+在为 DlqDestinationResolver 提供实现时要记住的一件重要事情是，binder中的处理器不会为应用程序自动创建主题。 这是因为binder无法推断DLQ 主题的名称， 因此，如果您使用此策略提供 DLQ 名称，则应用程序有责任确保事先创建这些主题。
+### Handling Records in a Dead-Letter Topic
+因为框架管不到用户如何处理DLQ的消息，也没有提供任何的标准机制来处理这些消息，如果造成失败的原因是短暂的，比如网络抖动等，那么你可能想要吧消息发送回原始的topic，然而，造成失败的原因大多数的情况下都是持久的，这样会造成无限的循环，本节中的例子展示了如何发送回原始的topic,它在尝试了三次后将它们转移到了"parking lot"主题。另外一个scs应用从死信主题中消费消息。
+这个例子假设原始的主题是so8400out，消费者组是so8400;
+可以考虑使用很多策略:
+- 考虑仅在主应用程序未运行时运行重新路由。 否则，瞬态错误的重试会很快用完；
+- 或者，使用两阶段方法：使用此应用程序路由到第三个主题，使用另一个从那里路由回主主题;
+```properties
+spring.cloud.stream.bindings.input.group=so8400replay
+spring.cloud.stream.bindings.input.destination=error.so8400out.so8400
+
+spring.cloud.stream.bindings.output.destination=so8400out
+
+spring.cloud.stream.bindings.parkingLot.destination=so8400in.parkingLot
+
+spring.cloud.stream.kafka.binder.configuration.auto.offset.reset=earliest
+
+spring.cloud.stream.kafka.binder.headers=x-retries
+
+```
+```java
+@SpringBootApplication
+@EnableBinding(TwoOutputProcessor.class)
+public class ReRouteDlqKApplication implements CommandLineRunner {
+
+    private static final String X_RETRIES_HEADER = "x-retries";
+
+    public static void main(String[] args) {
+        SpringApplication.run(ReRouteDlqKApplication.class, args).close();
+    }
+
+    private final AtomicInteger processed = new AtomicInteger();
+
+    @Autowired
+    private MessageChannel parkingLot;
+
+    @StreamListener(Processor.INPUT)
+    @SendTo(Processor.OUTPUT)
+    public Message<?> reRoute(Message<?> failed) {
+        processed.incrementAndGet();
+        Integer retries = failed.getHeaders().get(X_RETRIES_HEADER, Integer.class);
+        if (retries == null) {
+            System.out.println("First retry for " + failed);
+            return MessageBuilder.fromMessage(failed)
+                    .setHeader(X_RETRIES_HEADER, new Integer(1))
+                    .setHeader(BinderHeaders.PARTITION_OVERRIDE,
+                            failed.getHeaders().get(KafkaHeaders.RECEIVED_PARTITION_ID))
+                    .build();
+        }
+        else if (retries.intValue() < 3) {
+            System.out.println("Another retry for " + failed);
+            return MessageBuilder.fromMessage(failed)
+                    .setHeader(X_RETRIES_HEADER, new Integer(retries.intValue() + 1))
+                    .setHeader(BinderHeaders.PARTITION_OVERRIDE,
+                            failed.getHeaders().get(KafkaHeaders.RECEIVED_PARTITION_ID))
+                    .build();
+        }
+        else {
+            System.out.println("Retries exhausted for " + failed);
+            parkingLot.send(MessageBuilder.fromMessage(failed)
+                    .setHeader(BinderHeaders.PARTITION_OVERRIDE,
+                            failed.getHeaders().get(KafkaHeaders.RECEIVED_PARTITION_ID))
+                    .build());
+        }
+        return null;
+    }
+
+    @Override
+    public void run(String... args) throws Exception {
+        while (true) {
+            int count = this.processed.get();
+            Thread.sleep(5000);
+            if (count == this.processed.get()) {
+                System.out.println("Idle, exiting");
+                return;
+            }
+        }
+    }
+
+    public interface TwoOutputProcessor extends Processor {
+
+        @Output("parkingLot")
+        MessageChannel parkingLot();
+
+    }
+
+}
+```
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
