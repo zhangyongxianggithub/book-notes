@@ -736,7 +736,49 @@ public Function<String, String> uppercase() {
 - retryableExceptions='': 键中的 Throwable 类名称和值中的布尔值的映射。 指定将或不会重试的那些异常（和子类）。 另请参阅 defaultRetriable。 示例：spring.cloud.stream.bindings.input.consumer.retryable-exceptions.java.lang.IllegalStateException=false;
 - useNativeDecoding=false: 设置为true时，入站消息由客户端库直接反序列化，必须进行相应配置（例如，设置合适的Kafka生产者值反序列化器）。 使用此配置时，入站消息解组不基于绑定的 contentType。 使用本机解码时，生产者有责任使用适当的编码器（例如，Kafka 生产者值序列化器）来序列化出站消息。 此外，当使用本机编码和解码时，headerMode=embeddedHeaders 属性将被忽略，并且标题不会嵌入到消息中。 请参阅生产者属性 useNativeEncoding;
 - multiplex=false: 设置为 true 时，底层绑定器将在同一输入绑定上使用多个destination;
+## 高级消费者配置
+对于消息驱动的消费者的底层消息侦听器容器的高级配置，将单个 ListenerContainerCustomizer bean 添加到应用程序上下文。 它将在应用上述属性后调用，并可用于设置其他属性。 同样，对于轮询的消费者，添加 MessageSourceCustomizer bean。
+```java
+@Bean
+public ListenerContainerCustomizer<AbstractMessageListenerContainer> containerCustomizer() {
+    return (container, dest, group) -> container.setAdviceChain(advice1, advice2);
+}
 
+@Bean
+public MessageSourceCustomizer<AmqpMessageSource> sourceCustomizer() {
+    return (source, dest, group) -> source.setPropertiesConverter(customPropertiesConverter);
+}
+```
+## producer配置选项
+这些属性定义在`org.springframework.cloud.stream.binder.ProducerProperties`类中，下面的属性只对output类型的binding有效，必须是`spring.cloud.stream.bindings.<bindingName>.producer.`开头的，比如`spring.cloud.stream.bindings.func-out-0.producer.partitionKeyExpression=headers.id`。
+全局使用的默认值可以使用`spring.cloud.stream.default.producer`开头的属性设置.
+- autoStartup=true, 标识producer是否自动启动;
+- partitionKeyExpression=null, 一个SpEL表达式，决定如果对发送的消息进行分区，如果设置了这个属性，发送的消息就会被分区，partitionCount必须被设置为一个大于1的值，可以看[Partitioning Support](https://docs.spring.io/spring-cloud-stream/docs/3.2.1/reference/html/spring-cloud-stream.html#partitioning)。
+- partitionKeyExtractorName=null, 一个实现了PartitionKeyExtractorStrategy接口的bean的名字，用来提取key来计算分区的ID，与partitionKeyExpression属性是互斥的;
+- partitionSelectorName=null，一个实现了PartitionSelectorStrategy接口的bean的名字，用来基于分区的key来计算分区的ID，与partitionSelectorExpression属性互斥;
+- partitionSelectorExpression=null, 一个SpEL表达式，来自定义计算分区的ID，如果没有设置，则计算的方式是`hashCode(key) % partitionCount`,这里key是通过属性partitionKeyExpression计算得到的;
+- partitionCount=1, 目标分区的数量，如果开启了分区并且目标是分区的，必须设置一个大于1的值，当使用kafka时，这个配置只会被解析为一种提示信息，最终的数量取决于max(当前值，topic的实际的分区数)的最大值;
+- requiredGroups, 一个逗号分隔的组的列表，以逗号分隔的组列表，即使它们在创建后开始（例如，通过在 RabbitMQ 中预先创建持久队列），生产者也必须确保消息传递到这些组（这是啥意思，谁知道啊）;
+- headerMode=`依赖binder的实现`，设置为`none`时，关闭header功能，当外部的消息系统不是内置支持header时，这个属性特别有用，当设置为headers，使用内置的header机制，当设置为embeddedHeaders，它将headers的信息填充到payload中;
+- useNativeEncoding=false, 这个我也不知道啥意思
+- errorChannelEnable=false, 如果设置为true，并且，binder支持异步发送，那么发送失败的消息会被发送到一个error channel中，可以看错误处理的相关的小节.
+## 高级Producer配置
+在某些情况下，Producer Properties 不足以在 Binder 中正确配置生产 MessageHandler，或者在配置此类生产 MessageHandler 时您可能更喜欢编程方法。 不管什么原因，spring-cloud-stream 提供了 ProducerMessageHandlerCustomizer 来完成它
+```java
+@FunctionalInterface
+public interface ProducerMessageHandlerCustomizer<H extends MessageHandler> {
+
+	/**
+	 * Configure a {@link MessageHandler} that is being created by the binder for the
+	 * provided destination name.
+	 * @param handler the {@link MessageHandler} from the binder.
+	 * @param destinationName the bound destination name.
+	 */
+	void configure(H handler, String destinationName);
+
+}
+```
+你需要做的就是实现这个接口并配置为@bean。
 
 # Apache Kafka Binder
 ## 用法
@@ -804,7 +846,7 @@ binder当前使用的kafka-clients的版本是2.3.1，这个客户端向前兼�
 |standardHeaders|指示input适配器填充哪些标准标头。 允许的值：none、id、timestamp 或所有。 如果使用本机反序列化并且接收消息的第一个组件需要 id（例如配置为使用 JDBC 消息存储的聚合器），则很有用。|none|
 |converterBeanName|实现 RecordMessageConverter 的 bean 的名称。 在入站通道适配器中用于替换默认的 MessagingMessageConverter|null|
 |idleEventInterval|指示最近未收到任何消息的事件之间的间隔（以毫秒为单位）。 使用 ApplicationListener<ListenerContainerIdleEvent> 接收这些事件。 有关用法示例，请参阅示例：暂停和恢复消费者。|30000|
-|destinationIsPattern|正则表达式|false|
+|destinationIsPattern|正则表达式，当设置为true时，destination会被认为是一个正则表达式，|false|
 |topic.properties|创建新的topic使用的属性|none|
 |topic.replicas-assignment|副本分配的 Map<Integer, List<Integer>> ，键是分区，值是分配。 在配置新主题时使用。 请参阅 kafka-clients jar 中的 NewTopic Javadocs。|none|
 |topic.replication-factor|因子|none|

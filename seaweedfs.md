@@ -1,3 +1,4 @@
+[TOC]
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -671,6 +672,30 @@ maven的形式如下：
   filerClient.updateEntry("/some/dir", entryBuilder.build());
 ```
 # 复制
+SeaweedFS可以支持复制，复制是基于volume实现不是文件级别.
+基本的用法如下:
+- 启动weed master，可选的指定复制类型
+>#001 means for each file a replica will be created in the same rack
+>./weed master -defaultReplication=001
+- 启动volume
+>./weed volume -port=8081 -dir=/tmp/1 -max=100 -mserver="master_address:9333" -dataCenter=dc1 -rack=rack1
+>./weed volume -port=8082 -dir=/tmp/2 -max=100 -mserver="master_address:9333" -dataCenter=dc1 -rack=rack1
+复制类型的表格如下：
+|Value|含义|
+|:---|:---|
+|000|不复制，只有一份数据|
+|001|在同一个rack内复制一次|
+|010|在同一个dc内的不同的rack内复制一次|
+|100|在不同的dc内复制一次|
+|200|在2个不同的dc内复制2次|
+|110|在一个dc内的不同的rack内复制一次，在不同的dc内复制一次|
+如果复制模式是xyz，含义如下:
+|:--- |:---|
+|Column|Meaning|
+|x|在其他的dc内的复制数量|
+|y|number of replica in other racks in the same data center|
+|z|number of replica in other servers in the same rack|
+x\y\x可以是0，1，2；所以存在9种可能的类型，非常方便扩展，每一种复制类型将会创建x+y+z+1份volume的拷贝.
 
 
 
