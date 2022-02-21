@@ -1,14 +1,16 @@
 # 第一章 Spring Security架构概览
-Spring Security方便集成在Spring Boot于Spring Cloud项目中。
+Spring Security方便集成在Spring Boot与Spring Cloud项目中。
 ## Spring Security简介
 java安全管理的实现方案
 - Shiro
 - Spring Security
 - 开发者自己实现
+
 Spring Security最早叫做Acegi Security，是基于Spring的一种框架，后来改名了叫Spring Security，一直是配置繁琐；但是Spring Boot的出现解决了这个问题，因为可以提供自动化的配置。
 ## Spring Security核型功能
 - 认证（你是谁）
 - 授权（你可以做什么）
+
 支持的认证方式：
 - 表单认证
 - OAuth2.0认证
@@ -21,12 +23,11 @@ Spring Security最早叫做Acegi Security，是基于Spring的一种框架，后
 - X509认证
 - HTTP Basic认证
 - HTTP Digest认证
+
 也可以引入第三方的支持或者自定义认证逻辑。
 Spring Security支持URL请求授权、方法访问授权、SpEL访问控制、域对象安全、动态权限配置、RBAC模型等。
 ## Spring Security整体架构
-<<<<<<< HEAD
-=======
-在Spring Security的设计中，认证（Authentication）与授权（Authorization）是分开的，无论使用什么样的授权方式都不会影响授权；用户的认证信息主要是由Authentication的实现类来保存，Authentication接口如下：
+在Spring Security的设计中，认证（Authentication）与授权（Authorization）是分开的，无论使用什么样的授权方式都不会影响认证；用户的认证信息主要是由Authentication的实现类来保存，Authentication接口如下：
 ```java
 /*
  * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
@@ -177,6 +178,7 @@ public interface Authentication extends Principal, Serializable {
 - getDetials() 用来获取用户携带的详细的信息；
 - getPrincipal() 用来获取当前用户，例如是一个用户名或者是一个用户对象；
 - isAuthenticated() 当前用户是否认证成功;
+
 Spring Security中的认证的工作主要由AuthenticationManager负责；该接口的定义如下：
 ```java
 /*
@@ -244,6 +246,7 @@ public interface AuthenticationManager {
 - Authentication表示认证成功;
 - 抛出AuthenticationException，表示用户输入了无效的凭证;
 - 返回null，表示不能判定.
+
 主要的实现类是ProviderManager，ProviderManager管理了众多的AuthenticationProvider实例，AuthenticationProvider有点类似于AuthenticationManager，但是它多了一个supports()方法用来判断是否支持给定的Authentication类型。AuthenticationProvider接口定义如下：
 ```java
 /*
@@ -319,10 +322,11 @@ public interface AuthenticationProvider {
 	boolean supports(Class<?> authentication);
 }
 ```
-由于Authentication拥有众多的实现类，不同的实现类由不同的AuthenticationProvider来处理，所以又个supports方法，用来判断Provider是否支持对应的Authentication；在一个完整的认证流程中，可能支持多个Provider，这些Provider统一由Manager来管理，ProviderManager由一个可选的parent，当所有的AuthenticationProvider都处理失败时，就会调用parent认证。相当于一个备用的认证方式。
+由于Authentication拥有众多的实现类，不同的实现类由不同的AuthenticationProvider来处理，所以有个supports方法，用来判断Provider是否支持对应的Authentication；在一个完整的认证流程中，可能支持多个Provider，这些Provider统一由Manager来管理，ProviderManager由一个可选的parent，当所有的AuthenticationProvider都处理失败时，就会调用parent认证。相当于一个备用的认证方式。
 授权有2个关键的接口
 - AccessDecisionManager
 - AccessDecisionVoter
+
 AccessDecisionVoter是一个投票器，用于检查用户是否应该具备应有的角色；AccessDecisionManager是一个决策器，用来决定此次访问是否被允许；它们都有众多的实现类，AccessDecisionManager会挨个遍历AccessDecisionVoter，决定是否允许用户访问；有点类似于AuthenticationProvider与ProviderManager的关系。
 在Spring Security中，用户请求资源需要的角色会被封装成ConfigAttributes，投票器做的事情就是判断ConfigAttributes与当前用户的角色是否匹配。
 在Spring Security中，认证与授权都是通过过滤器来完成的，Spring Security的过滤器如下：
@@ -331,4 +335,11 @@ AccessDecisionVoter是一个投票器，用于检查用户是否应该具备应�
 |:---:|:---:|:---:|
 |ChannelProcessingFilter|过滤请求协议如HTTTP与HTTPS|NO|
 |WebAsyncManagerIntegrationFilter|将WebAsyncManager与Spring Security上下文进行集成|YES|
-||||
+其他的以后再说吧。
+Spring Security的所有的功能都是通过这些过滤器来实现的，这些过滤器按照既定的优先级排列形成过滤器链；也可以自定义过滤器，并通过@Order来调整自定义过滤器在过滤器链中的位置。默认的过滤器并不是直接在Web项目的原生过滤器链中，而是通过一个FilterChainProxy来统一管理，Spring Security中的过滤器链通过FilterChainProxy嵌入到Web项目的原生过滤器链中，如下图
+![过滤器链](./filterchainproxy.png)
+过滤器链可能存在多个
+![多个过滤器](./multi-filterchainproxy.png)
+FilterChainProxy会通过DelegatingFilterProxy整合到原生过滤器链中。
+Spring Security还对登录数据做了线程绑定。使用的是ThreadLocal的机制，SecurityContextHolder中会存储这个变量，当处理完成，SecurityContextHolder会把数据清空，并放到Session中，以后每当有请求到来，先到session中取出登录数据放到SecurityContextHolder中，然后处理完，再次保存到Session中。
+# 第2章 认证
