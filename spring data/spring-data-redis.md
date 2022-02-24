@@ -336,3 +336,4 @@ public class Address {
 战平的json化的结构
 ![](redis/flat.png)
 展平要求所有属性名称不干扰 JSON 路径。 使用扁平化时，不支持在映射键中使用点或括号或作为属性名称。 生成的哈希无法映射回对象。java.util.Date and java.util.Calendar are represented with milliseconds. JSR-310 Date/Time types are serialized to their toString form if jackson-datatype-jsr310 is on the class path.
+# Redis Repository
