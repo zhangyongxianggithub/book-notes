@@ -19,4 +19,4 @@ spring:
 - applicationConfig:[classpath:bootstrap.yml] 或者与任何激活的profile相关的文件，如果你有一个bootstrap.yml或者.properties文件，文件里面的属性会被用来配置bootstrap上下文，然后以parent的身份被添加到子上下文环境中，他们比application.yml的优先级低，也比其他被添加到子上下文的属性源属性的优先级低；可以参考[Changing the Location of Bootstrap Properties](https://docs.spring.io/spring-cloud-commons/docs/current/reference/html/#customizing-bootstrap-properties)来自定义这些属性源的内容。
 因为属性源的排序规则的原因，含有bootstrap单词相关的属性体具有更高的优先级，然而，这并不包括任何来自于bootstrap.yml中的任何的数据，它们的优先级更低，可以被用来设置默认值。你可以扩展上下文的层次结构，只需要对你创建的ApplicationContext设置parent上下文，比如，通过使用ApplicationContext接口的方法或者使用SpringApplicationBuilder的方便的方法（parent()、child()、sibling()）。bootstrap上下文是大部分的上下文的parent。体系结构中的每个上下文都有他自己的bootstrap属性源to avoid promoting values inadvertently from parents down to their descendants。如果有一个配置服务器，体系结构中的上下文都可以有不同的spring.application.name，因而可以有不同的远程属性源。普通的Spring Application上下文属性解析规则如下：从子上下文中的属性会覆盖父上下文中出现的属性。
 ## 1.3 改变Bootstrap属性的位置
-
+Bootstrap.yml文件的名字可以通过spring.cloud.bootstrap.name属性（默认是bootstrap）、spring.cloud.bootstrap.location(默认是空的)、spring.cloud.bootstrap.addidional-location(默认是空的)指定。这些属性的的行为类似于同名的spring.config.*属性，
