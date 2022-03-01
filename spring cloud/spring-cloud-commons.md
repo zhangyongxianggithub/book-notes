@@ -41,3 +41,9 @@ public class CustomPropertySourceLocator implements PropertySourceLocator {
     }
 }
 ```
+参数Environment就是即将创建的ApplicationContext要使用的环境，换句话说，也是我们要提供额外属性源的环境，它早已经有了有关Spring Boot提供的相关的属性源，所以你可以那些属性源来定位一个当前魂惊使用的属性源，比如，通过spring.application.name属性。如果您在其中创建一个包含此类的 jar，然后添加包含以下设置的 META-INF/spring.factories，则 customProperty PropertySource 将出现在其类路径中包含该 jar 的任何应用程序中：
+>org.springframework.cloud.bootstrap.BootstrapConfiguration=sample.custom.CustomPropertySourceLocator
+
+## 1.7 Logging Configuration
+如果你要配置日志设置，你可以把日志相关的配置放到bootstrap[.yml|.properties]文件中。
+## 1.8 Environment Changes
