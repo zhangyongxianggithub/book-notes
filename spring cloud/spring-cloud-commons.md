@@ -47,3 +47,8 @@ public class CustomPropertySourceLocator implements PropertySourceLocator {
 ## 1.7 Logging Configuration
 如果你要配置日志设置，你可以把日志相关的配置放到bootstrap[.yml|.properties]文件中。
 ## 1.8 Environment Changes
+应用监听一个EnvironmentChangeEvent类型的事件，有几种操作可以响应这种变更（最普遍的方法就是添加ApplicationListeners类型的bean），当观察到一个EnvironmentChangeEvent事件时，通常是有属性发生了变更，应用使用这些变更的属性做一下的事情：
+- 重新绑定上下文中的@ConfigurationProperties注解的bean的属性内容;
+- 设置logging.level.*中的属性的日志级别。
+需要注意，Spring Cloud Config Client缺省情况下，不会自动探查Environment中的属性变更，通常来说，我们不建议你去检测任何属性的变更（比如通过@Scheduled的方式），如果你有一个需要横向扩展的客户端应用，最好的办法就是广播EnvironmentChangeEvent事件到所有的实例中，而不是让它们去探询变更（比如，可以使用Spring Cloud Bus）。
+EnvironmentChangeEvent 涵盖了一大类刷新用例，只要您可以实际对 Environment 进行更改并发布事件即可。 请注意，这些 API 是公共的，并且是核心 Spring 的一部分）。 您可以通过访问 /configprops 端点（标准 Spring Boot Actuator 功能）来验证更改是否绑定到 @ConfigurationProperties bean。 例如，DataSource 可以在运行时更改其 maxPoolSize（Spring Boot 创建的默认 DataSource 是 @ConfigurationProperties bean）并动态增加容量。 重新绑定@ConfigurationProperties 不涵盖另一大类用例，在这些用例中，您需要对刷新进行更多控制，并且需要对整个 ApplicationContext 进行原子更改。 为了解决这些问题，我们有@RefreshScope。
