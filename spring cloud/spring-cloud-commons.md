@@ -51,4 +51,8 @@ public class CustomPropertySourceLocator implements PropertySourceLocator {
 - 重新绑定上下文中的@ConfigurationProperties注解的bean的属性内容;
 - 设置logging.level.*中的属性的日志级别。
 需要注意，Spring Cloud Config Client缺省情况下，不会自动探查Environment中的属性变更，通常来说，我们不建议你去检测任何属性的变更（比如通过@Scheduled的方式），如果你有一个需要横向扩展的客户端应用，最好的办法就是广播EnvironmentChangeEvent事件到所有的实例中，而不是让它们去探询变更（比如，可以使用Spring Cloud Bus）。
-EnvironmentChangeEvent 涵盖了一大类刷新用例，只要您可以实际对 Environment 进行更改并发布事件即可。 请注意，这些 API 是公共的，并且是核心 Spring 的一部分）。 您可以通过访问 /configprops 端点（标准 Spring Boot Actuator 功能）来验证更改是否绑定到 @ConfigurationProperties bean。 例如，DataSource 可以在运行时更改其 maxPoolSize（Spring Boot 创建的默认 DataSource 是 @ConfigurationProperties bean）并动态增加容量。 重新绑定@ConfigurationProperties 不涵盖另一大类用例，在这些用例中，您需要对刷新进行更多控制，并且需要对整个 ApplicationContext 进行原子更改。 为了解决这些问题，我们有@RefreshScope。
+EnvironmentChangeEvent可以适用于非常多的刷新场景，只要您可以实际更改Environment中扽诶容并并发布事件即可，需要注意的是，这些API是public的，是核心 Spring 的一部分。你可以通过访问/configprops验证@ConfigurationProperties注解bean是否产生了变更（这是标准的spring Boot Actuator提供的功能）。例如，DataSource类型的对象可以在运行时更改其 maxPoolSize（Spring Boot 创建的默认 DataSource 是 @ConfigurationProperties bean）并动态增加容量。 重新绑定@ConfigurationProperties注解bean只是其中一个使用场景，在其他的使用场景中，你需要对刷新进行更多控制，并且需要对整个 ApplicationContext 进行原子更改。 为了解决这些问题，可以使用@RefreshScope。
+## 1.9 Refresh Scope
+当存在配置发生变更时，被@RefreshScope标记的bean会被特殊的处理，这解决了有状态的bean的配置发生需要发生变更并跟随变更的问题，因为大部署的bean只会在初始化时才会注入配置相关的内容。比如，当一个DataSource已经打开了一个连接，此时，Environment中的database的url发生了变更，你可能想要终止所有的连接并且下一次从pool中取出新的连接时，你可能想要连接使用新的URL。有时候，一些只会初始化一次的bean可能需要强制应用@RefreshScope，如果一个bean是不可变更的，你必须使用注解@RefreshScope或者在属性`spring.cloud.refresh.extra-refreshable`中指定classname。如果你有一个DataSource，它是HikariDataSource类型的，它是不能被刷新的，它是属性`spring.cloud.refresh.never-refreshable`的默认值，如果你需要datasource可以被刷新，选择一个其他类型的DataSource实现。
+@RefreshScope注解的bean会使用一种呢懒惰代理机制，也就是只有真正的方法调用发生时，才会根据初始的属性值的缓存生成被代理的对象，为了在下一次方法调用时，重新初始化对象，你需要将属性缓存配置为过期。这时会从Environment中重新加载。
+整个Spring Cloud应用的上下文中会存在一个RefreshScope类型的bean，它由一个公共的refreshAll()方法，这个方法会通过清空目标对象的cache的方法刷新范围内的所有的bean，
