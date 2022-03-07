@@ -344,8 +344,194 @@ public class PersonService {
 |CONTAINING (case-sensitive)|firstname like '%' + ?0 + '%'|
 |CONTAINING (case-insensitive)|LOWER(firstname) like '%' + LOWER(?0) + '%'|
 ## 事务
+默认情况下，repository实例中继承于SimpleJpaRepository接口的CRUD方法都是事务性的，对于读操作来说，事务配置readOnly=true，其他的配置与只使用@Transactional的配置相同，这是为了可以使用事务的默认配置，由事事务repository片段支持的repository方法从实际片段方法继承事务属性。
+如果你想要调整repo、中一个方法的事务配置，只需要重新声明方法的事务就可以了，比如
+```java
+public interface UserRepository extends CrudRepository<User, Long> {
+
+  @Override
+  @Transactional(timeout = 10)
+  public List<User> findAll();
+
+  // Further query method declarations
+}
+```
+另外一种变更事务行为的方法是，使用门面模式或者使用service实现的方式，通常来说他们都是涵盖多个repository，这个事务的目的是为了那些不是单纯的crud的操作定义事务的边界，下面的例子是一个含有多个repo的门面模式的例子
+```java
+@Service
+public class UserManagementImpl implements UserManagement {
+
+  private final UserRepository userRepository;
+  private final RoleRepository roleRepository;
+
+  public UserManagementImpl(UserRepository userRepository,
+    RoleRepository roleRepository) {
+    this.userRepository = userRepository;
+    this.roleRepository = roleRepository;
+  }
+
+  @Transactional
+  public void addRoleToAllUsers(String roleName) {
+
+    Role role = roleRepository.findByName(roleName);
+
+    for (User user : userRepository.findAll()) {
+      user.addRole(role);
+      userRepository.save(user);
+    }
+  }
+}
+```
+这个例子让对方法addRoleToAllUsers()方法的调用运行在一个事务里面（参与到一个已存在的事务或者没有事务就创建一个新的事务），repository的事务配置会被忽略，因为外层的事务配置才是真正使用的事务。需要注意的是，你必须声明`<tx:annotation-driven />`或者声明`@EnableTransactionManagement`来明确的让门面上的注解事务配置生效，这个例子假设你使用了组件扫描。
+需要注意的是，从JPA视角来看，没有必要调用save方法，当时接口中也应该提供save方法，这是为了保证spring data提供的repository接口定义的一致性。
+#### 事务查询方法
+为了给查询添加事务特性，在你定义的repository接口上声明@Transactional，如下面的例子所示
+```java
+@Transactional(readOnly = true)
+interface UserRepository extends JpaRepository<User, Long> {
+
+  List<User> findByLastname(String lastname);
+
+  @Modifying
+  @Transactional
+  @Query("delete from User u where u.active = false")
+  void deleteInactiveUsers();
+}
+
+```
+通常，您希望将 readOnly 标志设置为 true，因为大多数查询方法只读取数据。 与此相反，deleteInactiveUsers() 使用 @Modifying 注释这会覆盖事务配置。 因此，该方法运行时，readOnly配置是false。
+你可以在只读查询上使用事务，并通过设置readOnly=true来标记它们，但是，这么做并不能保证你不会触发一个变更查询（虽然有的数据哭拒绝在只读事务中执行insert或者update语句），但是readOnly标记可以作为一个提示传播到底层的JDBC驱动中，驱动程序可以用来做性能优化。此外spring对底层的JPA提供程序做了一些优化。比如：当与Hibernate一起使用时，当事务被配置为readOnly=true时，flush modo会被设置为NEVER，这会让Hibernate跳过脏检查（对大量的对象树的检索会带来明显的提升）
 ## Locking
-## 签名
+为了指定要使用的lock模式，你可以在查询方法上使用@Lock注解，如下面的代码所示
+```java
+interface UserRepository extends Repository<User, Long> {
+
+  // Plain query method
+  @Lock(LockModeType.READ)
+  List<User> findByLastname(String lastname);
+}
+```
+这个方法声明使得查询使用LockModeType=READ的方式执行查询，你可以可以在repository接口上声明lock或者在方法上声明，如下面的例子所示
+```java
+interface UserRepository extends Repository<User, Long> {
+
+  // Redeclaration of a CRUD method
+  @Lock(LockModeType.READ)
+  List<User> findAll();
+}
+
+```
+## Auditing审计
+Spring Data 提供了成熟的审计支持，这些支持可以对entity的创建/变更保持透明的及时的跟踪。为了使用这些功能，你必须给你的实体类添加有关审计的元数据信息，可以使用注解的形式或者实现指定的接口。另外，审计功能需要一些注解配置或者XML配置才能开启，这些配置需要注册一些需要的基础组件。请参考配置案例中的store-specific章节。只需要跟踪创建/修改日期的应用不需要指定任何的AuditorAware。
+1. 基于注解的审计元数据
+我们提供了@CreatedBy、@LastModifiedBy来捕获创建与修改实体的用户，@CreatedDate、@LastModifiedDate用来捕获发生变更的时间。
+```java
+class Customer {
+
+  @CreatedBy
+  private User user;
+
+  @CreatedDate
+  private Instant createdDate;
+
+  // … further properties omitted
+}
+
+```
+正如你看到的，注解是有选择性的应用的，这依赖于你想要捕获信息的类型，捕获变更发生时间的注解可以使用在Joda-Time、DateTIme、传统的Date、Calendar、JDK8的日期时间类型、long或者Long类型的属性上。审核元数据不一定需要存在于根级别实体中，也可以添加到嵌入式实体中（取决于实际使用的存储），如下面的片段所示。、
+```java
+class Customer {
+
+  private AuditMetadata auditingMetadata;
+
+  // … further properties omitted
+}
+
+class AuditMetadata {
+
+  @CreatedBy
+  private User user;
+
+  @CreatedDate
+  private Instant createdDate;
+
+}
+
+```
+2. 基于接口的审计元数据
+如果您不想使用注解来定义审计元数据，您可以让您的entity类实现 Auditable 接口。 它暴漏了所有审计属性的 setter 方法。
+3. AuditorAware
+在使用@CreatedBy与@LastModifiedBy的场景，审计的基础组件需要以某种方式知晓当前登录的用户信息，为了达到这个目的，我们提供了AuditorAware<T> 服务提供者接口，你必须实现这个接口告诉基础组件当前登录的用户或者当前使用的系统等，泛型类型T必须是使用@CreatedBy或者@LastModifiedBy注解标注的属性的类型。
+下面是接口实现的一个例子，这个例子使用了Spring Security的Authentication对象
+```java
+class SpringSecurityAuditorAware implements AuditorAware<User> {
+
+  @Override
+  public Optional<User> getCurrentAuditor() {
+
+    return Optional.ofNullable(SecurityContextHolder.getContext())
+            .map(SecurityContext::getAuthentication)
+            .filter(Authentication::isAuthenticated)
+            .map(Authentication::getPrincipal)
+            .map(User.class::cast);
+  }
+}
+```
+上面的实现访问Spring Security框架提供的Authentication对象，并且会寻找自定义的UserDetails实例，这个实例是通过UserDetailsService接口实现提供的。
+4. ReactiveAuditorAware
+当使用reactive基础设施时，你可能想要使用上下文信息提供@CreatedBy或者@LastModifiedBy需要的信息。我们提供了ReactiveAuditorAware<T> SPI接口，你可以实现这个接口来告诉基础设施，当前登录的用户或者系统是谁。与上面的例子是一样的。
+```java
+class SpringSecurityAuditorAware implements ReactiveAuditorAware<User> {
+
+  @Override
+  public Mono<User> getCurrentAuditor() {
+
+    return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .filter(Authentication::isAuthenticated)
+                .map(Authentication::getPrincipal)
+                .map(User.class::cast);
+  }
+}
+```
+## JPA Auditing
+1. 普通的Auditing配置
+Spring Data JPA提供了entity监听器，这个监听器可以用来触发捕获审计信息的操作，首先，为了所有的实体都可以使用到这个entity监听器，你必须注册AuditingEntityListener在你的orm.xml文件中，如下所示
+```xml
+<persistence-unit-metadata>
+  <persistence-unit-defaults>
+    <entity-listeners>
+      <entity-listener class="….data.jpa.domain.support.AuditingEntityListener" />
+    </entity-listeners>
+  </persistence-unit-defaults>
+</persistence-unit-metadata>
+```
+如果只想在某个实体上应用`AuditingEntityListener`，可以使用@EntityListeners注解，如下所示
+```java
+@Entity
+@EntityListeners(AuditingEntityListener.class)
+public class MyEntity {
+
+}
+```
+设计功能需要spring-aspects的支持。
+orm.xml的方式非常容易修改变更，激活审计功能只需要添加Spring Data JPA的auditing空间元素到配置中，如下:
+```xml
+<jpa:auditing auditor-aware-ref="yourAuditorAwareBean" />
+```
+从spring Data JPA 1.5版本开始，你可以通过@EnableJpaAuditing注解开启审计，
+```java
+@Configuration
+@EnableJpaAuditing
+class Config {
+
+  @Bean
+  public AuditorAware<AuditableUser> auditorProvider() {
+    return new AuditorAwareImpl();
+  }
+}
+```
+如果你的应用上下文中存在AuditorAware类型的bean，审计的基础组件会自动使用这个bean来决定当前登录的用户；如果你的ApplicationContext中有多个实现或者多个bean，你可以通过@EnableJpAAuditing的auditorAwareRef属性明确的指定选择使用的AuditorAware实例。
 # JPA仓库
 ## 投影
 Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要一句聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
@@ -497,3 +683,72 @@ void someMethod(PersonRepository people) {
     people.findByLastname("Matthews", NamesOnly.class);
 }
 ```
+# 其他注意事项
+## 在自定义的实现中使用JpaContext
+当环境中有多个EntityManager类型的实例或者有自定义的repository实现时，你需要讲正确的EntityManager注入到repository的实现类中去；你也可以在@PersistenceContext注解中明确的指定EntityManager的名字，或者如果EntityManager是自动注入的，那么使用@Qualifier。从Spring Data JPA 1.9版本后，Spring Data JPA引入了一个叫做JpaContext的类，可以让你通过领域类来获得与其相关的EntityManager。我们假设一个领域类只会被应用中的一个EntityManager实例管理。下面的例子是如何在自定义的repository中使用JpaContext的方法。
+```java
+class UserRepositoryImpl implements UserRepositoryCustom {
+
+  private final EntityManager em;
+
+  @Autowired
+  public UserRepositoryImpl(JpaContext context) {
+    this.em = context.getEntityManagerByManagedType(User.class);
+  }
+
+  …
+}
+
+```
+这种方式的优势就是：假如领域类型被重新分配到一个不同的存储单元，那么repository不需要修改它的存储单元引用。
+### 合并持久性单元
+Spring支持多种持久性单元。然而有时候，你想要模块化你的应用但是所有的模块还是运行在一个单一的持久性单元上，为了支持这个特性，Spring Data JPA提供了PersistenceUnitManager类的实现。可以自动的基于持久性单元的名字来合并持久性单元，如下面的例子所示
+```java
+<bean class="….LocalContainerEntityManagerFactoryBean">
+  <property name="persistenceUnitManager">
+    <bean class="….MergingPersistenceUnitManager" />
+  </property>
+</bean>
+```
+一个普通的JPA应用建立过程，需要所有注解映射的类都列在orm.xml文件中，对于XML映射文件也是同样的道理；Spring Data JPA提供了ClasspathScanningPersistenceUnitPostProcessor，使用这个类后，可以配置base package，并且可以配置映射的文件名模式，使用这个bean后，应用会扫描配置的package中使用注解@Entity与@MappedSuperclass注解的类，与文件名模式匹配的配置文件。post-processor的配置方式如下：
+```xml
+<bean class="….LocalContainerEntityManagerFactoryBean">
+  <property name="persistenceUnitPostProcessors">
+    <list>
+      <bean class="org.springframework.data.jpa.support.ClasspathScanningPersistenceUnitPostProcessor">
+        <constructor-arg value="com.acme.domain" />
+        <property name="mappingFileNamePattern" value="**/*Mapping.xml" />
+      </bean>
+    </list>
+  </property>
+</bean>
+```
+## CDI Integration
+Repository接口的实例通常都是由容器创建的，所以当使用Spring Data的时候，使用Spring也是非常合适的。Spring为创建bean实例提供了成熟的支持，就像在[Creating Repository Instances](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.create-instances)文档中所示。从1.1.0版本开始，Spring Data JPA提供了自定义的CDI扩展，允许在CDI环境中使用repository抽象定义。扩展是JAR包的一部分。
+您现在可以通过为 EntityManagerFactory 和 EntityManager 实现 CDI 生产者来设置基础架构，如以下示例所示：
+```java
+class EntityManagerFactoryProducer {
+
+  @Produces
+  @ApplicationScoped
+  public EntityManagerFactory createEntityManagerFactory() {
+    return Persistence.createEntityManagerFactory("my-persistence-unit");
+  }
+
+  public void close(@Disposes EntityManagerFactory entityManagerFactory) {
+    entityManagerFactory.close();
+  }
+
+  @Produces
+  @RequestScoped
+  public EntityManager createEntityManager(EntityManagerFactory entityManagerFactory) {
+    return entityManagerFactory.createEntityManager();
+  }
+
+  public void close(@Disposes EntityManager entityManager) {
+    entityManager.close();
+  }
+}
+```
+# 附录D: Repository查询返回类型（支持的查询返回类型）
+下面的表格列出了Spring Data Repositories普遍支持的返回类型，
