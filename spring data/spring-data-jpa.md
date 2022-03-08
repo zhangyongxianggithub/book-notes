@@ -770,13 +770,13 @@ class EntityManagerFactoryProducer {
 |Future<T>|一个Future，查询方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
 |CompletableFuture<T>|一个Java8的CompletableFuture，方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
 |ListenableFuture|一个org.springframework.util.concurrent.ListenableFuture类型的对象，查询方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
-|Slice<T>|一个特定大小的数据块，指明是否还有更多的数据，需要方法参数中有Pageable|
+|Slice<T>|一个特定大小的数据块包含是否还有更多的数据的一些信息，需要方法参数中有Pageable|
 |Page<T>|一个带有额外新的Slice，比如结果的总数，需要方法参数中有Pageable|
 |GeoResult<T>|带有额外信息的结果实体，比如位置的距离等|
-|GeoResults<T>||
-|GeoPage<T>||
-|Mono<T>||
-|Flux<T>||
-|Single<T>||
-|Maybe<T>||
-|Flowable<T>||
+|GeoResults<T>|GeoResult<T>结果的列表，含有一些额外的信息，比如平均距离等|
+|GeoPage<T>|一个带有GeoResult<T>的Page，比如引用位置的平均距离等|
+|Mono<T>|Reactor的Mono类型，表示0个或者1个元素，查询方法预定最多返回一个记录，如果没有记录，返回Mono.empty(),返回多于一条会触发IncorrectResultSizeDataAccessException异常|
+|Flux<T>|Reactor的Flux类型，表示0或者多个元素，与Flowable类型类似，可以表示无限数量的元素|
+|Single<T>|Rxjava的Single类型，使用呢reactive repository时表示一个元素，预期查询方法最多返回一条记录，如果没有记录返回，返回Mono.empty()，返回多于一条会触发IncorrectResultSizeDataAccessException异常|
+|Maybe<T>|Rxjava的Maybe类型，使用reactive repository时表示0个或者1个元素，查询方法预定最多返回一个记录，如果没有记录，返回Mono.empty(),返回多于一条会触发IncorrectResultSizeDataAccessException异常|
+|Flowable<T>|使用reactive repository可以使用Rxjava的Flowable类型表示0个或者多个元素，返回Flowable的查询可以表示无限数量的元素|
