@@ -101,6 +101,7 @@ class ApplicationConfig {
 存储实体通过save()方法，底层用的EntityManager，如果实体是第一次存储，EntityManager会使用persist()方法，否则使用merge()方法。
 判断实体是否是新的，有3种方法，可以看文档。
 ## 查询方法
+JPA模块支持手动以一个字符串的方式定义一个查询或者从方法名衍生。
 - 查询查找策略，JPA支持2种查询方式，一种是直接执行SQL，一种是SQL通过方法名字衍生出来的SQL；衍生查询会使用很多谓词来处理方法的参数，这意味着如果参数里面出现了SQL的敏感词，会使用@EnableJpaRepositories里面的escapeCharacter转义。
 - 声明查询，虽然通过方法名生成查询很方便，但是有些场景下也不好，比如，方法名解析不支持想用的一些SQL关键字比如regexp操作，或者生成的方法名太丑了，你可以使用命名查询或者使用@Query方式。
 - 查询创建，通过方法名生成查询的例子在上面，下面是一个例子
@@ -110,12 +111,13 @@ public interface UserRepository extends Repository<User, Long> {
   List<User> findByEmailAddressAndLastname(String emailAddress, String lastname);
 }
 ```
+我们使用JPA criteria API创建了一个查询，本质上，上面的代码会翻译成下面的查询`select u from User u where u.emailAddress = ?1 and u.lastname = ?2`,Spring Data JPA会做属性检查，并且遍历嵌套的属性，正如在[Property Expressions](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-property-expressions)章节。
 我们使用JPA的规则创建了一个查询，但是本质上，使用的查询是
 ```sql
 select u from User u where u.emailAddress = ?1 and u.lastname = ?2
 ```
 下面的列表描述了JPA支持的SQL关键词翻译规则，参考文档上有，不写了。
-- 使用JPA命名查询，使用@NamedQuery或者@NameNativeQuery，@NamedQuery的例子
+- 使用JPA命名查询，使用@NamedQuery或者@NameNativeQuery，下面的例子都使用了<named-query/>或者@NamedQuery注解，这些查询必须以JPA查询语言的方式定义，当然，也可以使用<named-native-query/>或者@NamedNativeQuery注解，这些元素可以让你以native SQL的方式定义查询，但是这样做丧失了数据库平台无关性。@NamedQuery的例子
 ```java
 @Entity
 @NamedQuery(name = "User.findByEmailAddress",
@@ -123,7 +125,7 @@ select u from User u where u.emailAddress = ?1 and u.lastname = ?2
 public class User {
 }
 ```
-为了使用上面的命名查询
+为了使用上面的命名查询，要在UserRepository接口中进行描述。
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -132,7 +134,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
   User findByEmailAddress(String emailAddress);
 }
 ```
-这样接口种的findByEmailAddress方法就不会衍生SQL了，而是使用定义的命名查询。
+Spring会尝试解析方法调用是否与命名查询相匹配，名字的匹配方式是domain classname.method name，当名字匹配时，接口中的findByEmailAddress方法就不会衍生SQL了，而是使用定义的命名查询。
 - 使用@Query，优先级比@NamedQuery高
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -195,7 +197,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 ```
 如果你使用了java8的-parameters功能，可以不用使用@Param
 - 使用SpEL表达式，
-- 修改SQL，
+- 修改查询
+- 引用查询提示
+- configuring fetch- and loadgraphs
+
 ## 存储过程
 ## 规格
 JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
