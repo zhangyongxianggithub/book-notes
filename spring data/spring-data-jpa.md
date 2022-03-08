@@ -751,4 +751,32 @@ class EntityManagerFactoryProducer {
 }
 ```
 # 附录D: Repository查询返回类型（支持的查询返回类型）
-下面的表格列出了Spring Data Repositories普遍支持的返回类型，
+下面的表格列出了Spring Data Repositories普遍支持的返回类型，但是，你可以参考特定存储的参考文档来了解明确支持的返回类型的列表，因为，这里列出的一些类型可能在某些存储上是不支持的。Geospatial类型（比如GeoResult、GeoResults、GeoPage）只有那些支持地理信息查询的数据存储才可用，一些存储模块可能定义了它们自己的包装类型。
+|return type|描述|
+|:---|:---|
+|void|没有返回值|
+|Primitives|java原始数据类型|
+|Wrapper types|Java包装数据类型|
+|T|一个独一无二的实体，查询方法最多只会返回一个记录，如果没有记录，返回null，超过1个返回记录会触发IncorrectResultSizeDataAccessException异常|
+|Iterator<T>|一个迭代器|
+|Collection<T>|一个集合容器|
+|List<T>|一个列表|
+|Optional<T>|一个Java8或者Guava的Optional对象，查询方法最多返回1条数据，没有数据返回Optional.empty(),超过1条数据会触发IncorrectResultSizeDataAccessException异常|
+|Option<T>|一个Scala或者Vavr的Option类型，语法上与Java8的Optional差不多|
+|Stream<T>|java8的stream类型|
+|Streamable<T>|一个Iterable的扩展类型，具有很多stream接口的方法|
+|实现Streamable接口的类型，含有一个Streamable参数的构造函数的类型，或者含有一个Streamable参数的静态方法的类型|这些类型，含有一个构造函数，或者有of、valueOf等工厂方法，它们都有一个Streamable的参数，可以参考[Returning Custom Streamable Wrapper Types](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.collections-and-iterables.streamable-wrapper)获得更多的细节|
+|Vavr库的Seq、List、Map、Set|vavr的集合类型，可以参考[Support for Vavr Collections](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.collections-and-iterables.vavr)|
+|Future<T>|一个Future，查询方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
+|CompletableFuture<T>|一个Java8的CompletableFuture，方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
+|ListenableFuture|一个org.springframework.util.concurrent.ListenableFuture类型的对象，查询方法必须使用@Async注解并且必须开启了Spring异步执行方法的功能|
+|Slice<T>|一个特定大小的数据块，指明是否还有更多的数据，需要方法参数中有Pageable|
+|Page<T>|一个带有额外新的Slice，比如结果的总数，需要方法参数中有Pageable|
+|GeoResult<T>|带有额外信息的结果实体，比如位置的距离等|
+|GeoResults<T>||
+|GeoPage<T>||
+|Mono<T>||
+|Flux<T>||
+|Single<T>||
+|Maybe<T>||
+|Flowable<T>||
