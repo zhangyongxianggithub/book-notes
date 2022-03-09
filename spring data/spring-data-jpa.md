@@ -196,11 +196,110 @@ public interface UserRepository extends JpaRepository<User, Long> {
 }
 ```
 如果你使用了java8的-parameters功能，可以不用使用@Param
+<<<<<<< HEAD
 - 使用SpEL表达式，
 - 修改查询
 - 引用查询提示
 - configuring fetch- and loadgraphs
 
+=======
+- SpEL表达式
+  
+从Spring Data JPA 1.4版本开始，我们支持在@Query注解中手动定义的查询使用限制的SpEL模板表达式，根据正在运行的查询，这些表达式会在一个预定义的变量集合上执行解析，Spring Data JPA支持一个叫做entityName的变量，它的用法是
+```sql
+select x from #{#entityName} x
+```
+它会根据与给定的repo相关联的领域类型插入entityName，entityName的解析方式：如果领域类型在 @Entity 注释上设置了 name 属性，则使用它。 否则，使用领域类型的简单类名。下面的例子展示了在查询中使用#{#entityName}表达式的一种用例
+```java
+@Entity
+public class User {
+
+  @Id
+  @GeneratedValue
+  Long id;
+
+  String lastname;
+}
+
+public interface UserRepository extends JpaRepository<User,Long> {
+
+  @Query("select u from #{#entityName} u where u.lastname = ?1")
+  List<User> findByLastname(String lastname);
+}
+
+```
+使用#{#entityName}变量可以让你不需要在@Query注解中的查询书写实际的实体名。entityName可以通过@Entity注解定义，orm.xml中的定义不支持SpEL表达式。当然，你也可以直接在查询中使用User，但是这个名字你需要在查询中及时的变更，对#entityName的应用，可能会是一个对user类的映射的完全不同的实体名字（比如，通过使用@Entity(name=“MyUser”)定义逻辑实体的名字）。
+在查询中使用#{#entityName}表达式的另一个用例是当你想要定义一个通用的repo接口，这个通用的repo接口是一个具体的领域类型的专门的repo接口。为了不在repo接口重复定义相似的查询方法，你可以在通用的repo接口中@Query注解中的查询中使用#{#entityName}表达式，如下面的例子所示
+```java
+@MappedSuperclass
+public abstract class AbstractMappedType {
+  …
+  String attribute
+}
+
+@Entity
+public class ConcreteType extends AbstractMappedType { … }
+
+@NoRepositoryBean
+public interface MappedTypeRepository<T extends AbstractMappedType>
+  extends Repository<T, Long> {
+
+  @Query("select t from #{#entityName} t where t.attribute = ?1")
+  List<T> findAllByAttribute(String attribute);
+}
+
+public interface ConcreteRepository
+  extends MappedTypeRepository<ConcreteType> { … }
+
+```
+在上面的例子中，MappedTypeRepository接口是所有继承于AbstractMappedType的领域类型的共同的parent接口，它也定义了通用的findAllByAttribye(…)方法，可以在专门的repo接口上使用这个方法，如果你现在调用ConcreteRepository的findAllByAttribye方法，生成的查询是`select t from ConcreteType t where t.attribute = ?1`，SpEL表达式也可以用来处理方法参数，在这种SpEL表达式中，entity name不允许使用，但是可以方法的参数，可以通过参数的名字或者索引使用参数，如下面的例子所示
+```java
+@Query("select u from User u where u.firstname = ?1 and u.firstname=?#{[0]} and u.emailAddress = ?#{principal.emailAddress}")
+List<User> findByFirstnameAndCurrentUserWithCustomQuery(String firstname);
+```
+对于like条件来说，开发者通常都会想要在一个字符串值的2边加上%通配符，这样可以通过SpEL表达式与%符号实现
+```java
+@Query("select u from User u where u.lastname like %:#{[0]}% and u.lastname like %:lastname%")
+List<User> findByLastnameWithSpelExpression(@Param("lastname") String lastname);
+```
+当使用like条件时，like的值可能来自于不安全的输入，所以应该被转义处理防止它们包含一些通配符或者关键词，这样攻击者可能会访问到比正常情况下更多的数据；为了处理这种情况，在SpEL上下文中可以使用escape(Strring)方法，它在第一个参数中的所有存在_ 和 %字符的实例前面加上第二个参数指定的单个字符。在JPQL与SQL中，escape与like表达式的这种用法都允许使用，这保证了绑定参数的简洁可用。
+```
+@Query("select u from User u where u.firstname like %?#{escape([0])}% escape ?#{escapeCharacter()}")
+List<User> findContainingEscaped(String namePart);
+```
+当声明了上面repo的查询方法，那么findContainingEscaped("Peter_”)将会查询到Peter_Parker而不是Peter Parker，使用的转义字符可以通过@EnableJpaRepositories注解的escapeCharacter属性设置配置，请注意，SpEL 上下文中可用的方法 escape(String) 只会转义 SQL 和 JPQL 标准通配符 _ 和 %。 如果底层数据库或 JPA 实现支持其他通配符，则这些通配符不会被转义。
+- 应用查询提示
+为了给repo接口中声明的查询应用JPA查询提示，你可以使用@QueryHints注解，这个注解使用来了JPA @QueryHint注解数组与一个boolean类型的用于指定在分页查询时查询总数是否应用查询提示的标志
+```java
+public interface UserRepository extends Repository<User, Long> {
+
+  @QueryHints(value = { @QueryHint(name = "name", value = "value")},
+              forCounting = false)
+  Page<User> findByLastname(String lastname, Pageable pageable);
+}
+```
+前面的所有的章节描述了如何声明查询来获取一个给定的实体或者实体的集合，你可以使用[Custom Implementations for Spring Data Repositories](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.custom-implementations)中描述的自定义方法的方式添加自定义修改行为，这种方式可以实现全面的功能定制，你可以通过在查询方法上使用注解@Modifying来实现查询修改，如下面的例子中所示
+```java
+@Modifying
+@Query("update User u set u.firstname = ?1 where u.lastname = ?2")
+int setFixedFirstnameFor(String firstname, String lastname);
+```
+上面的写法会让查询从一个查询方法编程一个变更查询，因为EntityManager在变更查询执行完后可能包含过期的实体，我们不会自动清空它（可以参考EntityManager.clear()方法获得更多详细的细节），由于在执行修改查询后 EntityManager 可能包含过时的实体，我们不会自动清除它（有关详细信息，请参阅 EntityManager.clear() 的 JavaDoc），因为这有效地删除了 EntityManager 中仍待处理的所有未刷新的更改。 如果您希望 EntityManager 自动清除，可以将 @Modifying 注解的 clearAutomatically 属性设置为 true。@Modifying注解仅与@Query注解结合使用。 派生查询方法或自定义查询方法不需要此注解。
+Spring Data JPA也支持派生的删除查询，你可以不用明确的声明JPQL查询，如下面的例子所示
+```java
+interface UserRepository extends Repository<User, Long> {
+
+  void deleteByRoleId(long roleId);
+
+  @Modifying
+  @Query("delete from User u where u.role.id = ?1")
+  void deleteInBulkByRoleId(long roleId);
+}
+
+```
+虽然，声明式的查询方法deletebyRoleId(…)看起来也能实现deleteInBulkByRoleId方法同样的功能，但是他们2个还是有区别的，主要是运行的方式不同，正如名字所揭示的的那样，后面的方法会生成一个JPQL查询，这意味着，当前加载的User实例不会调用生命周期回调方法，为了确保实际调用生命周期回调，调用 deleteByRoleId(...) 会运行一个查询，然后一一删除返回的实例，以便持久性提供程序实际上可以在这些实体上调用 @PreRemove 声明周期回调方法。
+实际上，派生的删除查询是运行查询然后在结果上调用 CrudRepository.delete(Iterable<User> users) 并使行为与 CrudRepository 中其他 delete(...) 方法的实现保持同步的快捷方式。
+>>>>>>> 6a2a23a (update)
 ## 存储过程
 ## 规格
 JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
