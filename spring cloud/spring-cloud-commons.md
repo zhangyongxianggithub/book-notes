@@ -55,4 +55,14 @@ EnvironmentChangeEvent可以适用于非常多的刷新场景，只要您可以�
 ## 1.9 Refresh Scope
 当存在配置发生变更时，被@RefreshScope标记的bean会被特殊的处理，这解决了有状态的bean的配置发生需要发生变更并跟随变更的问题，因为大部署的bean只会在初始化时才会注入配置相关的内容。比如，当一个DataSource已经打开了一个连接，此时，Environment中的database的url发生了变更，你可能想要终止所有的连接并且下一次从pool中取出新的连接时，你可能想要连接使用新的URL。有时候，一些只会初始化一次的bean可能需要强制应用@RefreshScope，如果一个bean是不可变更的，你必须使用注解@RefreshScope或者在属性`spring.cloud.refresh.extra-refreshable`中指定classname。如果你有一个DataSource，它是HikariDataSource类型的，它是不能被刷新的，它是属性`spring.cloud.refresh.never-refreshable`的默认值，如果你需要datasource可以被刷新，选择一个其他类型的DataSource实现。
 @RefreshScope注解的bean会使用一种呢懒惰代理机制，也就是只有真正的方法调用发生时，才会根据初始的属性值的缓存生成被代理的对象，为了在下一次方法调用时，重新初始化对象，你需要将属性缓存配置为过期。这时会从Environment中重新加载。
-整个Spring Cloud应用的上下文中会存在一个RefreshScope类型的bean，它由一个公共的refreshAll()方法，这个方法会通过清空目标对象的cache的方法刷新范围内的所有的bean，
+整个Spring Cloud应用的上下文中会存在一个RefreshScope类型的bean，它由一个公共的refreshAll()方法，这个方法会通过清空目标对象的cache的方法刷新范围内的所有的bean。/refresh端点暴漏了这种功能(通过HTTP或者JMX)，为了通过bean的名字来刷新一个单独的bean，也可以使用refresh(String)方法。为了暴漏/refresh端点，你需要添加如下的配置到你的应用中
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: refresh
+```
+从技术上来说，@RefreshScope工作在@Configuration类上，这可能导致一些未知的行为，比如，@Configuration注解类中定义的@Bean本身是不在@RefreshScope作用范围内，比较特别的是，任何依赖这些bean的bean不能只依赖它们被初始化时的对象，除非它本身在@RefreshScope中，具体来说，任何依赖于这些 bean 的东西都不能依赖它们在启动刷新时被更新，除非它本身在 @RefreshScope 中。 在这种情况下，它会在刷新时重建，并重新注入其依赖项。 此时，它们会从刷新的@Configuration 重新初始化）。
+## 1.10 encryption与decryption
+
