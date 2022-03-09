@@ -156,4 +156,28 @@ parameter list的语法 direction name: type=default value
     precondition：输入MAX_DOLLORx>0 x>y>0，都是浮点数，表示美元数额。
     postcondition：x-y后剩余的美元金额
 2. 
+    - Date plusOneDay(Date date)
+    - effect desc: 计算给定日期的下一天的日期
+    - precondition: Date使一个从0000-00-00开始的有效日期，表示日期
+    - postcondition: 在Date的基础上+1
+```java
+public class Exercise2 {
+    /**
+     * @param date a specific day
+     * @return date+1day
+     */
+    public LocalDate plusOneDay(final LocalDate date) {
+        return date.plusDays(1);
+    }
+}
+```
 # 第3章 递归: 镜子
+递归是计算机科学家使用的最强大的问题求解技术之一。
+## 3.1 递归解决方案
+递归是强大的问题求解技术，思想类似于自上而下将复杂的问题分解为更小的问题，而且最特殊的就是小问题与初始问题的类型完全相同。新建递归解决方案时要牢记以下4个问题
+- 怎样根据同类型的更小问题来定义问题
+- 各个递归调用怎样减小问题的规模
+- 什么样的问题实例可以用作基例
+- 随着问题规模的减小，最终能否到达基例
+### 3.1.1 递归值方法：n的阶乘
+箱式跟踪是跟踪递归方法的执行情况的一种系统方法，
