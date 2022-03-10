@@ -65,4 +65,16 @@ management:
 ```
 从技术上来说，@RefreshScope工作在@Configuration类上，这可能导致一些未知的行为，比如，@Configuration注解类中定义的@Bean本身是不在@RefreshScope作用范围内，比较特别的是，任何依赖这些bean的bean不能只依赖它们被初始化时的对象，除非它本身在@RefreshScope中，具体来说，任何依赖于这些 bean 的东西都不能依赖它们在启动刷新时被更新，除非它本身在 @RefreshScope 中。 在这种情况下，它会在刷新时重建，并重新注入其依赖项。 此时，它们会从刷新的@Configuration 重新初始化）。
 ## 1.10 encryption与decryption
+Spring Cloud 有一个 Environment 预处理器，用于在本地解密属性值。Spring Cloud 有一个 Environment 预处理器，用于在本地解密属性值。 它遵循与 Spring Cloud Config Server 相同的规则，并具有相同的外部配置encrypt.*。因此，您可以使用 {cipher}* 形式的加密值，并且只要存在有效密钥，它们就会在主应用程序上下文获取环境设置之前被解密。要在应用程序中使用加密功能，您需要在类路径中包含 Spring Security RSA。maven坐标org.springframework.security:spring-security-rsa，并且您还需要 JVM 中的全强度 JCE 扩展 。如果由于“非法密钥大小”而出现异常并且使用 Sun 的 JDK，则需要安装 Java Cryptography Extension (JCE) Unlimited Strength Jurisdiction Policy Files。 有关更多信息，请参阅以下链接：将文件解压缩到您使用的 JRE/JDK x64/x86 版本的 JDK/jre/lib/security 文件夹中。
+## 1.11 endpoints
+对于Spring Boot Actuator应用来说，可以使用一些额外添加的用于管理的端点(endpoints)，你可以用的如下:
+- POST /actuator/env，可以用来更新Environment，重新绑定@ConfigurationProperties对象与log levels，为了开启这个端点功能，你必须设置management.endpoint.env.post.enabled=true；
+- /actuator/rfefresh 用来重载bootstrap上下文，刷新@RefreshScope注解的bean;
+- /actuator/restart 关闭ApplicationContext并重新启动它(默认是关闭的)
+- /actuator/pause 与/actuator/resume，用来调用ApplicationContext的生命周期回调方法，（stop()与start()）。
+如果你禁用 /actuator/restart 端点，那么 /actuator/pause 和 /actuator/resume 端点也将被禁用，因为它们只是 /actuator/restart 的一个特例。
+# Spring Cloud Commons: 通用抽象
+服务发现、负载平衡和断路器等模式适用于一个公共抽象层，所有 Spring Cloud 客户端都可以使用该抽象层，独立于实现（例如，使用 Eureka 或 Consul 进行发现）。
+## 2.1 @EnableDiscoveryClient注解
+Spring Cloud Commons 提供了 @EnableDiscoveryClient 注解。 这会寻找带有 META-INF/spring.factories 的 DiscoveryClient 和 ReactiveDiscoveryClient 接口的实现。 发现客户端的实现在 org.springframework.cloud.client.discovery.EnableDiscoveryClient 键下的 spring.factories 中添加了一个配置类。 DiscoveryClient 实现的示例包括 Spring Cloud Netflix Eureka、Spring Cloud Consul Discovery 和 Spring Cloud Zookeeper Discovery。
 
