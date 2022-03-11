@@ -196,13 +196,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 }
 ```
 如果你使用了java8的-parameters功能，可以不用使用@Param
-<<<<<<< HEAD
-- 使用SpEL表达式，
-- 修改查询
-- 引用查询提示
-- configuring fetch- and loadgraphs
-
-=======
 - SpEL表达式
   
 从Spring Data JPA 1.4版本开始，我们支持在@Query注解中手动定义的查询使用限制的SpEL模板表达式，根据正在运行的查询，这些表达式会在一个预定义的变量集合上执行解析，Spring Data JPA支持一个叫做entityName的变量，它的用法是
@@ -299,7 +292,6 @@ interface UserRepository extends Repository<User, Long> {
 ```
 虽然，声明式的查询方法deletebyRoleId(…)看起来也能实现deleteInBulkByRoleId方法同样的功能，但是他们2个还是有区别的，主要是运行的方式不同，正如名字所揭示的的那样，后面的方法会生成一个JPQL查询，这意味着，当前加载的User实例不会调用生命周期回调方法，为了确保实际调用生命周期回调，调用 deleteByRoleId(...) 会运行一个查询，然后一一删除返回的实例，以便持久性提供程序实际上可以在这些实体上调用 @PreRemove 声明周期回调方法。
 实际上，派生的删除查询是运行查询然后在结果上调用 CrudRepository.delete(Iterable<User> users) 并使行为与 CrudRepository 中其他 delete(...) 方法的实现保持同步的快捷方式。
->>>>>>> 6a2a23a (update)
 ## 存储过程
 ## 规格
 JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
