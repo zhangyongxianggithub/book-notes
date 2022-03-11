@@ -77,4 +77,12 @@ Spring Cloud 有一个 Environment 预处理器，用于在本地解密属性值
 服务发现、负载平衡和断路器等模式适用于一个公共抽象层，所有 Spring Cloud 客户端都可以使用该抽象层，独立于实现（例如，使用 Eureka 或 Consul 进行发现）。
 ## 2.1 @EnableDiscoveryClient注解
 Spring Cloud Commons 提供了 @EnableDiscoveryClient 注解。 这会寻找带有 META-INF/spring.factories 的 DiscoveryClient 和 ReactiveDiscoveryClient 接口的实现。 发现客户端的实现在 org.springframework.cloud.client.discovery.EnableDiscoveryClient 键下的 spring.factories 中添加了一个配置类。 DiscoveryClient 实现的示例包括 Spring Cloud Netflix Eureka、Spring Cloud Consul Discovery 和 Spring Cloud Zookeeper Discovery。
+Spring Cloud默认回提供阻塞与响应式的服务发现客户端，你可以通过设置
+```properties
+spring.cloud.discovery.blocking.enabled=false
+spring.cloud.discovery.reactive.enabled=false
+```
+关闭客户端功能，想要完全的关闭服务发现功能，可以直接设置`spring.cloud.discovery.enabled=false`。
+默认情况下，DiscoveryClient接口的实现回自动当前的Spring Boot服务到远程的服务注册中心，可以通过@EnableDiscoveryClient中的autoRegister=false来关闭这个行为。@EnableDiscoveryClient不在需要了，你可以直接把一个DiscoveryClient接口的实现放到classpath下面，spring boot应用会自动扫描并注册服务到服务注册中心。
+### 2.1.1 健康指标
 

@@ -1,0 +1,160 @@
+fragment simple_type_fields on __Type {
+  name
+  kind
+  description
+  ofType {
+    name
+    kind
+    description
+  }
+}
+fragment inputvalue_fields on __InputValue {
+  name
+  description
+  type {
+    ...simple_type_fields
+  }
+  defaultValue
+}
+fragment field_fields on __Field {
+  name
+  description
+  args {
+    ...inputvalue_fields
+  }
+  type {
+    ...simple_type_fields
+  }
+  isDeprecated
+  deprecationReason
+}
+fragment enumvaluefields on __EnumValue {
+  name
+  description
+  isDeprecated
+  deprecationReason
+}
+fragment directive_fields on __Directive {
+  name
+  description
+  locations
+  args {
+    ...inputvalue_fields
+  }
+}
+fragment type_fields on __Type {
+  kind
+  name
+  description
+  fields(includeDeprecated: true) {
+    ...field_fields
+  }
+  interfaces {
+    ...simple_type_fields
+  }
+  possibleTypes {
+    ...simple_type_fields
+  }
+  enumValues(includeDeprecated: true) {
+    ...enumvaluefields
+  }
+  inputFields {
+    ...inputvalue_fields
+  }
+  ofType {
+    ...simple_type_fields
+  }
+}
+query findSchema {
+  schema: __schema {
+    types {
+      ...type_fields
+    }
+    queryType {
+      ...type_fields
+    }
+    mutationType {
+      ...type_fields
+    }
+    subscriptionType {
+      ...type_fields
+    }
+    directives {
+      ...directive_fields
+    }
+  }
+}
+fragment country_fields on Country {
+  code
+  name
+  native
+  phone
+  capital
+  currency
+  emoji
+  emojiU
+  continent {
+    code
+    name
+    countries {
+      code
+      name
+    }
+  }
+  languages {
+    code
+    name
+    native
+    rtl
+  }
+  states {
+    code
+    name
+    country {
+      name
+    }
+  }
+}
+query findCountries {
+  countries(filter: { code: { in: ["CN", "RU", "UA"] } }) {
+    code
+    name
+  }
+}
+query findCountry {
+  country(code: "UA") {
+    ...country_fields
+  }
+}
+fragment continent_fields on Continent {
+  code
+  name
+  countries {
+    ...country_fields
+  }
+}
+query findContinets {
+  continents {
+    ...continent_fields
+  }
+}
+query findContinet {
+  continent(code: "AS") {
+    ...continent_fields
+  }
+}
+fragment language_fields on Language {
+  code
+  name
+  native
+}
+query findLanguages {
+  languages {
+    ...language_fields
+  }
+}
+query findLanguage {
+  language(code: "zh") {
+    ...language_fields
+  }
+}
