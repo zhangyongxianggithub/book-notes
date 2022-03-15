@@ -201,5 +201,37 @@ if(n == 0){
 - 兔子产生不死
 - 兔子在出生后2个月性成熟，性成熟在生命的第三个月开始
 - 兔子总是雌雄配对而生，产出一对雌雄兔子
-构建一个递归的方案来计算rabbit(n), 必须确定如何用rabbit(n-1)来计算rabbit(n)，rabbit(n)=n月开始前的兔子对数(rabbit(n-1))+当月产出的兔子对数，在n月初，并不是所有的的rabbit(n-1)个兔子都成熟了，只有n-2月前出生的兔子才成熟了，于是n月初产出的兔子个数是rabbit(n-2)。于是得到递归的关系是rabbit(n)=rabbit(n-1)+rabbit(n-2)。某些情况下，可以通过解决相同类型的多个更小的问题来解决初始问题。需要注意基例的问题。
+构建一个递归的方案来计算rabbit(n), 必须确定如何用rabbit(n-1)来计算rabbit(n)，rabbit(n)=n月开始前的兔子对数(rabbit(n-1))+当月产出的兔子对数，在n月初，并不是所有的的rabbit(n-1)个兔子都成熟了，只有n-2月前出生的兔子才成熟了，于是n月初产出的兔子个数是rabbit(n-2)。于是得到递归的关系是rabbit(n)=rabbit(n-1)+rabbit(n-2)。某些情况下，可以通过解决相同类型的多个更小的问题来解决初始问题。需要注意基例的问题。得到兔子的递归的定义如下:
+![生兔子的问题](adtjava/rabbit.png)
+这正好是一个斐波那契数列，java代码如下:
+```java
+public static int rabbit(n){
+    //Computes a term in the Fibonacci sequence
+    //Precondition: n is positive integer
+    //PostCondition: Returns the nth Fibonacci number
+    if(n<2){
+        return 1;
+    }else{
+        return rabbit(n-1)+rabbit(n-2);
+    }
+```
+组织游行队伍的问题，长为n的游行队伍，乐队不能相邻，有n个彩车与n个乐队，乐队-彩车，彩车-乐队是不同的排列，组织游行队伍的方法数是各排列类型的数目之和.
+- P(n) 是组织长为n的排列的方法数
+- F(n)是长为n，以彩车结尾的排列方法数；
+- B(n)是长为n，以乐队结尾的方法数;
+则P(n)=F(n)+B(n).
+F(n)=P(n-1),B(n)=F(n-1)=P(n-2)，则可以得到
+P(n)=P(n-1)+P(n-2).
+得到的公式是：
+![游行的彩车的问题](adtjava/parade.png)
+- 可以通过分解来解决问题;
+- 基例值非常重要。
+Spock的困惑：访问n颗行星中的k颗，有多少中选择，不考虑访问行星的顺序。基于行星X，得到选择数
+c(n,k)=包含行星X的k颗行星的组合数+不包含行星X的k颗行星的组合数
+c(n,k)=c(n-1,k-1)+c(n-1,k)
+若访问所有的行星那么n=k，则c(k,k)=1, 如果k=0，那么c(n,0)=1,如果k>n,c(n,k)=0，得到的公式是
+![访问行星的组合的方法](adtjava/compose.png)
+## 3.3 数组查找
+分而治之就是通过分解问题，处理子问题来推进算法，
+
 
