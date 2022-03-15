@@ -75,7 +75,7 @@ Spring Cloud 有一个 Environment 预处理器，用于在本地解密属性值
 如果你禁用 /actuator/restart 端点，那么 /actuator/pause 和 /actuator/resume 端点也将被禁用，因为它们只是 /actuator/restart 的一个特例。
 # Spring Cloud Commons: 通用抽象
 服务发现、负载平衡和断路器等模式适用于一个公共抽象层，所有 Spring Cloud 客户端都可以使用该抽象层，独立于实现（例如，使用 Eureka 或 Consul 进行发现）。
-## 2.1 @EnableDiscoveryClient注解
+## @EnableDiscoveryClient注解
 Spring Cloud Commons 提供了 @EnableDiscoveryClient 注解。 这会寻找带有 META-INF/spring.factories 的 DiscoveryClient 和 ReactiveDiscoveryClient 接口的实现。 发现客户端的实现在 org.springframework.cloud.client.discovery.EnableDiscoveryClient 键下的 spring.factories 中添加了一个配置类。 DiscoveryClient 实现的示例包括 Spring Cloud Netflix Eureka、Spring Cloud Consul Discovery 和 Spring Cloud Zookeeper Discovery。
 Spring Cloud默认回提供阻塞与响应式的服务发现客户端，你可以通过设置
 ```properties
@@ -84,5 +84,71 @@ spring.cloud.discovery.reactive.enabled=false
 ```
 关闭客户端功能，想要完全的关闭服务发现功能，可以直接设置`spring.cloud.discovery.enabled=false`。
 默认情况下，DiscoveryClient接口的实现回自动当前的Spring Boot服务到远程的服务注册中心，可以通过@EnableDiscoveryClient中的autoRegister=false来关闭这个行为。@EnableDiscoveryClient不在需要了，你可以直接把一个DiscoveryClient接口的实现放到classpath下面，spring boot应用会自动扫描并注册服务到服务注册中心。
-### 2.1.1 健康指标
+### 健康指标
+Spring Cloud Commons 自动配置了下面的Spring Boot健康指标
+1. DiscoveryClientHealthIndicator
+这个健康指示器基于当前注册的DiscoveryClient实现
+- 想要完全禁止这个指示器，设置`spring.cloud.discovery.client.health-indicator.enabled=false`
+- 要禁用描述字段，请设置 spring.cloud.discovery.client.health-indicator.include-description=false;
+- 要禁用服务检索，请设置`spring.cloud.discovery.client.health-indicator.use-services-query=false`。 默认情况下，指示器调用客户端的`getServices`方法。 在具有许多注册服务的部署中，每次检查都检索所有服务的成本可能太高。 设置这个属性将会跳过服务检索，而是使用客户端的`probe`方法;
 
+2. DiscoveryCompositeHealthContributor
+此复合健康指标基于所有已注册的 DiscoveryHealthIndicator bean。 要禁用，请设置 spring.cloud.discovery.client.composite-indicator.enabled=false
+### DiscoveryClient实例排序
+DiscoveryClient 接口扩展了 Ordered接口。 这在使用多个发现客户端时很有用，因为它允许您定义返回的发现客户端的顺序，类似于Spring 应用程序加载的 bean 加载排序。 默认情况下，任何 DiscoveryClient 的 order 设置为 0。如果您想为自定义 DiscoveryClient 实现设置不同的 order，只需覆盖 getOrder() 方法，以便它返回适合您设置的值。 除此之外，您可以使用属性来设置 Spring Cloud 提供的 DiscoveryClient 实现的顺序，其中包括 ConsulDiscoveryClient、EurekaDiscoveryClient 和 ZookeeperDiscoveryClient。 为此，您只需将 spring.cloud.{clientIdentifier}.discovery.order （或 Eureka 的 eureka.client.order ）属性设置为所需的值。
+如果类路径中没有 Service-Registry 支持的 DiscoveryClient，则将使用 SimpleDiscoveryClient 实例，该实例使用属性来获取有关服务和实例的信息。
+### SimpleDiscoveryClient
+有关可用实例的信息应通过以下格式的属性传递：spring.cloud.discovery.client.simple.instances.service1[0].uri=http://s11:8080，其中 spring.cloud.discovery .client.simple.instances 是公共前缀，那么 service1 代表该服务的 ID，而 [0] 表示实例的索引号（如示例中可见，索引以 0 开头），然后 uri 的值是实例可用的实际 URI。
+## ServiceRegistry
+Spring Cloud Commons提供了ServiceRegistry接口，这个接口提供了`register(Registration)`与`deregister(Registration)`2个方法，这可以让你实现自定义的服务注册逻辑，Registration是一个标记接口，下面是一个使用ServiceRegistry接口的例子
+```java
+@Configuration
+@EnableDiscoveryClient(autoRegister=false)
+public class MyConfiguration {
+    private ServiceRegistry registry;
+
+    public MyConfiguration(ServiceRegistry registry) {
+        this.registry = registry;
+    }
+
+    // called through some external process, such as an event or a custom actuator endpoint
+    public void register() {
+        Registration registration = constructRegistration();
+        this.registry.register(registration);
+    }
+}
+
+```
+每个ServiceRegistry实现都有它自己的Registry实现
+- ZookeeperServiceRegistry使用ZookeeperRegistration;
+- EurekaServiceRegistry使用EurekaRegistration;;
+- ConsulServiceRegistry使用ConsulRegistration;
+
+如果你正在使用ServiceRegistry接口，你需要传递正确的Registry实现。
+### ServiceRegistry自动注册
+缺省情况下，ServiceRegistry实现会自动注册运行的服务，要禁用该行为，您可以设置： * @EnableDiscoveryClient(autoRegister=false) 永久禁用自动注册。 * spring.cloud.service-registry.auto-registration.enabled=false 通过配置禁用行为。服务自动注册时将触发两个事件。 第一个事件称为 InstancePreRegisteredEvent，在服务注册之前触发。 第二个事件称为 InstanceRegisteredEvent，在服务注册后触发。 您可以注册一个 ApplicationListener(s) 来监听这些事件并做出反应。
+### Service Registry Actuator Endpoint
+Spring Cloud Commons 提供了一个 /service-registry actuator端点。 这个端点的信息依赖于 Spring Application Context 中的 Registration bean中的状态信息。 使用 GET方式 调用 /service-registry 会返回注册状态。 使用带有 JSON 正文的同一端点的 POST 会将当前注册的状态更改为新值。 JSON 正文必须包含具有首选值的状态字段。 请参阅您在更新状态时使用的 ServiceRegistry 实现的文档以及为状态返回的值。 例如，Eureka 支持的状态是 UP、DOWN、OUT_OF_SERVICE 和 UNKNOWN。
+## Spring RestTemplate as a Load Balancer Client
+您可以将 RestTemplate 配置为使用负载均衡器客户端。 要创建负载平衡的 RestTemplate，请创建一个 RestTemplate @Bean 并使用 @LoadBalanced 限定符，如以下示例所示：
+```java
+@Configuration
+public class MyConfiguration {
+
+    @LoadBalanced
+    @Bean
+    RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+
+public class MyClass {
+    @Autowired
+    private RestTemplate restTemplate;
+
+    public String doOtherStuff() {
+        String results = restTemplate.getForObject("http://stores/stores", String.class);
+        return results;
+    }
+}
+```
