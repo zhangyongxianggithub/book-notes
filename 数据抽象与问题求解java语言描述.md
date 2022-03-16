@@ -232,6 +232,46 @@ c(n,k)=c(n-1,k-1)+c(n-1,k)
 若访问所有的行星那么n=k，则c(k,k)=1, 如果k=0，那么c(n,0)=1,如果k>n,c(n,k)=0，得到的公式是
 ![访问行星的组合的方法](adtjava/compose.png)
 ## 3.3 数组查找
-分而治之就是通过分解问题，处理子问题来推进算法。
-
-
+分而治之就是通过分解问题，处理子问题来推进算法。binarySearch方法的代码如下:
+```java
+public static int binarySearch(int anArray[], int first, int last, int value){
+    int index;
+    if(first>last){
+        index=-1;
+    }
+    else{
+        int mid=(first+last)/2;
+        if(value==anArray[mid]){
+            index=mid;
+        }else if(value<anArray[mid]){
+            // POINT X
+            index=binarySearch(anArray, first, mid-1, value);
+        }else{
+            // POINT Y
+            index=binarySearch(anArray, mid+1, last, value);
+        }
+    }
+    return index;
+}
+```
+二分查找的不变式是若value出现在数组中，则anArray[first]<=value<=anArray[last]。
+统计学家经常需要数据集合的中值，在已排序的集合中，中值位于集合中心，未排序的数据集合中，小于中值与大于中值的值数相同。要递归的解决一个问题，应根据一个或者多个同类型的更小问题编写解决方案，更小的概念确保能够达到基例。但是查找第k个最小项的问题与之前的问题不同，它没办法根据问题的规模决定递归，而是根据元素的值决定的。递归的解决方案如下：
+- 在数组中选择枢轴项(pivot item);
+- 围绕枢轴项，合理排列数组项;
+- 将该策略递归的用于一个数组段.
+公式是
+![第k个最小项](adtjava/ksmall.png)
+下面是伪码解决方案
+```java
+ksmall(in k:integer, anArray: ArrayType, in first:integer, in last:integer)
+// return the kth smallest value in anArray[first...last]
+choose a pivot item p fromm anArray[first...last]
+partition the items of anArray[first...last] about p
+if(k< pivotIndex-first+1)
+    return ksmall(k,anArray,first,pivotIndex-1)
+else if(k==pivotIndex-first+1)
+    return p;
+else return ksmall(k-(pivotIndex-first+1),anArray,pivotIndex+1,last);
+```
+上述问题的关键是如何选择枢轴项p以及围绕所选的p划分数组。这是快速排序的雏形。
+## 3.4 组织数据
