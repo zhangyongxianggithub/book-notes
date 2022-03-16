@@ -275,3 +275,4 @@ else return ksmall(k-(pivotIndex-first+1),anArray,pivotIndex+1,last);
 ```
 上述问题的关键是如何选择枢轴项p以及围绕所选的p划分数组。这是快速排序的雏形。
 ## 3.4 组织数据
+

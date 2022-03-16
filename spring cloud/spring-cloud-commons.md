@@ -152,3 +152,7 @@ public class MyClass {
     }
 }
 ```
+RestTemplate对象不会自动创建，每个应用都必须手动创建他。
+URI 需要使用虚拟主机名（即服务名，而不是主机名）。 BlockingLoadBalancerClient 用于创建完整的物理地址。要使用负载平衡的 RestTemplate，您需要在classpath中存在负载平衡实现类。将 Spring Cloud LoadBalancer starter 等相关的库添加到您的项目中就可以使用了。
+## Spring WebClient as a Load Balancer Client
+
