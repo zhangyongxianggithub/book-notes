@@ -436,5 +436,16 @@ public class CustomLoadBalancerConfiguration {
 ## Caching
 每次必须选择实例时，除了最基本 ServiceInstanceListSupplier 实现（每次都向注册中心检索实例列表）之外，我们还提供了两个缓存实现。
 ### Caffeine
+如果classpath中存在com.github.ben-manes.caffeine:caffeine库，则将使用基于 Caffeine 的缓存实现。 有关如何配置它的信息，请参阅 LoadBalancerCacheConfiguration 部分。
+
+如果你使用Caffeine，您还可以通过使用`spring.cloud.loadbalancer.cache.caffeine.spec`属性设置您自己的caffeine规范来覆盖 LoadBalancer 的默认caffeine缓存设置。
+
+警告：设置您自己的 Caffeine 规范将覆盖任何其他 LoadBalancerCache 设置，包括通用的LoadBalancer 缓存配置，比如 ttl 和与capacity。
+### default LoadBalancer cache Implementation
+如果classpath中不存在 Caffeine，将使用 spring-cloud-starter-loadbalancer 依赖内置的的 DefaultLoadBalancerCache缓存实现。 有关如何配置它的信息，请参阅 LoadBalancerCacheConfiguration 部分。要使用 Caffeine 而不是默认缓存，请将 com.github.ben-manes.caffeine:caffeine 依赖项添加到classpath中。
+### LoadBalancer Cache Configuration
+你可以设置ttl时间（实体过期时间），类似于Duration语法的表达式字符串，以 Duration 表示。 作为 spring.cloud.loadbalancer.cache.ttl 属性的值。 你还可以通过设置 spring.cloud.loadbalancer.cache.capacity 属性的值来设置自己的 LoadBalancer 缓存初始容量。默认设置包括 ttl 设置为 35 秒，默认初始容量为 256。您还可以通过将 spring.cloud.loadbalancer.cache.enabled 的值设置为 false 来完全禁用 loadBalancer 缓存。
+尽管基本的、非缓存的实现对于原型设计和测试很有用，但它的效率远低于缓存版本，因此我们建议始终在生产中使用缓存版本。 如果缓存已经由 DiscoveryClient 实现完成，例如 EurekaDiscoveryClient，则应禁用负载均衡器缓存以防止双重缓存。
+## 基于Zone的load-balancing
 
 
