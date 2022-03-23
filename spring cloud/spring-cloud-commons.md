@@ -152,7 +152,261 @@ public class MyClass {
     }
 }
 ```
+## Spring WebClient as a Load Balancer Client
+你也可以将WebClient配置自动复杂均衡的客户端，为了创建一个具有复杂均衡特性的WebClient，使用下面的代码:
+```java
+@Configuration
+public class MyConfiguration {
+
+    @Bean
+    @LoadBalanced
+    public WebClient.Builder loadBalancedWebClientBuilder() {
+        return WebClient.builder();
+    }
+}
+
+public class MyClass {
+    @Autowired
+    private WebClient.Builder webClientBuilder;
+
+    public Mono<String> doOtherStuff() {
+        return webClientBuilder.build().get().uri("http://stores/stores")
+                        .retrieve().bodyToMono(String.class);
+    }
+}
+```
+### 失败请求的重试机制
+可以给RestTemplate设置重试机制，默认情况下，这种机制是关闭的，对于非响应式版本（RestTemplate），只要你的classpath中存在spring retry库，那么重试机制会自动开启，对于响应式版本（WebClient），你需要设置`spring.cloud.loadbalancer.retry.enabled=true`如果你想要关闭重试机制，那么设置属性
+`spring.cloud.loadbalancer.retry.enabled=false`，对于非反应式实现，如果您想在重试中实现 BackOffPolicy，则需要创建 LoadBalancedRetryFactory 类型的 bean 并覆盖 createBackOffPolicy() 方法。对于响应式实现，您只需将 spring.cloud.loadbalancer.retry.backoff.enabled 设置为 false 即可启用它。你可以设置以下的属性做一些定制化:
+- spring.cloud.loadbalancer.retry.maxRetriesOnSameServiceInstance，指示应在同一个 ServiceInstance 上重试请求的次数（针对每个选定实例单独计算）
+- spring.cloud.loadbalancer.retry.maxRetriesOnNextServiceInstance，表示新选择的 ServiceInstance 应重试请求的次数
+- spring.cloud.loadbalancer.retry.retryableStatusCodes，始终重试失败请求的状态代码;
+对于响应式实现，您可以额外设置： - spring.cloud.loadbalancer.retry.backoff.minBackoff - 设置最小回退持续时间（默认情况下，5 毫秒） - spring.cloud.loadbalancer.retry.backoff.maxBackoff - 设置 最大退避持续时间（默认情况下，毫秒的最大长值） - spring.cloud.loadbalancer.retry.backoff.jitter - 设置用于计算每个调用的实际退避持续时间的抖动（默认情况下，0.5）.对于响应式实现，您还可以实现自己的 LoadBalancerRetryPolicy 以更详细地控制负载平衡调用重试。前缀是 spring.cloud.loadbalancer.clients.<clientId>.* 的属性可以设置单个负载均衡器客户端，其中 clientId 是负载均衡器的名称之外，属性的内容与通用的属性基本相同。
+对于负载平衡重试，默认情况下，我们使用 RetryAwareServiceInstanceListSupplier 包装 ServiceInstanceListSupplier bean，以从先前选择的实例中选择不同的实例（如果可用）。 您可以通过将 spring.cloud.loadbalancer.retry.avoidPreviousInstance 的值设置为 false 来禁用此行为。
+```java
+@Configuration
+public class MyConfiguration {
+    @Bean
+    LoadBalancedRetryFactory retryFactory() {
+        return new LoadBalancedRetryFactory() {
+            @Override
+            public BackOffPolicy createBackOffPolicy(String service) {
+                return new ExponentialBackOffPolicy();
+            }
+        };
+    }
+}
+
+```
+如果要向重试功能添加一个或多个 RetryListener 实现，则需要创建 LoadBalancedRetryListenerFactory 类型的 bean 并返回要用于给定服务的 RetryListener 数组，如以下示例所示：
+```java
+@Configuration
+public class MyConfiguration {
+    @Bean
+    LoadBalancedRetryListenerFactory retryListenerFactory() {
+        return new LoadBalancedRetryListenerFactory() {
+            @Override
+            public RetryListener[] createRetryListeners(String service) {
+                return new RetryListener[]{new RetryListener() {
+                    @Override
+                    public <T, E extends Throwable> boolean open(RetryContext context, RetryCallback<T, E> callback) {
+                        //TODO Do you business...
+                        return true;
+                    }
+
+                    @Override
+                     public <T, E extends Throwable> void close(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+                        //TODO Do you business...
+                    }
+
+                    @Override
+                    public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+                        //TODO Do you business...
+                    }
+                }};
+            }
+        };
+    }
+}
+
+```
+## 2.5 Multiple RestTemplate Objects
+如果您想要一个非负载平衡的 RestTemplate，请创建一个 RestTemplate bean 并注入它。 要访问负载平衡的 RestTemplate，请在创建 @Bean 时使用 @LoadBalanced 限定符，如以下示例所示：
+```java
+@Configuration
+public class MyConfiguration {
+
+    @LoadBalanced
+    @Bean
+    RestTemplate loadBalanced() {
+        return new RestTemplate();
+    }
+
+    @Primary
+    @Bean
+    RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+
+public class MyClass {
+@Autowired
+private RestTemplate restTemplate;
+
+    @Autowired
+    @LoadBalanced
+    private RestTemplate loadBalanced;
+
+    public String doOtherStuff() {
+        return loadBalanced.getForObject("http://stores/stores", String.class);
+    }
+
+    public String doStuff() {
+        return restTemplate.getForObject("http://example.com", String.class);
+    }
+}
+
+```
+请注意，在前面的示例中，在普通的 RestTemplate 声明上使用了 @Primary 注释来消除未限定的 @Autowired 注入的歧义。如果看到 java.lang.IllegalArgumentException: Can not set org.springframework.web.client.RestTemplate field com.my.app.Foo.restTemplate to com.sun.proxy.$Proxy89 等错误，请尝试注入 RestOperations 或设置 spring .aop.proxyTargetClass=true。
+## 2.6 Multiple WebClient Objects
+如果您想要一个非负载平衡的 WebClient，请创建一个 WebClient bean 并注入它。 要访问负载平衡的 WebClient，请在创建 @Bean 时使用 @LoadBalanced 限定符，如以下示例所示：
+```java
+@Configuration
+public class MyConfiguration {
+
+    @LoadBalanced
+    @Bean
+    WebClient.Builder loadBalanced() {
+        return WebClient.builder();
+    }
+
+    @Primary
+    @Bean
+    WebClient.Builder webClient() {
+        return WebClient.builder();
+    }
+}
+
+public class MyClass {
+    @Autowired
+    private WebClient.Builder webClientBuilder;
+
+    @Autowired
+    @LoadBalanced
+    private WebClient.Builder loadBalanced;
+
+    public Mono<String> doOtherStuff() {
+        return loadBalanced.build().get().uri("http://stores/stores")
+                        .retrieve().bodyToMono(String.class);
+    }
+
+    public Mono<String> doStuff() {
+        return webClientBuilder.build().get().uri("http://example.com")
+                        .retrieve().bodyToMono(String.class);
+    }
+}
+```
 RestTemplate对象不会自动创建，每个应用都必须手动创建他。
 URI 需要使用虚拟主机名（即服务名，而不是主机名）。 BlockingLoadBalancerClient 用于创建完整的物理地址。要使用负载平衡的 RestTemplate，您需要在classpath中存在负载平衡实现类。将 Spring Cloud LoadBalancer starter 等相关的库添加到您的项目中就可以使用了。
-## Spring WebClient as a Load Balancer Client
+## 2.7 Spring WebFlux WebClient 作为负载均衡器客户端
+如主题所述，Spring WebFlux 可以与反应式和非反应式 WebClient 配置一起使用。
+### Spring WebFlux WebClient with ReactorLoadBalancerExchangeFilterFunction
+您可以将 WebClient 配置为使用 ReactiveLoadBalancer。 如果将 Spring Cloud LoadBalancer starter 添加到项目中，并且 spring-webflux 在类路径上，则会自动配置 ReactorLoadBalancerExchangeFilterFunction。 以下示例显示了如何配置 WebClient 以使用反应式负载平衡器：
+```java
+public class MyClass {
+    @Autowired
+    private ReactorLoadBalancerExchangeFilterFunction lbFunction;
 
+    public Mono<String> doOtherStuff() {
+        return WebClient.builder().baseUrl("http://stores")
+            .filter(lbFunction)
+            .build()
+            .get()
+            .uri("/stores")
+            .retrieve()
+            .bodyToMono(String.class);
+    }
+}
+```
+### Spring WebFlux WebClient with a Non-reactive Load Balancer Client
+如果 spring-webflux 在类路径上，则 LoadBalancerExchangeFilterFunction 是自动配置的。 但是请注意，这在后台使用了非反应式客户端。 以下示例显示了如何配置 WebClient 以使用负载平衡器：
+```java
+public class MyClass {
+    @Autowired
+    private LoadBalancerExchangeFilterFunction lbFunction;
+
+    public Mono<String> doOtherStuff() {
+        return WebClient.builder().baseUrl("http://stores")
+            .filter(lbFunction)
+            .build()
+            .get()
+            .uri("/stores")
+            .retrieve()
+            .bodyToMono(String.class);
+    }
+}
+
+```
+## 2.8 Ignore Network Interfaces
+有时，忽略某些命名的网络接口很有用，这样它们就可以从服务发现注册中排除（例如，在 Docker 容器中运行服务时）。可以设置正则表达式列表忽略想要顾虑的网络接口，以下配置忽略了 docker0 接口和所有以 veth 开头的接口：
+```yml
+spring:
+  cloud:
+    inetutils:
+      ignoredInterfaces:
+        - docker0
+        - veth.*
+```
+您还可以通过使用正则表达式列表强制仅使用指定的网络地址，如以下示例所示：
+spring:
+  cloud:
+    inetutils:
+      preferredNetworks:
+        - 192.168
+        - 10.0
+您还可以强制仅使用站点本地地址，如以下示例所示：
+```java
+spring:
+  cloud:
+    inetutils:
+      useOnlySiteLocalInterfaces: true
+```
+## HTTP Client Factoris
+Spring Cloud Commons 提供了用于创建 Apache HTTP 客户端 (ApacheHttpClientFactory) 和 OK HTTP 客户端 (OkHttpClientFactory) 的 工厂bean。仅当 OK HTTP jar在classpath里面时才会创建 OkHttpClientFactory bean。此外，Spring Cloud Commons 提供了用于创建两个客户端使用的连接管理器的工厂bean，分别是ApacheHttpClientConnectionManagerFactory与OkHttpClientConnectionPoolFactory，如果您想自定义如何在下游项目中创建 HTTP 客户端，您可以提供自己的这些 bean 实现。此外，如果您提供 HttpClientBuilder 或 OkHttpClient.Builder 类型的 bean，则默认工厂使用这些构建器作为构建器的基础构建器返回给下游的应用使用，您还可以通过将 spring.cloud.httpclientfactories.apache.enabled 或 spring.cloud.httpclientfactories.ok.enabled 设置为 false 来禁用这些 bean 的创建。
+## 当前启用特性
+Spring Cloud Commons 提供了一个 /features 执行器端点。 此端点返回类路径上可用的功能以及它们是否已启用。 返回的信息包括功能类型、名称、版本和供应商。
+### Feature types
+有两种类型的“特征”：抽象的和命名的。
+
+抽象特性是定义接口或抽象类并创建实现的特性，例如 DiscoveryClient、LoadBalancerClient 或 LockService。 抽象类或接口用于在上下文中查找该类型的 bean。 显示的版本是 bean.getClass().getPackage().getImplementationVersion()。
+
+命名特征是没有它们实现的特定类的特征。 这些功能包括“断路器”、“API 网关”、“Spring Cloud Bus”等。 这些功能需要名称和 bean 类型。
+### Declaring features
+任何模块都可以声明任意数量的 HasFeature bean，如以下示例所示：
+```java
+@Bean
+public HasFeatures commonsFeatures() {
+  return HasFeatures.abstractFeatures(DiscoveryClient.class, LoadBalancerClient.class);
+}
+
+@Bean
+public HasFeatures consulFeatures() {
+  return HasFeatures.namedFeatures(
+    new NamedFeature("Spring Cloud Bus", ConsulBusAutoConfiguration.class),
+    new NamedFeature("Circuit Breaker", HystrixCommandAspect.class));
+}
+
+@Bean
+HasFeatures localFeatures() {
+  return HasFeatures.builder()
+      .abstractFeature(Something.class)
+      .namedFeature(new NamedFeature("Some Other Feature", Someother.class))
+      .abstractFeature(Somethingelse.class)
+      .build();
+}
+
+```
+## Spring CloudCompatibility Verification
+由于部分用户在设置 Spring Cloud 应用时存在问题，我们决定添加兼容性验证机制。 如果您当前的设置与 Spring Cloud 要求不兼容，它将中断，并附上一份报告，显示究竟出了什么问题。
+目前，我们验证将哪个版本的 Spring Boot 添加到您的类路径中。报告示例。要禁用此功能，请将 spring.cloud.compatibility-verifier.enabled 设置为 false。 如果要覆盖兼容的 Spring Boot 版本，只需使用逗号分隔的兼容 Spring Boot 版本列表设置 spring.cloud.compatibility-verifier.compatible-boot-versions 属性。
+# Spring Cloud LoadBalancer
