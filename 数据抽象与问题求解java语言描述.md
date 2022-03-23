@@ -275,4 +275,13 @@ else return ksmall(k-(pivotIndex-first+1),anArray,pivotIndex+1,last);
 ```
 上述问题的关键是如何选择枢轴项p以及围绕所选的p划分数组。这是快速排序的雏形。
 ## 3.4 组织数据
-
+汉诺塔问题的解决方案
+solveTowers(in count:integer, in source:Pole, in destination:Pole, in spare:Pole)
+  if(count is 1){
+      move a disk directly from source to destination
+  }else{
+      solveTowers(count-1, source,spare,destination);
+      solveTowers(1,source,destination,spare);
+      solveTowers(count-1,source,destination,spare);
+  }
+## 3.5 递归与效率
