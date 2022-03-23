@@ -411,3 +411,30 @@ HasFeatures localFeatures() {
 由于部分用户在设置 Spring Cloud 应用时存在问题，我们决定添加兼容性验证机制。 如果您当前的设置与 Spring Cloud 要求不兼容，它将中断，并附上一份报告，显示究竟出了什么问题。
 目前，我们验证将哪个版本的 Spring Boot 添加到您的类路径中。报告示例。要禁用此功能，请将 spring.cloud.compatibility-verifier.enabled 设置为 false。 如果要覆盖兼容的 Spring Boot 版本，只需使用逗号分隔的兼容 Spring Boot 版本列表设置 spring.cloud.compatibility-verifier.compatible-boot-versions 属性。
 # Spring Cloud LoadBalancer
+Spring Cloud 提供了自己的客户端侧的负载均衡器抽象和实现。 对于负载平衡机制，Spring Cloud添加了ReactiveLoadBalancer抽象接口，并提供了基于 Round-Robin 和 Random 的实现类。 为了实现实例选择机制提供了响应式的ServiceInstanceListSupplier接口抽象。 目前支持基于服务发现方式的ServiceInstanceListSupplier实现，这种方式使用classpath中存在的客户端从远程注册中心中检索可用的服务实例。通过设置`spring.cloud.loadbalancer.enabled=false`可以关闭负载均衡。
+## 负载均衡算法
+默认使用的 ReactiveLoadBalancer 实现是 RoundRobinLoadBalancer。 要为选定的服务或所有服务使用不同的算法，你可以自定义 LoadBalancer 配置机制。例如下面的配置可以通过@LoadBalancerClient注解来切换到使用RandomLoadBalancer。
+```java
+public class CustomLoadBalancerConfiguration {
+
+    @Bean
+    ReactorLoadBalancer<ServiceInstance> randomLoadBalancer(Environment environment,
+            LoadBalancerClientFactory loadBalancerClientFactory) {
+        String name = environment.getProperty(LoadBalancerClientFactory.PROPERTY_NAME);
+        return new RandomLoadBalancer(loadBalancerClientFactory
+                .getLazyProvider(name, ServiceInstanceListSupplier.class),
+                name);
+    }
+}
+```
+您作为 @LoadBalancerClient 或 @LoadBalancerClients 配置参数传递的类不应使用 @Configuration 注释或超出组件扫描范围。
+## Spring Cloud LoadBalancer Integrations
+为了便于使用 Spring Cloud LoadBalancer，我们提供了可与 WebClient 一起使用的 ReactorLoadBalancerExchangeFilterFunction 和与 RestTemplate 一起使用的 BlockingLoadBalancerClient。 您可以在以下部分中查看更多信息和使用示例：
+- Spring RestTemplate 作为负载均衡器客户端
+- Spring WebClient 作为负载均衡器客户端
+- 带有 ReactorLoadBalancerExchangeFilterFunction 的 Spring WebFlux WebClient。
+## Caching
+每次必须选择实例时，除了最基本 ServiceInstanceListSupplier 实现（每次都向注册中心检索实例列表）之外，我们还提供了两个缓存实现。
+### Caffeine
+
+
