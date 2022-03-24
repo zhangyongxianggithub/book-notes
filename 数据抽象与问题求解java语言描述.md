@@ -285,3 +285,39 @@ solveTowers(in count:integer, in source:Pole, in destination:Pole, in spare:Pole
       solveTowers(count-1,source,destination,spare);
   }
 ## 3.5 递归与效率
+递归是一种强大的问题解决技术，常用于为最复杂的问题生成清晰的解决方案，易于理解与描述。递归的效率不高的2个因素：
+- 与方法调用相关的开销;
+- 一些递归算法的内在低效性。
+只有问题没有简单的迭代解决方案递归方案才是有价值的。内在低效性与使用的求解方法有关，比如rabbit案例中，很多值被反复计算了很多次。往往迭代解决方法的效率更高，我们通常会首先想到递归方法，可以合理的转换为迭代方案，比如rabbit的迭代方案如下:
+```java
+public static int iterativeRabbit(int n){
+    // iterative solution to the rabbit problem
+    // initialize base cases
+    int previous = 1;
+    int current = 1;
+    int next = 1;
+    for(int i=3;i<=n;i++){
+        next = current + previous;
+        previous=current;
+        current=next;
+    }
+    return next;
+}
+```
+如果方法的最后一个操作是单个递归调用，称为尾递归。尾递归方法转换为迭代方式是非常方便的。
+## 3.6 小结
+- 递归技术通过解决相同类型的，规模更小的问题来解决问题;
+- 构建递归解决方案时，需要注意以下4点:
+    - 如何用相同类型的规模更小的问题来定义问题;
+    - 每次递归调用怎样减少问题的规模;
+    - 什么问题实例可以作为基例;
+    - 随着问题规模的缩减，最终能到达基例么;
+- 在构建递归解决方案时，应该假设：若递归调用的初始条件是true，则其结束条件也为true;
+- 可以通过箱式跟踪递归方法的操作;
+- 递归方案更容易想出来，并易于理解、描述与实现;
+- 递归解决方法可以转换为迭代解决方案;
+- 如果可以用迭代方法就用迭代方法.
+## 3.7 自测题
+
+
+
