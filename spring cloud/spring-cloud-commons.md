@@ -447,5 +447,22 @@ public class CustomLoadBalancerConfiguration {
 你可以设置ttl时间（实体过期时间），类似于Duration语法的表达式字符串，以 Duration 表示。 作为 spring.cloud.loadbalancer.cache.ttl 属性的值。 你还可以通过设置 spring.cloud.loadbalancer.cache.capacity 属性的值来设置自己的 LoadBalancer 缓存初始容量。默认设置包括 ttl 设置为 35 秒，默认初始容量为 256。您还可以通过将 spring.cloud.loadbalancer.cache.enabled 的值设置为 false 来完全禁用 loadBalancer 缓存。
 尽管基本的、非缓存的实现对于原型设计和测试很有用，但它的效率远低于缓存版本，因此我们建议始终在生产中使用缓存版本。 如果缓存已经由 DiscoveryClient 实现完成，例如 EurekaDiscoveryClient，则应禁用负载均衡器缓存以防止双重缓存。
 ## 基于Zone的load-balancing
+为了启用基于区域的负载平衡，我们提供了 ZonePreferenceServiceInstanceListSupplier类。 我们使用具有域配置相关功能DiscoveryClient（例如，eureka.instance.metadata-map.zone）来选择指定区域内可用的服务实例。您还可以通过设置 spring.cloud.loadbalancer.zone 属性的值来覆盖 DiscoveryClient 特定的区域设置。目前，只有 Eureka Discovery Client 会检测LoadBalancer区域设置。 对于其他发现客户端，设置 spring.cloud.loadbalancer.zone 属性没有什么用，未来更多的客户端实现将会支持这个功能。为了确定检索到的 ServiceInstance 的zone，我们检查其元数据映射中“zone”键下的值。ZonePreferenceServiceInstanceListSupplier 过滤检索到的实例并仅返回同一区域内的实例。 如果区域为空或同一区域内没有实例，则返回所有检索到的实例。为了使用基于区域的负载平衡方法，您必须在自定义配置中实例化 ZonePreferenceServiceInstanceListSupplier bean。我们使用委托来处理 ServiceInstanceListSupplier bean。 我们建议在 ZonePreferenceServiceInstanceListSupplier 的构造函数中传递 DiscoveryClientServiceInstanceListSupplier 委托，然后用 CachingServiceInstanceListSupplier 包装后者以利用 LoadBalancer 缓存机制。
+```java
+public class CustomLoadBalancerConfiguration {
 
+    @Bean
+    public ServiceInstanceListSupplier discoveryClientServiceInstanceListSupplier(
+            ConfigurableApplicationContext context) {
+        return ServiceInstanceListSupplier.builder()
+                    .withDiscoveryClient()
+                    .withZonePreference()
+                    .withCaching()
+                    .build(context);
+    }
+}
+
+```
+## 3.5 Instance Health-Check for LoadBalancer
+可以为 LoadBalancer开启预定的 HealthCheck。 为此Spring提供了 HealthCheckServiceInstanceListSupplier类。 它定期验证 ServiceInstanceListSupplier 委托提供的实例是否仍然还活着，并且只返回健康的实例，如果没有设置健康检查 ，那么它返回所有检索到的实例。此机制在使用SimpleDiscoveryClient时特别有用。 对于由实际 Service Registry 支持的客户端，没有必要使用，因为我们在查询外部 ServiceDiscovery 后已经获得了健康的实例。
 
