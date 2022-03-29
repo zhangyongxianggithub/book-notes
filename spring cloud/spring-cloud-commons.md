@@ -464,5 +464,137 @@ public class CustomLoadBalancerConfiguration {
 
 ```
 ## 3.5 Instance Health-Check for LoadBalancer
-可以为 LoadBalancer开启预定的 HealthCheck。 为此Spring提供了 HealthCheckServiceInstanceListSupplier类。 它定期验证 ServiceInstanceListSupplier 委托提供的实例是否仍然还活着，并且只返回健康的实例，如果没有设置健康检查 ，那么它返回所有检索到的实例。此机制在使用SimpleDiscoveryClient时特别有用。 对于由实际 Service Registry 支持的客户端，没有必要使用，因为我们在查询外部 ServiceDiscovery 后已经获得了健康的实例。
+可以为 LoadBalancer开启预定的 HealthCheck。 为此Spring提供了 HealthCheckServiceInstanceListSupplier类。 它定期验证 ServiceInstanceListSupplier 委托提供的实例是否仍然还活着，并且只返回健康的实例，如果没有设置健康检查 ，那么它返回所有检索到的实例。此机制在使用SimpleDiscoveryClient时特别有用。 对于由实际 Service Registry 支持的客户端，没有必要使用，因为我们在查询外部 ServiceDiscovery 后已经获得了健康的实例。此机制在使用 SimpleDiscoveryClient时特别有用。 对于实际访问 Service Registry的客户端客户端，没有必要使用健康检查，因为我们在查询外部 ServiceDiscovery 后已经获得了健康的实例。当每个服务的实例数比较少的时候也建议设置健康检查，这是为了避免频繁发生重复调用失败实例。如果使用任何真实的服务注册组件，通常不需要添加这种健康检查机制，因为我们直接从服务注册中检索实例的健康状态。HealthCheckServiceInstanceListSupplier 依赖于一个委托的flux提供最新的实例。 在极少数情况下，当您想使用一个不刷新实例的委托时，即使实例列表可能发生变化（例如我们提供的 DiscoveryClientServiceInstanceListSupplier），你也可以设置 spring.cloud.loadbalancer.health-check.refetch-instances 为 true 以使 HealthCheckServiceInstanceListSupplier 刷新实例列表。 然后，您还可以通过修改 spring.cloud.loadbalancer.health-check.refetch-instances-interval 的值来调整刷新间隔，并通过设置 spring.cloud.loadbalancer.health-check.repeat-health-check=false来关闭额外的重复的健康检查。因为每个实例重新获取也会触发健康检查。HealthCheckServiceInstanceListSupplier 使用以 spring.cloud.loadbalancer.health-check 为前缀的属性。 您可以为调度程序设置初始延迟和间隔。 您可以通过设置 spring.cloud.loadbalancer.health-check.path.default 属性的值来设置健康检查 URL 的默认路径。您还可以通过设置 spring.cloud.loadbalancer.health-check.path.[SERVICE_ID] 属性的值来为任何给定服务设置特定值，将 [SERVICE_ID] 替换为您的服务的正确 ID。 如果未指定 [SERVICE_ID]，则默认使用 /actuator/health。 如果 [SERVICE_ID] 设置为 null 或空值，则不会执行健康检查。 您还可以通过设置 spring.cloud.loadbalancer.health-check.port 的值来为健康检查请求设置自定义端口。 如果没有设置，则在服务实例上请求的服务可用的端口。如果您依赖默认路径（/actuator/health），请确保将 spring-boot-starter-actuator 添加到协作者的依赖项中，除非您打算自己添加这样的端点。为了使用健康检查调度器方式，您必须在自定义配置中实例化 HealthCheckServiceInstanceListSupplier bean。我们使用委托来处理 ServiceInstanceListSupplier bean。 我们建议在 HealthCheckServiceInstanceListSupplier 的构造函数中传递一个 DiscoveryClientServiceInstanceListSupplier 委托。
+```java
+public class CustomLoadBalancerConfiguration {
 
+    @Bean
+    public ServiceInstanceListSupplier discoveryClientServiceInstanceListSupplier(
+            ConfigurableApplicationContext context) {
+        return ServiceInstanceListSupplier.builder()
+                    .withDiscoveryClient()
+                    .withHealthChecks()
+                    .build(context);
+        }
+    }
+
+```
+## 3.6 Same instance preference for LoadBalancer
+您可以设置 LoadBalancer，使其更喜欢选择前一次选择的实例（如果该实例可用）。您可以设置 LoadBalancer，使其更喜欢先前选择的实例（如果该实例可用）。
+
+为此，您需要使用 SameInstancePreferenceServiceInstanceListSupplier。 您可以通过将 spring.cloud.loadbalancer.configurations 的值设置为 same-instance-preference 或提供自己的 ServiceInstanceListSupplier bean 来配置它 — 例如：
+```java
+public class CustomLoadBalancerConfiguration {
+
+    @Bean
+    public ServiceInstanceListSupplier discoveryClientServiceInstanceListSupplier(
+            ConfigurableApplicationContext context) {
+        return ServiceInstanceListSupplier.builder()
+                    .withDiscoveryClient()
+                    .withSameInstancePreference()
+                    .build(context);
+        }
+    }
+```
+## 3.7 Request-based Sticky Session for LoadBalancer
+您可以设置 LoadBalancer，使其使用cookie中通过实例ID指定的实例。 我们目前支持请求通过 ClientRequestContext 或 ServerHttpRequestContext 传递给 LoadBalancer，这样SC LoadBalancer 会在交换过滤器函数和过滤器使用它们完成实例选择，为此，您需要使用 RequestBasedStickySessionServiceInstanceListSupplier。 您可以通过将 spring.cloud.loadbalancer.configurations 的值设置为 request-based-sticky-session 或提供自己的 ServiceInstanceListSupplier bean 来配置它 — 例如：
+```java
+public class CustomLoadBalancerConfiguration {
+
+    @Bean
+    public ServiceInstanceListSupplier discoveryClientServiceInstanceListSupplier(
+            ConfigurableApplicationContext context) {
+        return ServiceInstanceListSupplier.builder()
+                    .withDiscoveryClient()
+                    .withRequestBasedStickySession()
+                    .build(context);
+        }
+    }
+```
+对于该功能，在转发请求之前更新所选服务实例（如果该服务实例不可用，则该服务实例可能与原始请求 cookie 中的服务实例不同）是有用的。 为此，请将 spring.cloud.loadbalancer.sticky-session.add-service-instance-cookie 的值设置为 true。默认情况下，cookie 的名称是 sc-lb-instance-id。 您可以通过更改 spring.cloud.loadbalancer.instance-id-cookie-name 属性的值来修改它。This feature is currently supported for WebClient-backed load-balancing.
+## 3.8 Spring Cloud LoadBalancer Hints
+Spring Cloud LoadBalancer 允许您设置字符串提示，这些提示在 Request 对象中传递给 LoadBalancer，以后可以在可以处理它们的 ReactiveLoadBalancer 实现中使用。Spring Cloud LoadBalancer 允许您设置字符串提示，这些提示在 Request 对象中传递给 LoadBalancer，以后可以在可以处理它们的 ReactiveLoadBalancer 实现中使用。您可以通过设置 spring.cloud.loadbalancer.hint.default 属性的值来为所有服务设置默认提示。 您还可以通过设置 spring.cloud.loadbalancer.hint.[SERVICE_ID] 属性的值，将 [SERVICE_ID] 替换为您的服务的正确 ID，为任何给定服务设置特定值。 如果用户未设置提示，则使用默认值。
+## 3.9  Hint-Based Load-Balancing
+我们还提供了一个 HintBasedServiceInstanceListSupplier，它是一个 ServiceInstanceListSupplier 实现，用于实现基于hint的实例选择的功能。HintBasedServiceInstanceListSupplier 检查提示请求标头（默认标头名称为 X-SC-LB-Hint，但您可以通过更改 spring.cloud.loadbalancer.hint-header-name 属性的值来修改它），如果它找到一个提示请求头，使用头中传递的提示值来过滤服务实例。如果未添加任何提示标头，则 HintBasedServiceInstanceListSupplier 将使用属性中的提示值来过滤服务实例。如果没有通过标头或属性设置提示，则返回委托提供的所有服务实例。在过滤时，HintBasedServiceInstanceListSupplier 会查找在其 metadataMap 中的提示键下设置了匹配值的服务实例。如果没有找到匹配的实例，则返回委托提供的所有实例。
+您可以使用以下示例配置进行设置：
+```java
+public class CustomLoadBalancerConfiguration {
+
+    @Bean
+    public ServiceInstanceListSupplier discoveryClientServiceInstanceListSupplier(
+            ConfigurableApplicationContext context) {
+        return ServiceInstanceListSupplier.builder()
+                    .withDiscoveryClient()
+                    .withHints()
+                    .withCaching()
+                    .build(context);
+    }
+}
+```
+## 3.10 Transform the load-balanced HTTP request
+您可以使用选定的 ServiceInstance 来转换负载均衡的 HTTP 请求。对于 RestTemplate，您需要实现和定义 LoadBalancerRequestTransformer，如下所示：
+```java
+@Bean
+public LoadBalancerRequestTransformer transformer() {
+    return new LoadBalancerRequestTransformer() {
+        @Override
+        public HttpRequest transformRequest(HttpRequest request, ServiceInstance instance) {
+            return new HttpRequestWrapper(request) {
+                @Override
+                public HttpHeaders getHeaders() {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.putAll(super.getHeaders());
+                    headers.add("X-InstanceId", instance.getInstanceId());
+                    return headers;
+                }
+            };
+        }
+    };
+}
+```
+对于 WebClient，您需要实现和定义 LoadBalancerClientRequestTransformer，如下所示：
+```java
+@Bean
+public LoadBalancerClientRequestTransformer transformer() {
+    return new LoadBalancerClientRequestTransformer() {
+        @Override
+        public ClientRequest transformRequest(ClientRequest request, ServiceInstance instance) {
+            return ClientRequest.from(request)
+                    .header("X-InstanceId", instance.getInstanceId())
+                    .build();
+        }
+    };
+}
+```
+如果定义了多个转换器，它们将按照定义 Bean 的顺序应用。 或者，您可以使用 LoadBalancerRequestTransformer.DEFAULT_ORDER 或 LoadBalancerClientRequestTransformer.DEFAULT_ORDER 来指定顺序。
+## 3.11 Spring Cloud LoadBalancer Starter
+我们还提供了一个启动器，允许您在 Spring Boot 应用程序中轻松添加 Spring Cloud LoadBalancer。 为了使用它，只需将 org.springframework.cloud:spring-cloud-starter-loadbalancer 添加到构建文件中的 Spring Cloud 依赖项中。Spring Cloud LoadBalancer starter 包括 Spring Boot Caching 和 Evictor
+## 3.12. Passing Your Own Spring Cloud LoadBalancer Configuration
+您还可以使用@LoadBalancerClient 注解来传递您自己的负载均衡器客户端配置，传递负载均衡器客户端的名称和配置类，如下所示：
+```java
+@Configuration
+@LoadBalancerClient(value = "stores", configuration = CustomLoadBalancerConfiguration.class)
+public class MyConfiguration {
+
+    @Bean
+    @LoadBalanced
+    public WebClient.Builder loadBalancedWebClientBuilder() {
+        return WebClient.builder();
+    }
+}
+```
+为了使您自己的 LoadBalancer 配置工作更容易，我们在 ServiceInstanceListSupplier 类中添加了一个 builder() 方法。您还可以使用我们的替代预定义配置来代替默认配置，方法是将 spring.cloud.loadbalancer.configurations 属性的值设置为 zone-preference 以使用 ZonePreferenceServiceInstanceListSupplier 缓存或健康检查以使用 HealthCheckServiceInstanceListSupplier 缓存。您可以使用此功能来实例化 ServiceInstanceListSupplier 或 ReactorLoadBalancer 的不同实现，这些实现可以由您编写，也可以由我们作为替代方案提供（例如 ZonePreferenceServiceInstanceListSupplier），以覆盖默认设置。您可以在此处查看自定义配置的示例。您还可以通过 @LoadBalancerClients 注释传递多个配置（用于多个负载均衡器客户端），如以下示例所示：
+```java
+@Configuration
+@LoadBalancerClients({@LoadBalancerClient(value = "stores", configuration = StoresLoadBalancerClientConfiguration.class), @LoadBalancerClient(value = "customers", configuration = CustomersLoadBalancerClientConfiguration.class)})
+public class MyConfiguration {
+
+    @Bean
+    @LoadBalanced
+    public WebClient.Builder loadBalancedWebClientBuilder() {
+        return WebClient.builder();
+    }
+}
+```
+您作为 @LoadBalancerClient 或 @LoadBalancerClients 配置参数传递的类不应使用 @Configuration 注释或超出组件扫描范围。
+## Spring Cloud LoadBalancer Lifecycle
