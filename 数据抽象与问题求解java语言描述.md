@@ -346,5 +346,25 @@ listHolidays(in year: integer)
 该问题的数据是由年月日构成的日期，对日期数据的操作抽象有:
 - 确定给定年份的第一天的日期
 - 确定一个日期是否在另一个日期之前
-- 
+- 确定一个是否是假日
+- 确定指定日期后一天的日期.
+可以定义ADT的的操作如下:
+- +firstDay(in year:integer):Date {query}//return the date of the frist day of a given year
+- +isBefore(in date1:Date, in date2:Date): bool {query}//
+- +isHoliday(in date:Date):boolean {query}
+- +nextDay(in date:Date):Date {query}
+2. 例子: 约见簿，创建呢一个一年期的约见簿，上午8点到下午5点，每次30分钟。存储约见的日期、时间与性质的简单描述。定义一个ADT约见簿，数据项是约见，约见由日期、时间与目的组成，ADT的主要操作是
+- 为某天、某时某目的约见
+- 取消约见
+- 查询给定时间是否有约见
+- 确定呢给定时间约见的性质
+操作如下:
+- +createAppointmentBook()
+- +isAppointment(in date:Date, in time:Time): boolean {query}
+- +makeAppointment(in date:Date, in time:Time, in purpose: String): boolean
+- +cancelAppointment(in date:Date, in time:Time): boolean
+- +checkAppointment(in date:Date, in time:Time): String {query}
+## 4.3 实现ADT
+实现ADT时应该设计一种数据结构来表示ADT的数据，然后按照ADT操作，编写方法来访问数据，使用自上而下的方法设计ADT操作的算法，将每一次更进一步的具体描述看作对其抽象前去的实现形式，只有能使用编程语言的数据结构来表示ADT的数据这种细化过程才停止，编程语言越初级，实现级别越多。使用ADT的程序只能看到作用于数据的墙，数据的数据结构与ADT操作的实现过程都隐藏在墙后。
+
 
