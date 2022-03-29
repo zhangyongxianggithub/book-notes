@@ -330,5 +330,21 @@ public static int iterativeRabbit(int n){
 - 数据结构是编程语言中用于存储数据集合的一种结构。
 ## 4.2 指定ADT
 - 操作抽象;
+- adt的设计应该在问题解决过程中逐步得出，下面介绍一个推演ADT的例子
+1. 例子：计算给定年份中所有假日的日期，实现方案之一是查日历，以下是伪代码表示
+```java
+listHolidays(in year: integer)
+// display the dates of all holidays in a given year
+    date= date of first day of year
+    while(date is before the first day of year+1){
+        if(date is a holiday){
+            write (date is a holiday)
+        }
+        date=date of next day
+    }
+```
+该问题的数据是由年月日构成的日期，对日期数据的操作抽象有:
+- 确定给定年份的第一天的日期
+- 确定一个日期是否在另一个日期之前
 - 
 
