@@ -598,3 +598,103 @@ public class MyConfiguration {
 ```
 您作为 @LoadBalancerClient 或 @LoadBalancerClients 配置参数传递的类不应使用 @Configuration 注释或超出组件扫描范围。
 ## Spring Cloud LoadBalancer Lifecycle
+使用自定义的LoadBalancer配置时，经常使用的一种类型的bean是LoadBalancerLifecycle，也就是负载均衡器的生命周期方法，LoadBalancerLifecycle bean 提供名为 onStart(Request<RC> request)、onStartRequest(Request<RC> request, Response<T> lbResponse) 和 onComplete(CompletionContext<RES, T, RC> completionContext) 的回调方法，您应该实现这些方法以指定在负载平衡之前和之后应该执行的操作。onStart(Request<RC> request) 将 Request 对象作为参数。它包含用于选择适当实例的数据，包括下游客户端请求和提示。 onStartRequest 还将 Request 对象和另外的 Response<T> 对象作为参数。另一方面，将 CompletionContext 对象提供给 onComplete(CompletionContext<RES, T, RC> completionContext) 方法。它包含 LoadBalancer 响应，包括所选服务实例、针对该服务实例执行的请求的状态和（如果可用）返回给下游客户端的响应，以及（如果发生异常）相应的 Throwable。supports(Class requestContextClass, Class responseClass, Class serverTypeClass) 方法可用于确定相关处理器是否处理提供类型的对象。如果没有被用户覆盖，则返回 true。在上述方法调用中，RC 表示 RequestContext 类型，RES 表示客户端响应类型，T 表示返回的服务器类型。
+## Spring Cloud LoadBalancer Statistics
+我们提供了一个名为 MicrometerStatsLoadBalancerLifecycle 的 LoadBalancerLifecycle bean，它使用 Micrometer 提供负载平衡调用的统计信息。为了将此 bean 添加到您的应用程序上下文中，请将 spring.cloud.loadbalancer.stats.micrometer.enabled 的值设置为 true 并有一个可用的 MeterRegistry（例如，通过将 Spring Boot Actuator 添加到您的项目中）。MicrometerStatsLoadBalancerLifecycle 在 MeterRegistry 中注册以下仪表：
+- loadbalancer.requests.active：允许您监视任何服务实例的当前活动请求数量的量规（通过标签提供的服务实例数据）；
+
+- loadbalancer.requests.success：一个计时器，用于测量任何负载平衡请求的执行时间，这些请求以将响应传递给底层客户端而结束；
+
+- loadbalancer.requests.failed：一个计时器，用于测量任何以异常结束的负载平衡请求的执行时间；
+
+- loadbalancer.requests.discard：测量丢弃的负载平衡请求数量的计数器，即 LoadBalancer 尚未检索到运行请求的服务实例的请求。
+
+在可用时，通过标签将有关服务实例、请求数据和响应数据的附加信息添加到指标中。
+对于某些实现，例如 BlockingLoadBalancerClient，请求和响应数据可能不可用，因为我们从参数建立泛型类型并且可能无法确定类型并读取数据。
+## Configuring Individual LoadBalancerClients
+单个负载均衡器客户端可以单独配置，使用不同的前缀 spring.cloud.loadbalancer.clients.<clientId>就可以实现 。 其中 clientId 是负载均衡器的名称。 默认配置值可以在 spring.cloud.loadbalancer 中设置。 配置最终会被合并到一起并且，客户端的独立配置的优先级更高。比如下面的例子:
+```yml
+spring:
+  cloud:
+    loadbalancer:
+      health-check:
+        initial-delay: 1s
+      clients:
+        myclient:
+          health-check:
+            interval: 30s
+
+```
+上面的示例将生成一个合并的健康检查@ConfigurationProperties 对象，初始延迟=1s 和间隔=30s。除以下全局属性外，每个客户端的配置属性适用于大多数属性：
+- spring.cloud.loadbalancer.enabled，全局开启/关闭负载均衡
+- spring.cloud.loadbalancer.retry.enabled，开启/关闭全局负载均衡重试;
+- spring.cloud.loadbalancer.cache.enabled，开启/关闭全局负载均衡缓存;
+- spring.cloud.loadbalancer.stats.micrometer.enabled
+# 4 Spring Cloud Circuit Breaker
+Spring Cloud断路器提供了断路器的统一抽象，底层可以使用其他已有的框架/库来实现， 它提供了一致的API，让您（开发人员）选择最适合您的应用程序需求的断路器实现。
+## 4.1 简介
+Spring Cloud支持以下的断路器实现
+- Resilience4j
+- Sentinel
+- Spring Retry
+## Core Concepts
+要在代码中创建断路器，您可以使用 CircuitBreakerFactory API。 当classpath中包含 Spring Cloud Circuit Breaker starter时，会自动为您创建实现此 API 的 bean。 以下示例显示了如何使用此 API 的简单示例：
+```java
+@Service
+public static class DemoControllerService {
+    private RestTemplate rest;
+    private CircuitBreakerFactory cbFactory;
+
+    public DemoControllerService(RestTemplate rest, CircuitBreakerFactory cbFactory) {
+        this.rest = rest;
+        this.cbFactory = cbFactory;
+    }
+
+    public String slow() {
+        return cbFactory.create("slow").run(() -> rest.getForObject("/slow", String.class), throwable -> "fallback");
+    }
+
+}
+```
+CircuitBreakerFactory.create API 创建一个 CircuitBreaker类型的实例。 run 方法接受一个Supplier和一个Function。 Supplier是您要包装在断路器中的代码。 Function是在断路器跳闸时运行的后备。 该函数被传递引发次后备被触发的 Throwable。 如果您不想提供回退，您可以选择排除回退。
+如果 Project Reactor 在classpath中，您还可以将 ReactiveCircuitBreakerFactory 用于您的反应式代码。 以下示例显示了如何执行此操作：
+```java
+@Service
+public static class DemoControllerService {
+    private ReactiveCircuitBreakerFactory cbFactory;
+    private WebClient webClient;
+
+
+    public DemoControllerService(WebClient webClient, ReactiveCircuitBreakerFactory cbFactory) {
+        this.webClient = webClient;
+        this.cbFactory = cbFactory;
+    }
+
+    public Mono<String> slow() {
+        return webClient.get().uri("/slow").retrieve().bodyToMono(String.class).transform(
+        it -> cbFactory.create("slow").run(it, throwable -> return Mono.just("fallback")));
+    }
+}
+```
+ReactiveCircuitBreakerFactory.create API 创建一个名为 ReactiveCircuitBreaker 的类的实例。 run 方法采用 Mono 或 Flux 并将其包装在断路器中。 您可以选择分析一个回退函数，如果断路器跳闸并传递导致故障的 Throwable 将调用该函数。
+## Configuration
+您可以通过创建Customizer类型的 bean 来配置您的断路器。 Customizer 接口有一个方法（称为customize），它接受Object 进行自定义。有关如何自定义给定实现的详细信息，请参阅以下文档：
+- [Resilience4J](https://docs.spring.io/spring-cloud-commons/spring-cloud-circuitbreaker/current/reference/html/spring-cloud-circuitbreaker.html#configuring-resilience4j-circuit-breakers)
+- [Sentinel](https://github.com/alibaba/spring-cloud-alibaba/blob/master/spring-cloud-alibaba-docs/src/main/asciidoc/circuitbreaker-sentinel.adoc#circuit-breaker-spring-cloud-circuit-breaker-with-sentinel%E2%80%94%E2%80%8Bconfiguring-sentinel-circuit-breakers)
+- [Spring Retry](https://docs.spring.io/spring-cloud-circuitbreaker/docs/current/reference/html/spring-cloud-circuitbreaker.html#configuring-spring-retry-circuit-breakers)
+每次调用 CircuitBreaker#run 时，一些 CircuitBreaker 实现（例如 Resilience4JCircuitBreaker）都会调用自定义方法。 它可能效率低下。 在这种情况下，您可以使用 CircuitBreaker#once 方法。在无需多次调用自定义方法的情况下很有用，例如，在消费Resilience4j 的事件的场景。下面的例子展示了每个 io.github.resilience4j.circuitbreaker.CircuitBreaker 消费事件的方式
+```java
+Customizer.once(circuitBreaker -> {
+  circuitBreaker.getEventPublisher()
+    .onStateTransition(event -> log.info("{}: {}", event.getCircuitBreakerName(), event.getStateTransition()));
+}, CircuitBreaker::getName)
+```
+# CachedRandomPropertySource
+Spring Cloud Context 提供了一个 PropertySource，它基于 key 缓存随机值。 在缓存功能之外，它的工作方式与 Spring Boot 的 RandomValuePropertySource 相同。 如果您想要一个即使在 Spring 应用程序上下文重新启动后仍保持一致的随机值，此随机值可能很有用。 属性值采用 cachedrandom.[yourkey].[type] 的形式，其中 yourkey 是缓存中的键。 类型值可以是 Spring Boot 的 RandomValuePropertySource 支持的任何类型。
+```java
+myrandom=${cachedrandom.appname.value}
+```
+# Security
+## SSO
+所有 OAuth2 SSO 和资源服务器功能都在 1.3 版中移至 Spring Boot。 您可以在 Spring Boot 用户指南中找到文档。
+如果您的应用是面向 OAuth2 客户端的用户（即已声明 @EnableOAuth2Sso 或 @EnableOAuth2Client），那么它在 Spring Boot 的请求范围内具有 OAuth2ClientContext。 您可以从此上下文和自动连接的 OAuth2ProtectedResourceDetails 创建自己的 OAuth2RestTemplate，然后上下文将始终将访问令牌转发到下游，如果访问令牌过期，也会自动刷新访问令牌。 （这些是 Spring Security 和 Spring Boot 的特性。）
