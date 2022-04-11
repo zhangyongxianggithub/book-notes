@@ -377,4 +377,121 @@ OOP编程是组件或者对象的集合，而不是操作序列，封装特性�
 - 对象封装数据与数据上的操作，在Java中，对象是类的实例，类是编程人员定义的数据类型;
 # 第5章 链表
 ## 5.1 预备知识
+数组不适合用来实现ADT列表，主要是由于它是定长的，而且因为物理有序，插入/删除数据需要移动数据，链表是更灵活的数据结构。
+使用Java引用的ADT实现方式于数据结构都称为“基于引用”。
+使用数组的方式可以使用一种变长数组的方式实现ADT列表，具体的实现方式是，当达到容量限制后，分配一个更大的数组，并复制原来数组的内容到新的数组。具体的代码如下:
+```java
+if (capacityIncrement == 0){
+    capacity *= 2;
+}else{
+    capacity += capacityIncrement;
+}
+// now create a new array using the updated capacity value
+double[] newArray = new double[capacity];
+//copy the contents of the original array to the new array
+for (int i = 0;i < myArray.length; i++){
+    newArray[i]=myArray[i];
+}
+// now change th referennce to the original array to the new array
+myArray=newArray;
+```
+java中的Vector于ArrayList都是使用这种方式实现的。
+构建链表的节点定义
+```java
+public class Node<T extends Object> {
+    
+    private T item;
+    
+    private Node<T> next;
+    
+    private Node(final T item, final Node<T> next) {
+        this.item = item;
+        this.next = next;
+    }
+    
+    public Node(final T item) {
+        this(item, null);
+    }
+    
+    public T getItem() {
+        return item;
+    }
+    
+    public void setItem(final T item) {
+        this.item = item;
+    }
+    
+    public Node<T> getNext() {
+        return next;
+    }
+    
+    public void setNext(final Node<T> next) {
+        this.next = next;
+    }
+}
+```
+链表必须有一个head引用，要不找不到链表的其他节点。不一定基于引用来实现链表，可以使用数组来实现链表。
+## 5.2 链表编程
+显示链表的数据
+```java
+    public void display() {
+        for (Node<T> curr = head; curr != null; curr = curr.getNext()) {
+            System.err.println(curr.getItem());
+        }
+    }
+```
+删除链表中的节点涉及到删除中间节点与删除头节点。
+```java
+    public void delete(final T item) {
+        Node<T> prev = null;
+        Node<T> curr = head;
+        while (curr != null && !Objects.equals(curr.getItem(), item)) {
+            prev = curr;
+            curr = curr.getNext();
+        }
+        if (curr != null) {
+            if (prev != null) {
+                // 中间节点的情况
+                prev.setNext(curr.getNext());
+            } else {
+                //头节点的情况
+                head = curr.getNext();
+            }
+        }
+    }
+```
+按照index删除节点的元素
+```java
+    public void delete(int index) {
+        Node<T> prev = null;
+        Node<T> curr = head;
+        while (curr != null && index-- > 0) {
+            prev = curr;
+            curr = curr.getNext();
+        }
+        if (index <= 0) {
+            if (index < 0) {
+                head = curr.getNext();
+            } else {
+                prev.setNext(curr.getNext());
+            }
+        }
+    }
+```
+删除过程包含3步:
+- 定位要删除的节点;
+- 通过更改引用，将节点从链表中分离出来;
+- 把这个节点返回给系统;
 
+插入过程与删除过程类似，分为3个步骤:
+- 确定插入位置;
+- 新建一个节点，并在其中存储新数据;
+- 通过更改引用，将新节点连接到链表中.
+考虑有序表的情况
+curr指向第一个大于newValue的节点，prev指向最后一个小与newValue的节点。查询的伪代码如下:
+```java
+// determine the point of insertion into a sorted linked list
+// initialize prev and curr to start the traversal from the beginning of the list
+prev=null;
+curr=head;
+```
