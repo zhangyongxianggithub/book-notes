@@ -494,4 +494,32 @@ curr指向第一个大于newValue的节点，prev指向最后一个小与newValu
 // initialize prev and curr to start the traversal from the beginning of the list
 prev=null;
 curr=head;
+// advance prev and curr as long as nenwValue>the current data item
+// Loop invariant: newValue > data items in all
+// holds at and before the node that prev references
+while(newValue>curr.getItem()){
+    prev=curr;
+    curr=curr.getNext();
+}
 ```
+上述的伪代码中，当newValue大于所有的值时，curr最后一次循环是null，此时抛出空指针异常，修改如下:
+```java
+// determine the point of insertion into a sorted linked list
+// initialize prev and curr to start the traversal from the beginning of the list
+prev=null;
+curr=head;
+// advance prev and curr as long as nenwValue>the current data item
+// Loop invariant: newValue > data items in all
+// holds at and before the node that prev references
+while(curr!=null&&newValue>curr.getItem()){
+    prev=curr;
+    curr=curr.getNext();
+}
+newNode.setNext(curr);
+prev.setNext(newNode);
+//下面的情况是链表头的情况
+if(prev==null){
+    head=newNode;
+}
+```
+
