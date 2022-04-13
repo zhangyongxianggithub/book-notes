@@ -522,4 +522,24 @@ if(prev==null){
     head=newNode;
 }
 ```
-
+复用之前定义的ADT列表接口
+```java
+public interface ListInterface<T extends Object & Comparable<T>> {
+    // list operations:
+    boolean isEmpty();
+    
+    int size();
+    
+    void add(int index, T item) throws IndexOutOfBoundsException;
+    
+    void remove(int index) throws IndexOutOfBoundsException;
+    
+    T get(int index) throws IndexOutOfBoundsException;
+    
+    void removeAll();
+}
+```
+基于数组与基于引用的实现的比较
+基于数组的缺点：定长需要考虑ADT的最大存储个数，可能会造成空间浪费，采用变长数组也会造成空间浪费，而且复制元素比较耗时;适合列表项比较少的场景，空间浪费不严重，单节点内存少，因为下一个节点通过下标隐式得到，对特定值的访问都是O(1)时间复杂度，插入/删除节点要移动元素
+基于引用的优缺点:不受长度限制，不会浪费节点空间，按需分配，访问特点节点O(n)时间复杂度，都要从头开始遍历，插入/删除节点不用移动元素。
+递归方法需要头引用作为实参，不能作为类的公有成员。
