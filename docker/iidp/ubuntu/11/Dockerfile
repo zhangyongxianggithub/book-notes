@@ -9,4 +9,6 @@ run echo 'Asia/Shanghai' > /etc/timezone
 run unlink /etc/localtime
 copy Shanghai /usr/share/zoneinfo/Asia/Shanghai
 run ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+run apt update && apt install -y tini
 cmd ["java", "-version"]
+entrypoint ["tini", "-v", "-g", "--"]

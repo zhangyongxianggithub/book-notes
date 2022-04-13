@@ -8,4 +8,7 @@ env LANGUAGE zh_CN:zh
 run echo 'LANG=zh_CN.UTF-8' > /etc/locale.conf
 run echo 'Asia/Shanghai' > /etc/timezone
 run ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+copy tini /usr/bin/
+run chmod a+x /usr/bin/tini
 cmd ["java", "-version"]
+entrypoint ["tini", "-v", "-g", "--"]
