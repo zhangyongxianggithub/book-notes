@@ -1,5 +1,8 @@
+[TOC]
+
 # 记录下学习jdk工具的一些知识
-## jps命令
+
+# jps命令
 jps工具的全称是Java Virtual Machine Process Status，中文名字就是Java虚拟机进程状态工具，
 ### 语法：
 jps [options] [hostid]
