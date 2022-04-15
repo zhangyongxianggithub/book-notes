@@ -1,0 +1,6 @@
+# WebSocket
+WebSocket是一种网络传输协议，可以在单个TCP连接上进行全双工通信，位于OSI模型的应用层。WebSocket协议在2011年由IETF标准化为RFC-6455，后由RFC-7936补充规范。Web IDL的WebSocket API由W3C标准化。
+WebSocket使得客户端与服务器之间的数据交换变得更加简单，允许服务器主动向客户端推送数据。在WebSocket API中，浏览器与服务器只需要完成一次握手，2者之间就可以创建持久性的连接，并进行双向数据传输。
+## 简介
+WebSocket是一种与HTTP不同的协议，都位于OSI模型的应用层，并且都依赖于传输层的TCP协议；虽然它们不同，但是RFC-6455中规定：it is designed to work over HTTP ports 80 and 443 as well as to support HTTP proxies and intermmediaries(WebSocket通过HTTP端口80与443进行工作)并支持HTTP代理与中介)，从而使其于HTTP协议兼容，为了实现兼容性，WebSocket握手使用HTTP Upgrade头从HTTP协议更改为WebSocket协议。
+WebSocket协议支持Web浏览器与Web服务器之间的交互，具有较低的开销，便于实现客户端与服务器的实时数据传输。服务器可以通过标准化的方式来实现，而无需客户端首先请求内容，并允许消息在保持连接打开的同时来回传递。通过这种方式，可以在客户端与服务器之间进行双向持续对话。通信通过TCP端口80与443完成，这在
