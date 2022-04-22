@@ -564,3 +564,30 @@ tail.next=head就是循环链表，前面都叫做线性链表。适合于循环
 # 第6章 递归问题求解技术
 ## 回溯
 一种连续猜测的组织化方法，若某种猜测行不通，则撤回，并用另一种猜测替换它，这种反向折回并试探新步骤序列的策略称为回溯（backtracking）。可以与递归操作一起来解决问题。
+八皇后问题，8行8列，不能对角线，不能在同一行，同一列。使用回溯的方法解决，伪代码如下:
+```java
+placeQueue(in currColumn: integer)
+// please queens in columns numbered currColumn through 8.
+if(currColumn>8){
+    the problem is solved
+}else{
+    while(unconsidered squares exist in currColumn and the problem is unsolved){
+        determine the next square in column currColumn that
+        is not under attack by a queen in an earlier column
+        if( such a square exists){
+            place a queen in the square
+            placeQueen(currColumn+1);
+            if (no queen is possible in column currColumn+1){
+                remove queen from column currColumn and consider the next square in that column
+            }
+        }
+    }
+}
+clear all squares on the board
+if(a solution exists){
+    display solution
+}else{
+    display message
+}
+```
+

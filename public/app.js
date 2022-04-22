@@ -12,7 +12,7 @@ function setConnected(connected) {
 }
 
 function connect() {
-    var socket = new SockJS('http://localhost:8884/endpoint/ability');
+    var socket = new SockJS('http://localhost:8877/endpoint/ability');
     stompClient = Stomp.over(socket);
     stompClient.connect({}, function (frame) {
         setConnected(true);
