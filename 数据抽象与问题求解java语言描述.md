@@ -758,4 +758,60 @@ public class Queens {
 }
 ```
 ## 定义语言
+语言是字符串的集合，语法正确的Java集合的定义:
+> JavaPropgrams = {字符串w: w是语法正确的Java程序}
+语言不一定是指编程语言或者用于交流的语言，满足某些语法规则的字符串的集合都叫做语言，语法提出了语言的规则，大多的语法本质上都是递归的，一个好处是语法（确定字符串是否是给定语言）可以使用简洁的递归算法表示。这种算法叫做语言的识别算法。
+1. 语法基础知识
+- x|y表示x或者y
+- xy表示x后接y，或者x·y，·被省略了，表示连接或者追加;
+- <word>表示定义确定的word的任何实例
+以JavaIds={w: w是一个有效的Java标识符}
+有效的Java标识符以字母开头，后接0个或者多个字母或者数字，_或者$也算合法的字符。表示标识符定义的好的方法是使用语法图
+![语法图](adtjava/%E8%AF%AD%E6%B3%95%E5%9B%BE.png)
+或者使用文字语法表示:
+> \<identifier>=\<letter>|\<identifier>\<letter>|\<identifier>\<digit>|$\<identifier>|_\<identifier>
+\<letter>=a|b|...|z|A|B|...|Z
+\<digit>=0|1|...|9
+
+identifier出现在自己的定义中，所以是递归的。要确定给出的字符串w是否是JavaIds语言，识别算法：若w的长度为1且字符是字母，则w属于该语言，这个语句是基例，若w的长度大于1，w的最后一个字符是字母或者数字，且前面的字符是一个标识符，w属于该语言。伪代码如下:
+```java
+isId(in w:string):boolean
+// returns true if w is a legal Java identifier
+// otherwise returns false
+if(w is of length 1){//base case
+    if(w is a letter){
+        return true;
+    }else{
+        return false;
+    }
+}
+else if(th last character of w is a letter or a digit){
+    return isId(w minus its last character);
+}else{
+    return false;
+}
+```
+2. 2种简单语言
+回文Palindromes={w:从左向右读与从右向左读相同}
+语法的递归定义：
+- w是回文
+- 去掉第一个与最后一个字符的w是回文,且去掉的字符相同
+基例要考虑奇偶数的情况。
+回文Palindromes的语法如下:
+> \<pal>=empty string|\<ch>|a\<pal>a|b\<pal>b|c\<pal>c|...|z\<pal>z
+\<ch>=a|b|...|z|A|B|...|Z
+识别算法的伪代码如下:
+```java
+isPal(in w:string):boolean
+// returns true if the string w of letters is a palindrome otherwise returns false;
+if(w is the empty string or w is of length 1){
+    return true;
+}else if(w''s first and last characters are the same letter){
+    return isPal(w minus its first and last characters);
+}else{
+    return false;
+}
+```
+3. 代数表达式
+
 
