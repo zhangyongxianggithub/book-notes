@@ -779,6 +779,22 @@ public interface ProducerMessageHandlerCustomizer<H extends MessageHandler> {
 }
 ```
 你需要做的就是实现这个接口并配置为@bean。
+# 内容类型协商
+数据转换时任何的消息驱动未服务架构的核心特性之一，在Spring Cloud Stream中，假设数据表示为Spring的Message类型的对象，一个message必须在传递前转换成合适的类型数据与大小，有2个原因：
+- 需要把传递进来的数据内容转换成消息处理器支持的消息类型;
+- 需要把要发送出去的消息转换成byte[]类型，以方便的物理线路上传输。
+Kafka与Rabbit binder会使用byte[]的形式发送数据，这是由binder实现控制的。在Spring Cloud Stream中，消息转换是通过org.springframework.messaging.converter.MessageConverter实现的。
+## 机制
+为了更好的理解内容类型协商的机制与必要性，我们通过一个简单的例子来解释一下，使用下面简单的消息处理器
+```java
+public Function<Person, String> personFunction {}
+```
+上面例子中的handler泗洪一个Person类型的输入参数，并且输出一个String类型的数据。为了让框架成功地将传入的 Message 作为参数传递给这个，它必须以某种方式将 Message 类型的有效负载从byte[]格式转换为 Person 类型。换句话说，框架需要找到合适的MessageConverter并应用Converter。为了完成这些，框架需要来自用户的一些指令。指令之一已经有handler方法的签名提供了（Person类型），因此，从理论上来说，这些已经足够了，然而，对于大多数的场景，为了能找到合适的MessageConverter，框架需要一些额外的指令信息，比如contentType.
+Spring Cloud Stream提供了3种定义contentType的机制（按照优先级排序）
+- HEADER: Message本身可以传递contentType，通过提供contentType头，你可以声明你要使用的contentType，来定位于应用一个合适的MessageConverter;
+- BINDING: 每一个binding可以设置一个contentType，通过`spring.cloud.stream.bindings.input.content-type`属性;
+- DEFAULT: 如果contentType没有出现在Message头中，或者没有在binding上设置，那么会使用默认的application/json来定位或者应用合适的MessageConverter.
+正如前面所提到的，前面的列表也演示了冲突时的优先级顺序，比如，header头比其他方式的contentType的优先级更高，binding设置的contentType比如默认的contentType优先级高，本质上，这可以让你覆盖默认的contentType，当让，框架也提供了一个有意义的默认值，默认值是由社区反馈确定的。
 
 # Apache Kafka Binder
 ## 用法
