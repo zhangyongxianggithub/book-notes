@@ -796,7 +796,10 @@ Spring Cloud Stream提供了3种定义contentType的机制（按照优先级排�
 - DEFAULT: 如果contentType没有出现在Message头中，或者没有在binding上设置，那么会使用默认的application/json来定位或者应用合适的MessageConverter.
 正如前面所提到的，前面的列表也演示了冲突时的优先级顺序，比如，header头比其他方式的contentType的优先级更高，binding设置的contentType比如默认的contentType优先级高，本质上，这可以让你覆盖默认的contentType，当让，框架也提供了一个有意义的默认值，默认值是由社区反馈确定的。
 将 application/json 设为默认值的另一个原因源于分布式微服务架构驱动的互操作性要求，其中生产者和消费者不仅运行在不同的 JVM 上，还可以运行在不同的非 JVM 平台上。
-当handler方法返回非void值时，如果返回值是Message类型，那么就直接发送Message，如果不是Message类型，那么会通过返回值构造一个新的Message发送，新的Message的header继承于输入的Message的header，当时header中的内容会经过SpringIntegrationProperties.messageHandlerNotPropagatedHeaders过滤，缺省情况下，只有contentType
+当handler方法返回非void值时，如果返回值是Message类型，那么就直接发送Message，如果不是Message类型，那么会通过返回值构造一个新的Message发送，新的Message的header继承于输入的Message的header，当时header中的内容会经过SpringIntegrationProperties.messageHandlerNotPropagatedHeaders过滤，缺省情况下，只有contentType会被过滤，这意味着，生成的新的message不会带有contentType头信息，这样，contentType就可以在下游变更。你可以始终选择从handler方法返回Message，这样，你可以注入任何头信息。
+如果存在内部管道，Message会以同样的方式发送到下一个handler处理，如果没有内部管道，或者已经到了最后一个handler，Message会被发送到output中。
+## ContentType与ArgumentType
+正如前面提到的，框架选择合适的MessageConverter，需要参数类型或者额外的contentType信息，选择MessageConverter的逻辑是参数解析器（HandlerMethodArgumentResolver）处理的，
 # Apache Kafka Binder
 ## 用法
 为了使用Apache Kafka Binder，你需要添加`spring-cloud-stream-binder-kafka`依赖，如下面的maven所示
