@@ -799,7 +799,21 @@ Spring Cloud Stream提供了3种定义contentType的机制（按照优先级排�
 当handler方法返回非void值时，如果返回值是Message类型，那么就直接发送Message，如果不是Message类型，那么会通过返回值构造一个新的Message发送，新的Message的header继承于输入的Message的header，当时header中的内容会经过SpringIntegrationProperties.messageHandlerNotPropagatedHeaders过滤，缺省情况下，只有contentType会被过滤，这意味着，生成的新的message不会带有contentType头信息，这样，contentType就可以在下游变更。你可以始终选择从handler方法返回Message，这样，你可以注入任何头信息。
 如果存在内部管道，Message会以同样的方式发送到下一个handler处理，如果没有内部管道，或者已经到了最后一个handler，Message会被发送到output中。
 ## ContentType与ArgumentType
-正如前面提到的，框架选择合适的MessageConverter，需要参数类型或者额外的contentType信息，选择MessageConverter的逻辑是参数解析器（HandlerMethodArgumentResolver）处理的，
+正如前面提到的，框架选择合适的MessageConverter，需要参数类型或者额外的contentType信息，选择MessageConverter的逻辑是参数解析器（HandlerMethodArgumentResolver）处理的，参数解析器会在用户定义的handler方法调用前被触发，此时框架已经知道真正的参数类型。如果参数类型与当前的payload类型不匹配的话，框架就会委托给预先配置的MessageConverters栈处理，MessageConverters栈会检查栈中的MessageConverter是否能够转换payload。正如你看到的:
+```java
+Object fromMessage(Message<?> message, Class<?> targetClass);
+```
+MessageConverter的操作使用targetClass作为参数之一，框架会保证提供的Message始终包含contentType头信息，当没有contentType头信息出现时，框架会注入binding设置的contentType或者默认的contentType头信息。框架可以通过contentType与参数类型的组合决定message是否能够转换为目标类型，如果没有发现合适的MessageConverter，将会抛出异常，你可以通过添加自定义的MessageConverter来处理这种情况[User-defined Message Converters](https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-user-defined-message-converters)。
+但是，如果payload类型与handler方法声明的目标类型匹配时会发生什么？在这种情况下，不会发生任何转换操作；payload将会直接传递到handler方法，这听起来比较直接并且合理，需要注意handler方法使用Message<?>或者Object作为参数的情况，如果目标类型是Object类型，那么本质上，不会发生任何转换操作。期望只通过contentType的信息将Message转换为目标类型是不可能的，contentType只是目标类型的一个补充，如果你想，你可以提供一个hint，MessageConverter可以在转换时使用到这个hint.
+## Message Converters
+MessageConverter接口定义了2个方法:
+```java
+Object fromMessage(Message<?> message, Class<?> targetClass);
+
+Message<?> toMessage(Object payload, @Nullable MessageHeaders headers);
+```
+了解这些方法的约定及其用法很重要，特别是在 Spring Cloud Stream 的上下文中。
+fromMessage 方法将传入的Message转换为参数类型。 Message的payload可以是任何类型，是否支持多种类型取决于MessageConverter的实现。 例如，某些JSON转换器可能支持byte[]、String 等payload类型。 当应用程序包含内部管道（即输入→处理程序1→处理程序2→...→输出）并且上游处理程序的输出导致消息可能不是初始线路格式时，这一点很重要。
 # Apache Kafka Binder
 ## 用法
 为了使用Apache Kafka Binder，你需要添加`spring-cloud-stream-binder-kafka`依赖，如下面的maven所示
