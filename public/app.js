@@ -12,7 +12,7 @@ function setConnected(connected) {
 }
 
 function connect() {
-    var socket = new SockJS('http://localhost:8877/endpoint/ability');
+    var socket = new SockJS('http://10.162.194.24:8877/endpoint/scadaapp/ability');
     stompClient = Stomp.over(socket);
     stompClient.connect({}, function (frame) {
         setConnected(true);
