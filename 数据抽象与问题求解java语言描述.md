@@ -880,5 +880,20 @@ if(ch is an identifier){
 \<标识符>=a|b|...|z
 将起前缀表达式转换为后缀表达式的方法的伪代码如下:
 ```java
-
+convert(in pre: string):string
+// Converts a prefix expression pre to postfix form
+// Precondition: The expression inn the string pre is a valid prefix expression
+// PostCondition: Returns the equivalent postfix expression as a string
+//check the first character of the given string
+ch = first character of pre
+delete first character of pre
+if(ch is a lowercase letter){
+    // base case - single identifier expression
+    return ch as a string
+}else{
+    // do the conversion resursively
+    postfix1=convert(pre)
+    postfix2=convert(pre)
+    return postfix1+postfix2+ch;
+}
 ```
