@@ -817,4 +817,68 @@ if(w is the empty string or w is of length 1){
 <前缀>=<标识符>|<操作符><前缀><前缀>
 <操作符>=+｜-｜*｜/
 <标识符>=a|b|...|z
-可以看到是递归结构的，
+可以看到是递归结构的.首先构建一个递归的值方法endPre(first,last),返回前缀表达式尾自负的索引或者如果不是前缀表达式返回-1，方法的伪代码如下:
+```java
+endPre(in first:integer, in last: integer)
+// finds the end of a prefix expression, if one exists.
+// Precondition: the substring of strExp from first through last contains no blank characters。
+// Postcondition: Returns the index of the last character in strExp that begins at index first, if one exists,
+// or returns -1 if no such prefix expression exists
+if(first<0 or first>last){
+    return -1;
+}
+ch=character at position first of strExp
+if(ch is an identifier){
+    // index of last character in simple prefix expression
+    return first;
+}else if(ch is an operator){
+    // find the end of the first prefix expression
+    firstEnd=endPre(first+1,last);
+    if(firstEnd>-1){
+        return endPre(firstEnd+1,last);
+    }else{
+        return -1;
+    }
+}else{
+    return -1;
+}
+```
+通过endPre确定isPre的方法的伪代码如下:
+```java
+isPre()
+// Determines whether the string expression in this class is a prefix expression.
+// Precondition: the class has a data field strExp that has been initialized with a string expression that contains no blank characters.
+// Postcondition: return true if the expression is in prefix form otherwise return false.
+size = length of expression strExp
+lastChar = endPre(0, size - 1)
+if(lastChar>=0 and lastChar == size -1 ){
+    return true;
+}else{
+    return false;
+}
+```
+计算前缀代数表达式的伪代码如下:
+```java
+evaluatePrefix(in strExp: String): float
+// evaluate the prefix exprerssion strExp
+// Precondition: strExp is a string consisting of a valid prefix expression containing no blanks.
+// Postcondition: returns the value of the prefix expression.
+ch - first character of expression strExp
+delete first character of expression strExp
+if(ch is an identifier){
+    // base case - single identifier
+    return value of the identifier;
+}else{
+    operand1=evaluatePrefix(strExp);
+    operand2=evaluatePrefix(strExp);
+    return operand1 op operand2;
+}
+```
+定义后缀表达式的语法为:
+\<后缀>=\<标识符>|\<后缀>\<后缀>\<操作符>
+\<操作符>=+|-|*|/
+\<标识符>=a|b|...|z
+将起前缀表达式转换为后缀表达式的方法的伪代码如下:
+```java
+
+```
