@@ -814,6 +814,54 @@ Message<?> toMessage(Object payload, @Nullable MessageHeaders headers);
 ```
 了解这些方法的约定及其用法很重要，特别是在 Spring Cloud Stream 的上下文中。
 fromMessage 方法将传入的Message转换为参数类型。 Message的payload可以是任何类型，是否支持多种类型取决于MessageConverter的实现。 例如，某些JSON转换器可能支持byte[]、String 等payload类型。 当应用程序包含内部管道（即输入→处理程序1→处理程序2→...→输出）并且上游处理程序的输出导致消息可能不是初始线路格式时，这一点很重要。
+然而，toMessage方法有着更为严格的规范，这个方法始终将Message转换为有线传输格式byte[]。因此，出于通用的意图和目的（尤其是在实现您自己的转换器时），您可以认为这两种方法的签名为以下的形式：
+```java
+Object fromMessage(Message<?> message, Class<?> targetClass);
+Message<byte[]> toMessage(Object payload, @Nullable MessageHeaders headers);
+```
+## 已经提供的MessageConverters
+如前所述，框架已经提供了一组MessageConverter用于处理常见的使用场景。以下列表按优先级顺序描述了提供的MessageConverter（第一个匹配的MessageConverter会被使用，不会继续向下查找）.
+- ApplicationJsonMessageMarshallingConverter: 这是`org.springframework.messaging.converter.MappingJackson2MessageConverter`的一种变体，当contentType设置为applicaion/json时，用于Message的payload与POJO之间的相互转换;
+- ByteArrayMessageConverter: 当contentType设置为application/octet-stream，用于Message的payload与byte[]之间的相互转换。它本质上是一种传递，主要是为了向后兼容而存在。
+- ObjectStringMessageConverter: 当 contentType 为 text/plain 时，支持将任何类型转换为 String。 它调用 Object 的 toString() 方法，或者，如果有效负载是 byte[]，则调用 new String(byte[]);
+- JsonUnmarshallingConverter: 类似于 ApplicationJsonMessageMarshallingConverter。 当 contentType 为 application/x-java-object 时，它支持任何类型的转换。 它期望将实际类型信息作为属性嵌入到 contentType 中（例如，application/x-java-object;type=foo.bar.Cat）。
+
+当没有找到合适的Converter时，框架会抛出异常；发生这种情况时，您应该检查您的代码和配置并确保您没有遗漏任何内容（即确保您通过Binding或Header提供了 contentType）。 但是，很可能，您发现了一些不常见的使用场景（例如自定义 contentType），并且当前提供的 MessageConverters 堆栈不知道如何转换。 如果是这种情况，您可以添加自定义 MessageConverter。 请参阅用户定义的消息转换器。
+## 用户自定义MessageConverter
+Spring Cloud Stream 公开了一种机制来定义和注册额外的 MessageConverters。 要使用它，请实现 org.springframework.messaging.converter.MessageConverter，将其配置为 @Bean。 然后将其附加到现有的 `MessageConverter` 堆栈中。
+重要的是要知道自定义 MessageConverter 实现会被添加到现有堆栈的头部。 因此，自定义 MessageConverter 实现的优先级会比现有的实现高，这使您可以覆盖现有的转换器。
+下面是一个例子:
+```java
+@SpringBootApplication
+public static class SinkApplication {
+
+    ...
+
+    @Bean
+    public MessageConverter customMessageConverter() {
+        return new MyCustomMessageConverter();
+    }
+}
+
+public class MyCustomMessageConverter extends AbstractMessageConverter {
+
+    public MyCustomMessageConverter() {
+        super(new MimeType("application", "bar"));
+    }
+
+    @Override
+    protected boolean supports(Class<?> clazz) {
+        return (Bar.class.equals(clazz));
+    }
+
+    @Override
+    protected Object convertFromInternal(Message<?> message, Class<?> targetClass, Object conversionHint) {
+        Object payload = message.getPayload();
+        return (payload instanceof Bar ? payload : new Bar((byte[]) payload));
+    }
+}
+```
+
 # Apache Kafka Binder
 ## 用法
 为了使用Apache Kafka Binder，你需要添加`spring-cloud-stream-binder-kafka`依赖，如下面的maven所示
