@@ -1414,6 +1414,80 @@ public class ReRouteDlqKApplication implements CommandLineRunner {
 ```
 ## Partitioning with the Kafka Binder
 Apache Kafka本身支持分区功能。
+有时候，将数据发送到特定的分区是十分有用的，比如：当你想要严格的顺序处理消息时（某个消费者的所有的消息都应该发送到一个分区中）。以下示例显示了如何配置生产者和消费者端：
+```java
+@SpringBootApplication
+@EnableBinding(Source.class)
+public class KafkaPartitionProducerApplication {
+
+    private static final Random RANDOM = new Random(System.currentTimeMillis());
+
+    private static final String[] data = new String[] {
+            "foo1", "bar1", "qux1",
+            "foo2", "bar2", "qux2",
+            "foo3", "bar3", "qux3",
+            "foo4", "bar4", "qux4",
+            };
+
+    public static void main(String[] args) {
+        new SpringApplicationBuilder(KafkaPartitionProducerApplication.class)
+            .web(false)
+            .run(args);
+    }
+
+    @InboundChannelAdapter(channel = Source.OUTPUT, poller = @Poller(fixedRate = "5000"))
+    public Message<?> generate() {
+        String value = data[RANDOM.nextInt(data.length)];
+        System.out.println("Sending: " + value);
+        return MessageBuilder.withPayload(value)
+                .setHeader("partitionKey", value)
+                .build();
+    }
+
+}
+```
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        output:
+          destination: partitioned.topic
+          producer:
+            partition-key-expression: headers['partitionKey']
+            partition-count: 12
+```
+必须预先给主题配置足够多的分区来达到消费者组所需的并发性能。上面的配置最多支持12个消费者实例（如果并发为 2,那么消费者实例=6，如果并发=3，那么消费者实例数量=4，依此类推）。通常最好“过度配置”分区以允许将来增加消费者或并发性。
+上述配置使用默认分区逻辑算法（key.hashCode() % partitionCount）。 这可能不是一个合适的平衡算法，具体取决于键值。 您可以使用 partitionSelectorExpression或 partitionSelectorClass属性覆盖此默认值。
+由于分区由 Kafka 原生处理，因此在消费者端不需要特殊配置。 Kafka 跨实例分配分区。以下 Spring Boot 应用程序侦听 Kafka 流并打印（到控制台）每条消息所在的分区 ID：
+```java
+@SpringBootApplication
+@EnableBinding(Sink.class)
+public class KafkaPartitionConsumerApplication {
+
+    public static void main(String[] args) {
+        new SpringApplicationBuilder(KafkaPartitionConsumerApplication.class)
+            .web(false)
+            .run(args);
+    }
+
+    @StreamListener(Sink.INPUT)
+    public void listen(@Payload String in, @Header(KafkaHeaders.RECEIVED_PARTITION_ID) int partition) {
+        System.out.println(in + " received from partition " + partition);
+    }
+
+}
+```
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings:
+        input:
+          destination: partitioned.topic
+          group: myGroup
+```
+你可以根据需要添加实例，Kafka会重新平衡分区分配，如果实例数（instanceCount*concurrency）超过分区数，那么部分消费者处于空闲状态。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
