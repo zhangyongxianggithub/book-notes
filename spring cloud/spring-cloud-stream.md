@@ -1488,6 +1488,8 @@ spring:
           group: myGroup
 ```
 你可以根据需要添加实例，Kafka会重新平衡分区分配，如果实例数（instanceCount*concurrency）超过分区数，那么部分消费者处于空闲状态。
+# kafka Tips, Tricks and Recipes
+
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
