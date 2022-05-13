@@ -861,6 +861,262 @@ public class MyCustomMessageConverter extends AbstractMessageConverter {
     }
 }
 ```
+# Inter-Application Communication（应用实例通信）
+SCS具有应用实例通信的能力，应用实例通信是一个涉及到很多方面的复杂问题，问题点如下:
+- 多个应用实例间的连接问题;
+- 实例index与实例数量的问题;
+- 分片的问题
+1. 多个应用实例间的连接问题
+虽然SCS使单个的SpringBoot应用可以非常方便的连接到消息系统，但是SCS的典型的使用场景是：创建多个应用间的管道，微服务应用间互相发送数据，你可以通过关联相邻应用间的input/output目的地址实现。假设现在一个设计要求Time Source应用发送数据到Log Sink应用，你可以为2个应用的绑定设置一个共用的名为ticktock的destination。
+Time Source应用会设置如下的属性，假设bingding的名字是output）
+```yaml
+spring.cloud.stream.bindings.output.destination=ticktock
+```
+Log Sink因果难过会设置如下属性，假设binding的名字是input
+```yaml
+spring.cloud.stream.bindings.input.destination=ticktock
+```
+2. 实例index与实例数量的问题
+在对SCS应用进行扩缩容时，每个实例都会接收到当前应用一共有多少个实例以及它自己的index是多少，SCS是通过`spring.cloud.stream.instanceCount`与`spring.cloud.stream.instanceIndex`2个属性来实现的，比如，如果HDFS的sink应用存在2个实例，所有3个实例的`spring.cloud.stream.instanceCount=3`，单独的应用的`spring.cloud.stream.instanceIndex`会分别设置为0，1，2.
+当SCS应用通过Spring Cloud Data Flow部署时，这些属性是自动配置的，当SCS应用独立启动时，这些属性必须正确设置，默认情况下，`spring.cloud.stream.instanceCount=1`并且`spring.cloud.stream.instanceIndex=0`.
+在扩缩容场景中，这两个属性的正确配置对于解决分区行为（见下文）很重要；并且某些绑定器（例如，Kafka 绑定器）总是需要这两个属性以确保数据可以被多个消费者实例正确消费。
+3. 分区
+分区分2种
+- Configuring Output Bindings for Partitioning
+  你可以通过设置binding的`partitionKeyExpression`或者`partitionKeyExtractorName`属性以及partitionCount属性，来让output binding发送分区数据，如下面的例子
+  ```properties
+  spring.cloud.stream.bindings.func-out-0.producer.partitionKeyExpression=headers.id
+spring.cloud.stream.bindings.func-out-0.producer.partitionCount=5
+  ```
+  基于例子中的配置，数据使用下面的逻辑发送到目标分区：依据partitionKeyExpression，为每条需要发送到分区的output binding的消息计算partition key值，partitionKeyExpression是一个 SpEL表达式，根据outbound消息（在前面的示例中，它是消息头中的id的值）计算出分区键值。
+  如果SpEL表达式不足以满足您的需求，您可以通过提供一个org.springframework.cloud.stream.binder.PartitionKeyExtractorStrategy接口的实现并将其配置为bean（通过使用@Bean注释）来计算分区键值。如果您在Application Context中有多个 org.springframework.cloud.stream.binder.PartitionKeyExtractorStrategy类型的bean，您可以通过使用 partitionKeyExtractorName属性指定其名称来进一步过滤，如下例所示：
+  ```java
+  --spring.cloud.stream.bindings.func-out-0.producer.partitionKeyExtractorName=customPartitionKeyExtractor
+--spring.cloud.stream.bindings.func-out-0.producer.partitionCount=5
+. . .
+@Bean
+public CustomPartitionKeyExtractorClass customPartitionKeyExtractor() {
+    return new CustomPartitionKeyExtractorClass();
+}
+  ```
+  一旦计算出消息键，分区选择过程将目标分区确定为介于0和partitionCount - 1之间。适用于大多数场景的默认计算公式：key.hashCode() % partitionCount。 计算公式可以在binding上进行自定义，通过设置一个SpEL表达式来针对“键”计算（通过partitionSelectorExpression属性）或通过将 org.springframework.cloud.stream.binder.PartitionSelectorStrategy 实现配置为 bean（通过使用@Bean注解）。 与PartitionKeyExtractorStrategy类似，当 Application Context中有多个此类 bean 可用时，您可以使用 spring.cloud.stream.bindings.output.producer.partitionSelectorName属性对其进行进一步过滤，如下例所示：
+  ```java
+--spring.cloud.stream.bindings.func-out-0.producer.partitionSelectorName=customPartitionSelector
+. . .
+@Bean
+public CustomPartitionSelectorClass customPartitionSelector() {
+    return new CustomPartitionSelectorClass();
+}
+  ```
+- Configuring Input Bindings for Partitioning: 输入绑定（绑定名称为 uppercase-in-0）被配置为通过设置其 partitioned 属性以及应用程序本身的 instanceIndex 和 instanceCount 属性来接收分区数据，如下例所示：
+```properties
+spring.cloud.stream.bindings.uppercase-in-0.consumer.partitioned=true
+spring.cloud.stream.instanceIndex=3
+spring.cloud.stream.instanceCount=5
+```
+instanceCount表示分区消费数据的应用实例的总数，应用的多个实例的instanceIndex必须唯一，介于0到instanceCount-1之间，instanceIndex可以帮助应用实例标识它自身消费的唯一分区(s)，而且对于那些不能内置支持分区的binder也是需要instanceIndex的，比如RabbitMQ，每个分区都有一个队列，队列包含instanceIndex，对于Kafka，如果`autoRebalanceEnabled=true`(这是默认的),Kafka Server负责为实例分发分区，所以不需要这些属性，如果`autoRebalanceEnabled=false`，那么binder使用instanceCount与instanceIndex来确定实例订阅的分区（分区数量必须>=实例数量）.Binder分配分区而不是Kafka，如果想要特定分区的数据始终发送到同一个实例，需要正确的设置这2个值，会确保所有的数据都得到消费，而且应用实例间互斥的消费数据.
+虽然使用多个实例进行分区数据处理的场景在单独部署的场景中中设置可能会很复杂，但Spring Cloud Dataflow可以通过正确填充输入和输出值并让您依赖运行时基础架构来显着简化流程提供有关实例索引和实例计数的信息。
+# Testing
+SCS提供了测试微服务应用的相关支持，而且不需要实际的连接到外部的消息系统.
+## Spring Integration Test Binder
+定义在spring-cloud-stream-test-support模块中的就版本的test binder是专门用来简化消息相关组件的单元测试编写的，因而可能绕过Binder API的某些核心功能。这样的轻量级的当时对于很多测试场景足够了，集成测试时，它需要真实的binders，所以我们启用它。为了统一单元测试与集成测试之间的巨大差异处理，我们开发了新的test binder，新的binder使用Spring Integration框架作为一个JVM内的Message Broker，本质上就是一个不需要网络连接的真正的binder。
+## Test Binder Configuration
+为了开启Spring Integration Test Binder，你需要
+- 添加必须的依赖;
+- 移除`spring-cloud-stream-test-support`依赖;
+下面是需要添加的依赖
+```xml
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-stream</artifactId>
+    <version>${spring.cloud.stream.version}</version>
+    <type>test-jar</type>
+    <scope>test</scope>
+    <classifier>test-binder</classifier>
+</dependency>
+```
+## Test Binder使用
+你可以为你的微服务编写简单的单元测试
+```java
+@SpringBootTest
+@RunWith(SpringRunner.class)
+public class SampleStreamTests {
+
+	@Autowired
+	private InputDestination input;
+
+	@Autowired
+	private OutputDestination output;
+
+	@Test
+	public void testEmptyConfiguration() {
+		this.input.send(new GenericMessage<byte[]>("hello".getBytes()));
+		assertThat(output.receive().getPayload()).isEqualTo("HELLO".getBytes());
+	}
+
+	@SpringBootApplication
+	@Import(TestChannelBinderConfiguration.class)
+	public static class SampleConfiguration {
+		@Bean
+		public Function<String, String> uppercase() {
+			return v -> v.toUpperCase();
+		}
+	}
+}
+```
+如果你需要更多的控制，或者想要在同一个测试集中测试多个配置，你可以这样编写单元测试
+```java
+@EnableAutoConfiguration
+public static class MyTestConfiguration {
+	@Bean
+	public Function<String, String> uppercase() {
+			return v -> v.toUpperCase();
+	}
+}
+
+. . .
+
+@Test
+public void sampleTest() {
+	try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
+				TestChannelBinderConfiguration.getCompleteConfiguration(
+						MyTestConfiguration.class))
+				.run("--spring.cloud.function.definition=uppercase")) {
+		InputDestination source = context.getBean(InputDestination.class);
+		OutputDestination target = context.getBean(OutputDestination.class);
+		source.send(new GenericMessage<byte[]>("hello".getBytes()));
+		assertThat(target.receive().getPayload()).isEqualTo("HELLO".getBytes());
+	}
+}
+```
+对与多个Binding或者多个input或者output或者想要明确指定发送或者接收的destination的场景，InputDestination或者OutputDestination的send()与receive()方法有重载的版本，可以指定destination的名字。考虑下面的例子
+```java
+@EnableAutoConfiguration
+public static class SampleFunctionConfiguration {
+
+	@Bean
+	public Function<String, String> uppercase() {
+		return value -> value.toUpperCase();
+	}
+
+	@Bean
+	public Function<String, String> reverse() {
+		return value -> new StringBuilder(value).reverse().toString();
+	}
+}
+```
+编写的实际的单元测试是:
+```java
+@Test
+public void testMultipleFunctions() {
+	try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
+			TestChannelBinderConfiguration.getCompleteConfiguration(
+					SampleFunctionConfiguration.class))
+							.run("--spring.cloud.function.definition=uppercase;reverse")) {
+
+		InputDestination inputDestination = context.getBean(InputDestination.class);
+		OutputDestination outputDestination = context.getBean(OutputDestination.class);
+
+		Message<byte[]> inputMessage = MessageBuilder.withPayload("Hello".getBytes()).build();
+		inputDestination.send(inputMessage, "uppercase-in-0");
+		inputDestination.send(inputMessage, "reverse-in-0");
+
+		Message<byte[]> outputMessage = outputDestination.receive(0, "uppercase-out-0");
+		assertThat(outputMessage.getPayload()).isEqualTo("HELLO".getBytes());
+
+		outputMessage = outputDestination.receive(0, "reverse-out-0");
+		assertThat(outputMessage.getPayload()).isEqualTo("olleH".getBytes());
+	}
+}
+```
+对于具有额外的映射属性（例如destination）的场景，您应该使用这些名称。例如，考虑前面测试的另一个版本，我们将uppercase函数的输入和输出显式映射到myInput和myOutput的destination
+```java
+@Test
+public void testMultipleFunctions() {
+	try (ConfigurableApplicationContext context = new SpringApplicationBuilder(
+			TestChannelBinderConfiguration.getCompleteConfiguration(
+					SampleFunctionConfiguration.class))
+							.run(
+							"--spring.cloud.function.definition=uppercase;reverse",
+							"--spring.cloud.stream.bindings.uppercase-in-0.destination=myInput",
+							"--spring.cloud.stream.bindings.uppercase-out-0.destination=myOutput"
+							)) {
+
+		InputDestination inputDestination = context.getBean(InputDestination.class);
+		OutputDestination outputDestination = context.getBean(OutputDestination.class);
+
+		Message<byte[]> inputMessage = MessageBuilder.withPayload("Hello".getBytes()).build();
+		inputDestination.send(inputMessage, "myInput");
+		inputDestination.send(inputMessage, "reverse-in-0");
+
+		Message<byte[]> outputMessage = outputDestination.receive(0, "myOutput");
+		assertThat(outputMessage.getPayload()).isEqualTo("HELLO".getBytes());
+
+		outputMessage = outputDestination.receive(0, "reverse-out-0");
+		assertThat(outputMessage.getPayload()).isEqualTo("olleH".getBytes());
+	}
+}
+```
+## Test Binder与PollableMessageSource
+Spring Integration Test Binder还允许您在使用PollableMessageSource时编写单元测试（有关更多详细信息，请参阅[Using Polled Consumers](https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html#spring-cloud-streams-overview-using-polled-consumers)）。
+但是需要理解的重要一点是轮询不是事件驱动的，并且PollableMessageSource是轮询策略， 这种策略公开产生（poll for）一个消息（singular）的操作，轮询频率、使用多少线程或从哪里轮询（消息队列或文件系统）完全取决于您； 换句话说，配置轮询器或线程或消息的实际来源是您的责任。 幸运的是，Spring 有很多抽象来配置它。考虑洗面的例子
+```java
+@Test
+public void samplePollingTest() {
+	ApplicationContext context = new SpringApplicationBuilder(SamplePolledConfiguration.class)
+				.web(WebApplicationType.NONE)
+				.run("--spring.jmx.enabled=false", "--spring.cloud.stream.pollable-source=myDestination");
+	OutputDestination destination = context.getBean(OutputDestination.class);
+	System.out.println("Message 1: " + new String(destination.receive().getPayload()));
+	System.out.println("Message 2: " + new String(destination.receive().getPayload()));
+	System.out.println("Message 3: " + new String(destination.receive().getPayload()));
+}
+
+@Import(TestChannelBinderConfiguration.class)
+@EnableAutoConfiguration
+public static class SamplePolledConfiguration {
+	@Bean
+	public ApplicationRunner poller(PollableMessageSource polledMessageSource, StreamBridge output, TaskExecutor taskScheduler) {
+		return args -> {
+			taskScheduler.execute(() -> {
+				for (int i = 0; i < 3; i++) {
+					try {
+						if (!polledMessageSource.poll(m -> {
+							String newPayload = ((String) m.getPayload()).toUpperCase();
+							output.send("myOutput", newPayload);
+						})) {
+							Thread.sleep(2000);
+						}
+					}
+					catch (Exception e) {
+						// handle failure
+					}
+				}
+			});
+		};
+	}
+}
+```
+上面的（非常基本的）示例将以2秒的间隔内生成3条消息，将它们发送到Source的输出desitnation，该绑定器将其发送到OutputDestination，我们在那里检索它们（对于任何断言）。目前，它打印以下内容：
+>Message 1: POLLED DATA
+Message 2: POLLED DATA
+Message 3: POLLED DATA
+
+如您所见，数据是相同的。这是因为此binder定义了一个实际MessageSource的默认实现 - binder会使用poll()操作轮询此Source获取消息。虽然对于大多数测试场景来说已经足够了，但在某些情况下您可能想要定义自己的MessageSource。为此，只需在您的测试配置中配置一个 MessageSource类型的bean，提供您自己的消息来源实现。
+```java
+@Bean
+public MessageSource<?> source() {
+	return () -> new GenericMessage<>("My Own Data " + UUID.randomUUID());
+}
+```
+不要将此bean命名为messageSource，因为它会与Spring Boot提供的同名（不同类型）的bean发生冲突，原因不相关。
+# Health Indicator
+Spring Cloud Stream为binders提供了一个健康指示器。它 binders的名称注册，可以通过设置management.health.binders.enabled属性来启用或禁用。要启用健康检查，您首先需要启用“web”和“actuator”（请参阅​​Binding Visualization and Control），需要包含2者的依赖项。如果应用程序未明确设置management.health.binders.enabled，则management.health.defaults.enabled为true并启用binder健康指标。如果要完全禁用运行状况指示器，则必须management.health.binders.enabled设置为false。
+您可以使用Spring Boot Actuator健康端点来访问健康指示器-/actuator/health。默认情况下，将康端点的结果只会显示粗略的应用程序状态。为了从Binder健康指示器接收完整的详细信息，您需要在应用程序中包含属性`management.endpoint.health.show-details=ALWAYS`。健康指标是特定于 binder的，某些binder实现可能不一定提供健康指标。
+如果您想完全禁用所有开箱即用的健康指标，而是提供您自己的健康指标，您可以设置属性`management.health.binders.enabled=false`来实现，然后在您的应用程序中提供您自己的HealthIndicator类型的bean。在这种情况下，Spring Boot健康指标基础设施将采用这些自定义bean。即使您没有禁用binder将康指标，您仍然可以提供自己的HealthIndicator类型的bean来添加额外的健康检查的内容。
+当您在同一个应用程序中有多个Binder时，默认情况下健康指标就是开启的，除非应用程序设置`management.health.binders.enabled=false`。在这种情况下，如果用户想要禁用所有Binder中的某些Binder的健康检查，需要设置`management.health.binders.enabled=false`并且单独设置Binder特有的属性，相关的内容请参阅连接到多个系统。
+如果classpath中存在多个Binder，但并非所有Binder都在应用程序中使用，这可能会导致健康指标上下文中的一些问题。问题与执行健康检查的具体Binder实现细节相关。例如，如果 Kafka binder未注册任何目的地，则可能会将状态确定为DOWN。
+让我们看一个具体的情况。假设您在classpath中同时存在Kafka和Kafka Streams2个binder，但仅在应用程序代码中使用Kafka Streams binder，即仅使用了Kafka Streams binder提供的Binding。由于没有使用Kafka Binder，并且它会检查Binder是否注册了任何目的地，因此binder健康检查将失败。顶级应用程序健康检查状态将报告为DOWN。在这种情况下，您可以简单地从应用程序中删除kafka binder的依赖项，因为您没有使用它。
 
 # Apache Kafka Binder
 ## 用法
@@ -1156,6 +1412,8 @@ public class ReRouteDlqKApplication implements CommandLineRunner {
 
 }
 ```
+## Partitioning with the Kafka Binder
+Apache Kafka本身支持分区功能。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
