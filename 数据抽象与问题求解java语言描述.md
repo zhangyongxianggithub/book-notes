@@ -918,3 +918,31 @@ fact(n)=n!=n*(n-1)*...*1 n>0
 - 归纳假设：对于任意数n=k，属性为真即fact(k)=k(k-1)....1
 - 归纳结论，对于n=k+1,属性为真，也就是证明fact(k+1)=(k+1)k(k-1)....1
 根据fact方法定义，fact(k+1)=(k+1)*fact(k)=(k+1)k(k-1)....1， 证毕
+前面介绍过汉诺塔问题的解决方案，基本算法的伪代码如下:
+```java
+solveTowers(in count:integer, in source:Pole, in destination:Pole, in spare:Pole)
+if(count is 1){
+    move a disk directly from source to destination
+}else{
+    solveTowers(count-1, source, spare, destination);
+    solveTowers(1, source, destination, spare);
+    solveTowers(count-1, spare, destination, source);
+}
+```
+设 moves(N)是N个圆盘的移动次数，当N=1时，moves(N)=1
+moves(N)=moves(N-1)+moves(1)+moves(N-1)=2<sup>N</sup>-1，下面根据数学归纳法证明这个公式
+- 基例: N=1时 2<sup>1</sup>-1=1，所以属性为真，下面要证明，对于任意的数k，属性为真，那么对于k+1，属性为真。
+- 归纳假设: 设对于任意的数N=k，属性为真，即moves(k)=2<sup>k</sup>-1;
+- 归纳结论: 说明N=k+1属性为真，必须证明moves(k+1)=2<sup>k+1</sup>-1, 根据moves的递归关系
+moves(k+1)=2moves(k)+1=2*(2<sup>k</sup>-1)+1=2<sup>k+1</sup>-1.证毕。
+## 小结
+- 回溯是一种解决问题的策略，涉及递归及一系列最终导出解的猜测，如果某种猜测行不通，则反向折回，替换猜测，并再次试探完成解决方案;
+- 语法是定义语言的工具，语言是一个符号串集合，使用语法定义语言，经常可以构建直接基于语法的识别算法，语法通常都是递归的，因此可以简明扼要的描述大量语言;
+- 代数表达式语言存在好几种，各有优劣，前缀与后缀表达式难于使用，但是语法简单，还消除了二义性。中缀表达式易于使用，但是需要括号、关联规则与优先级规则等，语法复杂;
+- 数学归纳法与递归有密切的关系，可以用归纳来证明递归算法的正确性。
+- 解决递归类问题的2种方案1.数学归纳法与2.循环不变式。
+# 第7章 栈
+栈具有后进先出的特点，栈与递归存在重要的关系。
+## ADT 栈
+
+
