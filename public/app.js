@@ -12,16 +12,16 @@ function setConnected(connected) {
 }
 
 function connect() {
-    var socket = new SockJS('http://10.162.194.24:8884/endpoint/scadaapp/ability');
+    var socket = new SockJS('http://localhost:8884/endpoint/scadaapp/ability');
     stompClient = Stomp.over(socket);
     stompClient.connect({}, function (frame) {
         setConnected(true);
         console.log('Connected: ' + frame);
-        stompClient.subscribe('/topic/ability/6476013364639170560/6476072944425500672/6476082805670412288/p1.c1/property/asf', function (greeting) {
+        stompClient.subscribe('/topic/ability/6476013364639170560/6476072944425500672/6476082805670412288/p1.c1/tag/t1', function (greeting) {
             //  showGreeting(JSON.parse(greeting.body).content);
             showGreeting(greeting.body);
         });
-        stompClient.subscribe('/app/ability/6476013364639170560/6476072944425500672/6476082805670412288/p1.c1/property/asf', function (greeting) {
+        stompClient.subscribe('/app/ability/6476013364639170560/6476072944425500672/6476082805670412288/p1.c1/tag/t1', function (greeting) {
             //  showGreeting(JSON.parse(greeting.body).content);
             showGreeting(greeting.body);
         });
