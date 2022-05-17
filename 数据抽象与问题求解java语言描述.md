@@ -944,5 +944,72 @@ moves(k+1)=2moves(k)+1=2*(2<sup>k</sup>-1)+1=2<sup>k+1</sup>-1.证毕。
 # 第7章 栈
 栈具有后进先出的特点，栈与递归存在重要的关系。
 ## ADT 栈
+在设计问题的解决方案时，可推演出用于解决问题的抽象数据类型的规范。
+考虑打字场景\<-表示backspace就是退格。
+>abcc\<-ddde\<-\<-\<-ef\<-fg
+
+如何读取输入行并获得正确的输入，设计解决方案时，必须涉及到存储输入行的环节，先根据解决方案定义数据存储上的操作，初始的解决方案可能如下:
+```java
+// read the line, correcting mistake along the way
+while(not end of line){
+    Read a new character ch
+    if(ch is not a '<-'){
+        add ch to adt
+    }else{
+        remove from the adt the item added most recently
+    }
+}
+```
+得到ADT应该包含的操作:
+- 向ADT添加新项;
+- 从ADT中删除最近添加的项;
+需要判断当ADT为空时，继续\<-的后果，结果就是什么也不操作,如果要倒叙展示输入的文字，则还要检索数据项
+```java
+// read the line, correcting mistake along the way
+while(not end of line){
+    Read a new character ch
+    if(ch is not a '<-'){
+        add ch to adt
+    }else if(ADT is not empty){
+        retrieve from adt the item added most recently and put it in ch
+        write ch
+        remove from the adt the item added most recently
+    }else{
+        ignore <-
+    }
+}
+```
+ADT的操作
+- 确定ADT是否为空
+- 从ADT中检索最近加入的项
+这就是栈，栈包含的主要的操作
+- 创建一个空栈
+- 确定栈是否为空
+- 向栈中加入新项;
+- 从栈中删除最近加入的项;
+- 从栈中检索最近加入的项;
+- 从栈中删除所有项;
+栈的伪代码表示
+```java
+// StackItemType is the type of the items stored in the stack
++createStack()
+// create a empty stack
++isEmpty():Boolean {query}
+// determines whether a stack is empty
++push(in newItem:StackItemType) throws StackException
+// adds newItem to the top of the stack, throws StackException if the insertion is not successful
++pop():StackItemType throws StackException
+// retrieves and then removes the top of the stack(the item that was added most recently).
+// throws StackException if the deletion is not successful
++popAll()
+// removes all items from the stack
++peek():StackItemType throws StackException
+// retrieves the top of the stack. that is, peek retrieves the item that was added most recently.
+// retrieves dose not change the stack, throws StackException if the retrieval is not successful
+```
+UML图就忽略了。
+## ADT栈的简单应用
+
+
 
 
