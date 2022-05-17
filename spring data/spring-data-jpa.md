@@ -630,7 +630,7 @@ class Config {
 如果你的应用上下文中存在AuditorAware类型的bean，审计的基础组件会自动使用这个bean来决定当前登录的用户；如果你的ApplicationContext中有多个实现或者多个bean，你可以通过@EnableJpAAuditing的auditorAwareRef属性明确的指定选择使用的AuditorAware实例。
 # JPA仓库
 ## 投影
-Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要一句聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
+Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要依据聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
 ```java
 class Person {
 
@@ -677,7 +677,7 @@ interface PersonSummary {
   }
 }
 ```
-方法调用是，目标实例的address属性被获取并且被包装到一个投影代理里面。投影接口的访问器方法与聚合根的属性访问器完全匹配的投影接口叫做封闭式投影，上面的例子就是封闭式投影。如果你使用封闭式投影，Spring Data可以优化查询执行，因为我们知道所有的属性都会被包装到投影接口代理中，更多的信息，可以看参考文档。
+方法调用时，目标实例的address属性被获取并且被包装到一个投影代理里面。投影接口的访问器方法与聚合根的属性访问器完全匹配的投影接口叫做封闭式投影，上面的例子就是封闭式投影。如果你使用封闭式投影，Spring Data可以优化查询执行，因为我们知道所有的属性都会被包装到投影接口代理中，更多的信息，可以看参考文档。
 不匹配的叫做开放式投影，投影接口的访问器方法必须使用@Value注解标注，如下：
 ```java
 interface NamesOnly {
@@ -736,7 +736,7 @@ interface NamesOnly {
 }
 ```
 ### 基于类的投影
-另一种定义投影的方式是使用DTO，里面包含要被检索的属性，与投影接口的使用方法差不多，区别就是DTO方式不会产生代理，也不支持嵌套的投影，下面是DTO的例子
+另一种定义投影的方式是使用DTO，里面包含要被检索的属性，与投影接口的使用方法差不多，区别就是DTO方式不会产生代理，也不支持嵌套的投影，如果底层存储通过限定要加载的字段的方式优化查询执行，要被加载的字段必须通过构造函数的参数名字定义，下面是投影DTO的例子
 ```java
 class NamesOnly {
 
@@ -768,7 +768,7 @@ interface PersonRepository extends Repository<Person, UUID> {
   <T> Collection<T> findByLastname(String lastname, Class<T> type);
 }
 ```
-这种方式，方法获取聚合根时会自动应用类型投影
+这种方式，方法获取聚合根时会根据传递的Class决定是返回聚合根还是返回投影类型。
 ```java
 void someMethod(PersonRepository people) {
 
@@ -779,6 +779,7 @@ void someMethod(PersonRepository people) {
     people.findByLastname("Matthews", NamesOnly.class);
 }
 ```
+检查 Class 类型的查询参数是否符合动态投影参数的条件。 如果查询的实际返回类型等于 Class 参数的泛型参数类型，则匹配的 Class 参数不可用于查询或 SpEL 表达式中。 如果您想使用 Class 参数作为查询参数，请确保使用不同的泛型参数，例如 Class<?>。
 # 其他注意事项
 ## 在自定义的实现中使用JpaContext
 当环境中有多个EntityManager类型的实例或者有自定义的repository实现时，你需要讲正确的EntityManager注入到repository的实现类中去；你也可以在@PersistenceContext注解中明确的指定EntityManager的名字，或者如果EntityManager是自动注入的，那么使用@Qualifier。从Spring Data JPA 1.9版本后，Spring Data JPA引入了一个叫做JpaContext的类，可以让你通过领域类来获得与其相关的EntityManager。我们假设一个领域类只会被应用中的一个EntityManager实例管理。下面的例子是如何在自定义的repository中使用JpaContext的方法。
