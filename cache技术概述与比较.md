@@ -45,6 +45,7 @@ Graph graph = cache.get(key);
 // Lookup and compute entries that are absent
 Map<Key, Graph> graphs = cache.getAll(keys);
 ```
+
 - 手动异步加载
 - 异步loading
 ### 计算
