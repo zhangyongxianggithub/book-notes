@@ -1009,7 +1009,80 @@ ADT的操作
 ```
 UML图就忽略了。
 ## ADT栈的简单应用
+1. 检查括号匹配
+匹配的条件
+- 每遇到一个}都有前面遇到的{匹配;
+- 达到字符串结尾时，各个{都有相应的匹配;
+伪代码的解决方案如下:
+```java
+aStack.createStack();
+balancedSoFar=true;
+i=0;
+while(balancedSoFar and i \< length of aString){
+    ch=character at position i in aString
+    ++i;
+    // push an open brace
+    if(ch is '{'){
+        aStack.push('{');
+    }
+    // close brace
+    else if(ch is '}'){
+        if(!aStack.isEmpty()){
+            openBrace=aStack.pop();
+        }else{
+            balancedSoFar=false;
+        }
+    }
+}
+if(balancedSoFar and aStack.isEmpty()){
+    aString is balanced braces
+}else{
+    aString dose not have balanced brances;
+}
+```
+更简单的解决方案：跟踪当前未匹配的左大括号的数目。
+防故障编程: 
+2. 识别语言中的字符串
+识别某个字符串是否在下面的语言中
+> L={w$w': w是除$外的字符串，w可能为空，w'=reverse(w)}
 
-
+类似于回文，可以用栈解决下面是伪代码
+```java
+aStack.createStack();
+// push the characters before $, that is the character in w onto the stack
+i=0;
+ch=character at position i in aString
+while(ch is not '$'){
+    aStack.push(ch)
+    ++i;
+    ch=character at position i in aString
+}
+// skip the $
+++i;
+// match the reverse of w
+inLanguage=true;// assume string is in Language
+while(inLanguage and i < length of aString>){
+    ch=character at position i in aString
+    try{
+        stackTop=aStack.pop();
+        if(stackTop equals ch){
+            ++i;//characters match
+        }else{
+            // top of stack is not ch
+            inLanguage=false;
+        }
+    }
+    catch(StackException e){
+        // aStack.pop() failed, aStack is empty(first half of string is shorter than second  half)
+        inLanguage=false;
+    }
+}
+if(inLanguage and aStack.isEmpty()){
+    aString is in language
+}else{
+    aString is not in language;
+}
+```
+## ADT栈的实现
 
 
