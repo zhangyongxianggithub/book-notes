@@ -1084,5 +1084,66 @@ if(inLanguage and aStack.isEmpty()){
 }
 ```
 ## ADT栈的实现
+定义接口规范
+```java
+package com.zyx.java.adt.chapter7;
+public interface StackInterface<T> {
+    /**
+     * determines whether the stack is empty.
+     * Precondition: None
+     * Postcondition: Returns true if the stack is empty otherwise returns
+     * false.
+     * 
+     * @return true or false
+     */
+    boolean isEmpty();
+    
+    /**
+     * removes all the items from the stack.
+     * Precondition: None
+     * Postcondition: Stack is empty.
+     */
+    void popAll();
+    
+    /**
+     * add an item to the top of a stack
+     * Precondition: newItem is the item to be added
+     * Postcondition: If insertion is successful, newItem is on the top of the
+     * stack.
+     * Exception: Some implementations may throw Stackexception when newItem
+     * cannot be placed on the stack.
+     * 
+     * @param newItem
+     * @throws StackException
+     */
+    void push(T newItem) throws StackException;
+    
+    /**
+     * remove the top of a stack.
+     * Precondition: None.
+     * Postcondition: if the stack is not empty, the item that was added most
+     * recently is removed from the stack and returned.
+     * Exception: Throws StackException if the stack is empty.
+     * 
+     * @return
+     * @throws StackException
+     */
+    T pop() throws StackException;
+    
+    /**
+     * retrieves the top of a stack.
+     * Precondition: none.
+     * Postcondition: if the stack is not empty, the item that was added most
+     * recently is returned. the stack ias unchanged.
+     * Exception: Throws StackException if the stack is empty.
+     * 
+     * @return
+     * @throws StackException
+     */
+    T peek() throws StackException;
+    
+}
+```
+1. 基于数组的实现
 
 
