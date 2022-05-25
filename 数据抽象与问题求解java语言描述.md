@@ -1342,5 +1342,79 @@ public class StackListBased<T extends Comparable<T>>
 4. 各种实现的比较
 归根结底，ADT的实现都是基于数组或者基于引用。数组实现有容量限制。
 ## 应用: 代数表达式
+1. 计算后缀表达式
+ADT栈可以非常方便的解决后缀表达式，伪代码如下:
+```java
+for(each character ch in the string){
+    if(ch is an operand){
+        push value that operand ch represents onto stack
+    }else{//ch is an operator named op
+        //evaluate and push the result
+        operand2=pop the top of the stack;
+        operand1=pop the top of the stack;
+        result=operand1 op operand2
+        push result onto stack
+    }
+}
+```
+2. 将中缀表达式转换为后缀表达式
+中缀表达式转换为后缀表达式的3个事实
+- 操作数的先后顺序保持不变;
+- 操作符相对于操作数只向右移；
+- 删除所有小括号;
+收腰任务是如何放置操作符。一种初始的方案为:
+```java
+initialize postfixExp to the null string
+for(each character ch in the infix expression){
+    switch(ch){
+        case ch is an operand:
+           append ch to the end of postfixExp;
+           break;
+        case ch is an operator:
+           store ch until you know where to place it;
+           break;
+        case ch is '(' or ')':
+           discard ch
+           break;
+    }
+}
+```
+>小括号表示的含义是计算子表达式的值，忽略内部细节
 
+考虑小括号、优先级与从左到右关联的中缀表达式的步骤
+- 遇到操作数时，追加到postfixExp后面，后缀表达式操作数的顺序与在中缀表达式中一样；
+- 使'('入栈;
+- 遇到操作符时，若栈为空，操作符入栈，若非空，则使优先级更高的操作符出栈追加到postfixExp后面，遇到(或者优先级更低或者栈空时，停止，使新的操作符入栈，优先级相同，也要出栈，因为这是从左到右的规则;
+- 遇到')'时，操作符出栈追加到postfixExp后，直到遇到匹配的'('为止；
+- 到达字符串尾，将栈的剩余内容追加到postfixExp后面.
+伪代码的解决方案是:
+```java
+initialize postfixExp to the null string
+for(each character ch in the infix expression){
+    switch(ch){
+        case ch is an operand:
+           postfixExp=postfixExp+ch
+           break;
+        case '(': //save '(' on stack
+           aStack.push(ch);
+           break;
+        case ')':// pop stack until matching '('
+           while(top of stack is not '('){
+                postfixExp=postfixExp+aStack.pop();
+           }
+           openParen=aStack.pop();//remove open parenthesis
+           break;
+        case ch is an operator://process stack operators of greater precedence
+           while(!aStack.isEmpty() and top of stack is not '(' and precedence(ch)<=precedence(top of stack)){
+               postfixExp=postfixExp+aStack.pop();
+           }
+           aStack.push(ch);//save new operator
+           break;
+    }
+}
+// append to postfixExp the operators remaining in the stack
+while(!aStack.isEmpty()){
+    postfixExp=postfixExp+aStack.pop();
+}
+```
 
