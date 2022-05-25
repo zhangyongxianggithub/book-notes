@@ -1145,5 +1145,202 @@ public interface StackInterface<T> {
 }
 ```
 1. 基于数组的实现
+```java
+package com.zyx.java.adt.chapter7;
+
+/**
+ * @version 1.0
+ * @name: zhangyongxiang
+ * @author: zhangyongxiang@baidu.com
+ * @date 2022/5/26 02:02
+ * @description:
+ **/
+
+public class StackArrayBased<T> implements StackInterface<T> {
+    private final int MAX_STACK = 50;
+    private T items[];
+    private int top;
+    
+    public StackArrayBased() {
+        items = (T[]) new Object[MAX_STACK];
+        top = -1;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return top < 0;
+    }
+    
+    @Override
+    public boolean isFull() {
+        return top == MAX_STACK - 1;
+    }
+    
+    @Override
+    public void popAll() {
+        top = -1;
+    }
+    
+    @Override
+    public void push(final T newItem) throws StackException {
+        if (!isFull()) {
+            items[++top] = newItem;
+        } else {
+            throw new StackException("stack full");
+        }
+    }
+    
+    @Override
+    public T pop() throws StackException {
+        if (!isEmpty()) {
+            return items[top--];
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+    
+    @Override
+    public T peek() throws StackException {
+        if (!isEmpty()) {
+            return items[top];
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+}
+```
+2. 基于引用的实现
+```java
+package com.zyx.java.adt.chapter7;
+
+import com.zyx.java.adt.chapter5.Node;
+
+/**
+ * @version 1.0
+ * @name: zhangyongxiang
+ * @author: zhangyongxiang@baidu.com
+ * @date 2022/5/26 02:14
+ * @description:
+ **/
+
+public class StackReferenceBased<T extends Comparable<T>>
+        implements StackInterface<T> {
+    
+    private Node<T> top;
+    
+    public StackReferenceBased() {
+        top = null;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return top == null;
+    }
+    
+    @Override
+    public boolean isFull() {
+        return false;
+    }
+    
+    @Override
+    public void popAll() {
+        top = null;
+    }
+    
+    @Override
+    public void push(final T newItem) {
+        top = new Node<>(newItem, top);
+    }
+    
+    @Override
+    public T pop() throws StackException {
+        if (!isEmpty()) {
+            final Node<T> temp = top;
+            top = top.getNext();
+            return temp.getItem();
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+    
+    @Override
+    public T peek() throws StackException {
+        if (!isEmpty()) {
+            return top.getItem();
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+}
+
+```
+3. 使用ADT列表的实现
+```java
+package com.zyx.java.adt.chapter7;
+
+import com.zyx.java.adt.chapter5.LinkedList;
+import com.zyx.java.adt.chapter5.ListInterface;
+
+/**
+ * @version 1.0
+ * @name: zhangyongxiang
+ * @author: zhangyongxiang@baidu.com
+ * @date 2022/5/26 02:21
+ * @description:
+ **/
+
+public class StackListBased<T extends Comparable<T>>
+        implements StackInterface<T> {
+    
+    private ListInterface<T> list;
+    
+    public StackListBased() {
+        list = new LinkedList<>();
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return list.isEmpty();
+    }
+    
+    @Override
+    public boolean isFull() {
+        return false;
+    }
+    
+    @Override
+    public void popAll() {
+        list.removeAll();
+    }
+    
+    @Override
+    public void push(final T newItem) throws StackException {
+        list.add(1, newItem);
+    }
+    
+    @Override
+    public T pop() throws StackException {
+        if (!isEmpty()) {
+            final T temp = list.get(1);
+            list.remove(1);
+            return temp;
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+    
+    @Override
+    public T peek() throws StackException {
+        if (!isEmpty()) {
+            return list.get(1);
+        } else {
+            throw new StackException("stack empty");
+        }
+    }
+}
+```
+4. 各种实现的比较
+归根结底，ADT的实现都是基于数组或者基于引用。数组实现有容量限制。
+## 应用: 代数表达式
 
 
