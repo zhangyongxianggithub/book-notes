@@ -41,3 +41,81 @@ location = /user {
     proxy_pass http://login.example.com;
 }
 ```
+- server_name
+* 语法: server_name name ...;
+* 默认: server_name "";
+* 上下文: server
+设置虚拟服务器的名字，比如
+```conf
+server {
+    server_name example.com www.example.com;
+}
+```
+第一个出现的名字成为主要服务器名字.名字可以包含星号*，*号可以放到名字的开头与结尾
+```conf
+server {
+    server_name example.com *.example.com www.example.*;
+}
+```
+这样的名字叫做通配符名字.
+上面的2个名字可以组合成一个
+```conf
+server {
+    server_name .example.com;
+}
+```
+也可以在名字中使用正则表达式，需要在名字前面放上波浪线~
+```conf
+server {
+    server_name www.example.com ~^www\d+\.example\.com$;
+}
+```
+正则表达式可以包含捕获的内容，可以在后面的指令中使用
+```conf
+server {
+    server_name ~^(www\.)?(.+)$;
+
+    location / {
+        root /sites/$2;
+    }
+}
+
+server {
+    server_name _;
+
+    location / {
+        root /sites/default;
+    }
+}
+```
+在正则表达式中的命名捕获会创建变量，在后面其他的指令中可以使用这个变量。
+```nginx
+server {
+    server_name ~^(www\.)?(?<domain>.+)$;
+
+    location / {
+        root /sites/$domain;
+    }
+}
+
+server {
+    server_name _;
+
+    location / {
+        root /sites/default;
+    }
+}
+```
+如果指令被设置为$hostname，那么就会使用服务器的hostname，可以描述一个空的服务器名字
+```nginx
+server {
+    server_name www.example.com "";
+}
+```
+这样服务器可以处理没有Host头的请求，而不是必须是默认的服务器名字（address::port），这是默认的设置。在0.8.48版本以前，默认使用物理服务器的hostname，通过名字搜索虚拟服务器的时候，如果名字匹配了多个虚拟服务器的名字，比如同时匹配的通配符名字与正则表达式名字，第一个匹配的名字的优先级更高，优先级如下:
+- 精确的名字
+- 以*开始的最长通配符匹配的名字;
+- 以*结尾的最长通配符匹配的名字;
+- 第一个匹配的正则表达式名字.
+
+
