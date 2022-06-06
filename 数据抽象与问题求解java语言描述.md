@@ -1425,4 +1425,16 @@ while(!aStack.isEmpty()){
 ![航班图数据](adtjava/flight-graph.png)
 C1->C2表示C2与C1邻接，称为有向路径，但是C1不是与C2邻接的。
 1. 使用栈的非递归解决方案
-开发使用穷举算法，也就是尝试没种可能的航班。也就是回溯法，深度遍历类似。 
+开发使用穷举算法，也就是尝试没种可能的航班。也就是回溯法，深度遍历类似。就是不断折返。算法的伪代码如下:
+```java
+aStack.createStack();
+aStack.push(originCity);// push origin city onto stack
+while(a sequence of flights from the origin to the destination has not been found){
+    if(you need to backtrack from the city on the top of the stack){
+        temp=aStack.pop();
+    }else{
+        select a destination city C for s flight from the city on the top of the stack;
+        aStack.push(C)
+    }
+}
+```
