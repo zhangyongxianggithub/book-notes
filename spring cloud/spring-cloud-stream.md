@@ -1559,6 +1559,8 @@ spring.cloud.stream.bindings.processData-in-0.consumer.defaultRetryable=false
 ```properties
 spring.cloud.stream.bindings.processData-in-0.consumer.retry-template-name=<your-retry-template-bean-name>
 ```
+## Handling Deserialization errors with DLQ
+
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
