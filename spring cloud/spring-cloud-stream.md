@@ -1560,7 +1560,62 @@ spring.cloud.stream.bindings.processData-in-0.consumer.defaultRetryable=false
 spring.cloud.stream.bindings.processData-in-0.consumer.retry-template-name=<your-retry-template-bean-name>
 ```
 ## Handling Deserialization errors with DLQ
-
+消费者处理器遇到了反序列化异常，我希望SCS的DLQ机制可以处理这种情况，但是实际上没有，我应该怎么办？
+正常的DLQ机制是不会处理这种异常的，这是因为，这种异常发生于消费者的poll()操作完成之前，Spring Kafka项目提供了很多方式来解决这个问题，让我们了解下，假如下面是我们的消费者:
+```java
+@Bean
+public Consumer<String> functionName() {
+    return s -> {
+        System.out.println(s);
+    };
+}
+```
+它只是一个单一的String参数的简单函数，我们想绕过SCS提供的消息转换器，并希望使用native反序列化器。对于字符串类型，这没有多大意义，但对于像 AVRO等更复杂的类型，您必须依赖外部反序列化器，因此希望将转换委托给 Kafka。现在，当消费者收到数据时，让我们假设有一条坏记录导致了反序列化错误，例如，可能有人传递了一个整数而不是字符串。在这种情况下，如果您不在应用程序中执行任何操作，则 excption 将通过链传播，您的应用程序最终将退出。为了处理这个问题，您可以添加一个配置 DefaultErrorHandler 的 ListenerContainerCustomizer @Bean。此 DefaultErrorHandler 配置有 DeadLetterPublishingRecoverer。我们还需要为消费者配置一个 ErrorHandlingDeserializer。这听起来像是很多复杂的事情，但实际上，在这种情况下归结为这 3 个 bean。
+```java
+@Bean
+	public ListenerContainerCustomizer<AbstractMessageListenerContainer<byte[], byte[]>> customizer(DefaultErrorHandler errorHandler) {
+		return (container, dest, group) -> {
+			container.setErrorHandler(errorHandler);
+		};
+	}
+```
+```java
+@Bean
+	public DefaultErrorHandler errorHandler(DeadLetterPublishingRecoverer deadLetterPublishingRecoverer) {
+		return new DefaultErrorHandler(deadLetterPublishingRecoverer);
+	}
+```
+```java
+@Bean
+	public DeadLetterPublishingRecoverer publisher(KafkaOperations bytesTemplate) {
+		return new DeadLetterPublishingRecoverer(bytesTemplate);
+	}
+```
+让我们逐一分析。第一个是采用DefaultErrorHandler的ListenerContainerCustomizer bean。该容器现在使用该特定错误处理程序进行定制。您可以在此处了解有关容器自定义的更多信息。第二个bean是配置了发布到DLT的DefaultErrorHandler。有关DefaultErrorHandler的更多详细信息，请参见此处。第三个bean是最终负责发送到DLT的DeadLetterPublishingRecoverer。默认情况下，DLT主题命名为 ORIGINAL_TOPIC_NAME.DLT。你可以改变它。有关更多详细信息，请参阅文档。我们还需要通过应用程序配置来配置一个 ErrorHandlingDeserializer。ErrorHandlingDeserializer 委托给实际的反序列化器。如果出现错误，它将记录的键/值设置为空，并包含消息的原始字节。然后它在标头中设置异常并将此记录传递给侦听器，然后侦听器调用已注册的错误处理程序。以下是所需的配置：
+```yaml
+spring.cloud.stream:
+  function:
+    definition: functionName
+  bindings:
+    functionName-in-0:
+      group: group-name
+      destination: input-topic
+      consumer:
+       use-native-decoding: true
+  kafka:
+    bindings:
+      functionName-in-0:
+        consumer:
+          enableDlq: true
+          dlqName: dlq-topic
+          dlqProducerProperties:
+            configuration:
+              value.serializer: org.apache.kafka.common.serialization.StringSerializer
+          configuration:
+            value.deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+            spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+```
+我们通过绑定上的配置属性提供 ErrorHandlingDeserializer。 我们还指出要委托的实际反序列化器是 StringDeserializer。请记住，上面的 dlq 属性都与本秘籍中的讨论无关。 它们纯粹是为了解决任何应用程序级别的错误。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
