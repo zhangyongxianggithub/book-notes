@@ -1616,6 +1616,66 @@ spring.cloud.stream:
             spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
 ```
 我们通过绑定上的配置属性提供 ErrorHandlingDeserializer。 我们还指出要委托的实际反序列化器是 StringDeserializer。请记住，上面的 dlq 属性都与本秘籍中的讨论无关。 它们纯粹是为了解决任何应用程序级别的错误。
+## Basic Offset management in Kafka binder
+我们建议你阅读本文档的[Resetting Offsets](https://docs.spring.io/spring-cloud-stream-binder-kafka/docs/current/reference/html/spring-cloud-stream-binder-kafka.html#reset-offsets)来彻底的理解SCS的偏移量管理方案。下面是要点:
+默认情况下，Kafka支持两种类型的偏移量开始消费消息-最早的和最新的。它们的语义从它们的名称中是不言自明的。假设您是第一次运行消费者。如果您没有填写Spring Cloud Stream应用程序中的group.id，那么它将成为匿名消费者。 无论何时，您有一个匿名消费者，在这种情况下，Spring Cloud Stream应用程序默认将从topic分区中latest可用偏移量开始消费。另一方面，如果您明确指定group.id，则默认情况下，Spring Cloud Stream应用程序将从topic分区中earliest可用的偏移量开始。在上述两种情况下（具有显式组和匿名组的消费者），可以通过使用属性`spring.cloud.stream.kafka.bindings.<binding-name>.consumer.startOffset`并将其设置为earliest或latest。现在，假设您之前已经运行了消费者，现在再次启动它。在这种情况下，上述情况中的起始偏移量语义不适用，因为消费者找到了消费者组之前已经提交的偏移量（在匿名消费者的情况下，虽然应用程序没有提供group.id，但绑定器将自动为您生成一个）。它只是从最后提交的偏移量开始。即使您提供了startOffset值也是这样的。
+但是，您可以使用resetOffsets属性覆盖消费者从上次提交的偏移量开始消费的这种默认行为。为此，请将属性`spring.cloud.stream.kafka.bindings.<binding-name>.consumer.resetOffsets`设置为true（默认为 false）。然后确保提供startOffset值（最早或最晚）。当您这样做然后启动消费者应用程序时，每次启动时，它都会像第一次启动一样启动，并忽略分区的任何已提交偏移量。
+## Seeking to arbitrary offsets in Kafka
+使用Kafka binder，我知道它可以将偏移量设置为earliest或latest，但我需要将偏移量定位到中间，即可以设置为任意偏移量。有没有办法使用Spring Cloud Stream Kafka binder来实现这一点? 之前我们看到了Kafka binder如何让您处理基本的偏移管理。默认情况下，binder不允许您会退到任意偏移量，至少通过我们上面说的机制是实现不了的。但是，binder提供了一些低级策略机制来实现此用例。 让我们来探索一下。首先，当您想要重置为除最早或最新之外的任意偏移量时，请确保将resetOffsets配置保留为其默认值，配置为任何值都是错误的。 然后你必须提供一个KafkaBindingRebalanceListener类型的自定义bean，它将被注入到所有消费者绑定中。它是一个带有一些默认方法的接口，但这里是我们感兴趣的方法：
+```java
+/**
+	 * Invoked when partitions are initially assigned or after a rebalance. Applications
+	 * might only want to perform seek operations on an initial assignment. While the
+	 * 'initial' argument is true for each thread (when concurrency is greater than 1),
+	 * implementations should keep track of exactly which partitions have been sought.
+	 * There is a race in that a rebalance could occur during startup and so a topic/
+	 * partition that has been sought on one thread may be re-assigned to another
+	 * thread and you may not wish to re-seek it at that time.
+	 * @param bindingName the name of the binding.
+	 * @param consumer the consumer.
+	 * @param partitions the partitions.
+	 * @param initial true if this is the initial assignment on the current thread.
+	 */
+	default void onPartitionsAssigned(String bindingName, Consumer<?, ?> consumer,
+			Collection<TopicPartition> partitions, boolean initial) {
+		// do nothing
+	}
+```
+让我们研究下细节，本质上，每次在主题分区的初始分配期间或重新平衡之后都会调用此方法。为了更好的说明，让我们假设我们的主题是foo并且它有4个分区。 最初，我们只在组中启动一个消费者，这个消费者将从所有分区中消费。当消费者第一次启动时，所有4个分区都被初始分配到当前的消费者。但是，我们不想让分区以默认值（最早）开始消费（因为我们明确定义了一个组），而是对于每个分区，我们希望它们从任意偏移量开始消费。 想象一下，您有一个业务案例要从某些偏移量开始使用，如下所示。
+>Partition   start offset
+>
+>0           1000
+1           2000
+2           2000
+3           1000
+
+可以通过实现接口中的方法实现:
+```java
+@Override
+public void onPartitionsAssigned(String bindingName, Consumer<?, ?> consumer, Collection<TopicPartition> partitions, boolean initial) {
+
+    Map<TopicPartition, Long> topicPartitionOffset = new HashMap<>();
+    topicPartitionOffset.put(new TopicPartition("foo", 0), 1000L);
+    topicPartitionOffset.put(new TopicPartition("foo", 1), 2000L);
+    topicPartitionOffset.put(new TopicPartition("foo", 2), 2000L);
+    topicPartitionOffset.put(new TopicPartition("foo", 3), 1000L);
+
+    if (initial) {
+        partitions.forEach(tp -> {
+            if (topicPartitionOffset.containsKey(tp)) {
+                final Long offset = topicPartitionOffset.get(tp);
+                try {
+                    consumer.seek(tp, offset);
+                }
+                catch (Exception e) {
+                    // Handle excpetions carefully.
+                }
+            }
+        });
+    }
+}
+```
+这只是一个初步的实现。 现实世界的用例比这复杂得多，您需要相应地进行调整，但这肯定会给您一个基本的草图。 当消费者移动偏移量失败时，它可能会抛出一些运行时异常，您需要决定在这些情况下该怎么做。当我们添加第二个消费者时，将发生重新平衡并且一些分区将被重新分配。假设新的消费者获得分区2和3。当这个新的Spring Cloud Stream消费者调用这个onPartitionsAssigned方法时，它将看到分区2和3的初始分配。因此，它将根据初始参数的条件检查执行定位操作，对于第一个消费者，它现在只有分区0和1，对于这个消费者来说，这只是一个重新平衡事件，不被视为初始分配（初始条件已经改变）。 因此，由于对初始参数的条件检查，它不会重新定位偏移量。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
