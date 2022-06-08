@@ -1676,6 +1676,58 @@ public void onPartitionsAssigned(String bindingName, Consumer<?, ?> consumer, Co
 }
 ```
 这只是一个初步的实现。 现实世界的用例比这复杂得多，您需要相应地进行调整，但这肯定会给您一个基本的草图。 当消费者移动偏移量失败时，它可能会抛出一些运行时异常，您需要决定在这些情况下该怎么做。当我们添加第二个消费者时，将发生重新平衡并且一些分区将被重新分配。假设新的消费者获得分区2和3。当这个新的Spring Cloud Stream消费者调用这个onPartitionsAssigned方法时，它将看到分区2和3的初始分配。因此，它将根据初始参数的条件检查执行定位操作，对于第一个消费者，它现在只有分区0和1，对于这个消费者来说，这只是一个重新平衡事件，不被视为初始分配（初始条件已经改变）。 因此，由于对初始参数的条件检查，它不会重新定位偏移量。
+## How do I mannually acknowlege using Kafka bidner
+我想要在我的消费者中自行acknowledge消息该怎么办呢？默认情况下，Kafka bidner委托给Spring for Apache Kafka项目执行提交相关的操作设置，Spring Kafka中默认的ackMode是batch，这里可以看到更多的信息[committing-offsets](https://docs.spring.io/spring-kafka/docs/current/reference/html/#committing-offsets)，在某些情况下，您希望禁用此默认提交行为并依赖手动提交。 以下步骤允许您执行此操作。将属性 	`spring.cloud.stream.kafka.bindings.<binding-name>.consumer.ackMode`设置为MANUAL或MANUAL_IMMEDIATE。 当这样设置时，消费者方法收到的消息中将出现一个名为 kafka_acknowledgment（来自 KafkaHeaders.ACKNOWLEDGMENT）的标头假如下面的消费者方法:
+```java
+@Bean
+public Consumer<Message<String>> myConsumer() {
+    return msg -> {
+        Acknowledgment acknowledgment = message.getHeaders().get(KafkaHeaders.ACKNOWLEDGMENT, Acknowledgment.class);
+        if (acknowledgment != null) {
+         System.out.println("Acknowledgment provided");
+         acknowledgment.acknowledge();
+        }
+    };
+}
+```
+## How do I override the default binding names in Spring Cloud Stream
+Spring Cloud Stream基于函数定义和签名创建默认绑定，但是如何将这些覆盖为更友好的领域名字？假如下面是你的函数签名
+```java
+@Bean
+public Function<String, String> uppercase(){
+...
+}
+```
+默认情况下，SCS将会创建下面的绑定
+1. uppercase-in-0
+2. uppercase-out-0
+你可以通过下面的属性覆盖绑定的默认设置
+```properties
+spring.cloud.stream.function.bindings.uppercase-in-0=my-transformer-in
+spring.cloud.stream.function.bindings.uppercase-out-0=my-transformer-out
+```
+设置完后，所有的binding相关的属性必须使用新的名字`my-transformer-in`与`my-transformer-out`，下面是一个Kafka Stream的多个输入的例子
+```java
+@Bean
+public BiFunction<KStream<String, Order>, KTable<String, Account>, KStream<String, EnrichedOrder>> processOrder() {
+...
+}
+```
+默认情况下，SCS将会创建3个不同的binding
+1. processOrder-in-0;
+2. processOrder-in-1;
+3. processOrder-out-0;
+每次要在这些绑定上设置一些配置时，都必须使用这些绑定名称。 您不喜欢这样，并且想要使用对域更友好且更易读的绑定名称，例如:
+1. orders
+2. accounts
+3. enrichedOrders
+你可以通过下面的设置完成
+```properties
+spring.cloud.stream.function.bindings.processOrder-in-0=orders
+spring.cloud.stream.function.bindings.processOrder-in-1=accounts
+spring.cloud.stream.function.bindings.processOrder-out-0=enrichedOrders
+```
+一旦你这样做了，它会覆盖默认的绑定名称，并且你想在它们上设置的任何属性都必须在这些新的绑定名称上。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
