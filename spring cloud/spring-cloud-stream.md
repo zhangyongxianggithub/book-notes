@@ -1728,6 +1728,38 @@ spring.cloud.stream.function.bindings.processOrder-in-1=accounts
 spring.cloud.stream.function.bindings.processOrder-out-0=enrichedOrders
 ```
 一旦你这样做了，它会覆盖默认的绑定名称，并且你想在它们上设置的任何属性都必须在这些新的绑定名称上。
+## How do I send a message key as part of my record?
+您通常需要发送关联数据结构（如地图）作为具有键和值的记录。 Spring Cloud Stream 允许您以简单的方式做到这一点。 以下是执行此操作的基本蓝图，但您可能希望使其适应您的特定用例。这是示例生产者方法（又名供应商）。
+```java
+@Bean
+public Supplier<Message<String>> supplier() {
+    return () -> MessageBuilder.withPayload("foo").setHeader(KafkaHeaders.MESSAGE_KEY, "my-foo").build();
+}
+```
+这是一个简单的函数，它发送带有字符串有效负载的消息，但也带有一个键。 请注意，我们使用 KafkaHeaders.MESSAGE_KEY 将密钥设置为消息头。如果要从默认的 kafka_messageKey 更改密钥，那么在配置中，我们需要指定此属性:
+```properties
+spring.cloud.stream.kafka.bindings.supplier-out-0.producer.messageKeyExpression=headers['my-special-key']
+```
+请注意，我们使用的binding名字是supplier-out-0，因为这是我们的函数名字，请根据你的情况更新.
+## How do I use native serlializer and deserializer instead of message conversion done by Spring Cloud Stream
+我不想在 Spring Cloud Stream 中使用消息转换器，而是想在 Kafka 中使用本机 Serializer 和 Deserializer。 默认情况下，Spring Cloud Stream 使用其内部内置的消息转换器处理此转换。 我怎样才能绕过这个并将责任委托给 Kafka？这真的很容易做到。您所要做的就是提供以下属性来启用native序列化。`spring.cloud.stream.kafka.bindings.<binding-name>.producer.useNativeEncoding: true`，然后，您还需要设置 serailzers。 有几种方法可以做到这一点。
+```properties
+spring.cloud.stream.kafka.bindings.<binding-name>.producer.configurarion.key.serializer: org.apache.kafka.common.serialization.StringSerializer
+spring.cloud.stream.kafka.bindings.<binding-name>.producer.configurarion.value.serializer: org.apache.kafka.common.serialization.StringSerializer
+```
+或者使用binder配置
+```properties
+spring.cloud.stream.kafka.binder.configurarion.key.serializer: org.apache.kafka.common.serialization.StringSerializer
+spring.cloud.stream.kafka.binder.configurarion.value.serializer: org.apache.kafka.common.serialization.StringSerializer
+```
+当使用binder的方式时，配置对所有的binding都是有效的，binding级别的设置只对当前的binding有效，在反序列化端，你只需要提供下面配置中的反序列化器
+```properties
+spring.cloud.stream.kafka.bindings.<binding-name>.consumer.configurarion.key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+spring.cloud.stream.kafka.bindings.<binding-name>.producer.configurarion.value.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+```
+你也可以在binder级别来设置它们，你可以设置强制使用native解码器的属性
+`spring.cloud.stream.kafka.bindings.<binding-name>.consumer.useNativeDecoding: true`但是，对于 Kafka binder，这是不必要的，因为当它到达 binder 时，Kafka 已经使用配置的反序列化器对它们进行反序列化。
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
