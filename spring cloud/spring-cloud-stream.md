@@ -1489,7 +1489,76 @@ spring:
 ```
 你可以根据需要添加实例，Kafka会重新平衡分区分配，如果实例数（instanceCount*concurrency）超过分区数，那么部分消费者处于空闲状态。
 # kafka Tips, Tricks and Recipes
-
+## Simple DLQ with Kafka
+作为一个开发者，我想写一个消费kafka Topic的消费者应用，然而，如果消费的过程中发生了错误，我不想要应用完全停止消费，我想要把处理错误的消息记录发送到DLT后继续处理后续的消息记录。一种解决方案是使用SCS的DLQ机制，出于讨论的目的，让我们假设以下是我们的消费者实现。
+```java
+@Bean
+public Consumer<byte[]> processData() {
+  return s -> {
+     throw new RuntimeException();
+  };
+```
+这是一个非常简单的函数，它会为其处理的所有记录引发异常，但您可以使用此函数并将其扩展到任何其他类似情况。为了发送错误的记录到DLT，我们需要提供下面的配置:
+```yaml
+spring.cloud.stream:
+  bindings:
+   processData-in-0:
+     group: my-group
+     destination: input-topic
+ kafka:
+   bindings:
+     processData-in-0:
+       consumer:
+         enableDlq: true
+         dlqName: input-topic-dlq
+```
+为了激活DLQ，消费者应用必须提供group。匿名消费者不能使用DLQ功能。我们还需要通过将Kafka消费者绑定上的enableDLQ属性设置为true来启用DLQ。最后，我们可以可选的指定DLT的名字，这是通过Kafka消费者绑定上的dlqName属性实现的，如果不指定这个场景默认使用input-topic-dlq.my-group.error作为DLT的topic。请注意，在上面提供的消费者例子中，负载的类型是byte[]，默认情况下，Kafka Binder中的DLQ生产者能处理的默认的负载是byte[\]类型数据，如果不是byte[]类型，我们需要提供合适的序列化器配置，比如，我们重写消费者实现如下:
+```java
+@Bean
+public Consumer<String> processData() {
+  return s -> {
+     throw new RuntimeException();
+  };
+}
+```
+现在，我们需要告诉Spring Cloud Stream，我们希望在写入DLT时如何序列化数据。 这是此场景的修改配置:
+```yaml
+spring.cloud.stream:
+  bindings:
+   processData-in-0:
+     group: my-group
+     destination: input-topic
+ kafka:
+   bindings:
+     processData-in-0:
+       consumer:
+         enableDlq: true
+         dlqName: input-topic-dlq
+         dlqProducerProperties:
+           configuration:
+             value.serializer: org.apache.kafka.common.serialization.StringSerializer
+```
+## DLQ with Advanced Retry Options
+这类似于上面的方法，但作为开发人员，我想配置重试的处理方式。如果你按照上面的方法进行操作，当遇到处理错误时，会使用KafkaBinder内部默认的重试机制，默认情况下，binder最多尝试处理3次，第一次处理失败后的延迟是1秒，每次延迟的回退时间是2.0倍数递增直到最大的10秒，你可以更改所有这些配置，如下所示:
+```properties
+spring.cloud.stream.bindings.processData-in-0.consumer.maxAtttempts
+spring.cloud.stream.bindings.processData-in-0.consumer.backOffInitialInterval
+spring.cloud.stream.bindings.processData-in-0.consumer.backOffMultipler
+spring.cloud.stream.bindings.processData-in-0.consumer.backOffMaxInterval
+```
+如果需要，您还可以通过提供布尔值映射来提供可重试异常的列表。 例如，
+```properties
+spring.cloud.stream.bindings.processData-in-0.consumer.retryableExceptions.java.lang.IllegalStateException=true
+spring.cloud.stream.bindings.processData-in-0.consumer.retryableExceptions.java.lang.IllegalArgumentException=false
+```
+默认情况下，将重试上面配置中未列出的任何异常。如果需要改更默认的行为，那么您可以通过以下方式变更:
+```properties
+spring.cloud.stream.bindings.processData-in-0.consumer.defaultRetryable=false
+```
+您还可以提供自己的 RetryTemplate 并将其标记为 @StreamRetryTemplate，它将被 binder 扫描和使用。 当您需要更复杂的重试策略和策略时，这很有用。如果您有多个 @StreamRetryTemplate bean，那么您可以使用该属性指定您的绑定需要哪一个:
+```properties
+spring.cloud.stream.bindings.processData-in-0.consumer.retry-template-name=<your-retry-template-bean-name>
+```
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
