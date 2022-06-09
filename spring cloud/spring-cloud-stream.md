@@ -1761,6 +1761,173 @@ spring.cloud.stream.kafka.bindings.<binding-name>.producer.configurarion.value.d
 你也可以在binder级别来设置它们，你可以设置强制使用native解码器的属性
 `spring.cloud.stream.kafka.bindings.<binding-name>.consumer.useNativeDecoding: true`但是，对于 Kafka binder，这是不必要的，因为当它到达 binder 时，Kafka 已经使用配置的反序列化器对它们进行反序列化。
 ## explain how offset resetting work in kafka stream binder
+默认情况下，Kafka Stream Binder生成的新的消费者始终从earliest偏移量开始消费，有时候，有的应用需要从latest开始消费，而这是可以做到的。想象下面的场景
+```java
+@Bean
+public BiConsumer<KStream<Object, Object>, KTable<Object, Object>> myBiConsumer{
+    (s, t) -> s.join(t, ...)
+    ...
+}
+```
+我们有一个需要两个输入绑定的 BiConsumer bean。 在这种情况下，第一个绑定用于 KStream，第二个绑定用于 KTable。 第一次运行此应用程序时，默认情况下，两个绑定都从最早的偏移量开始。 由于某些要求，我想从最新的偏移量开始怎么办？ 您可以通过启用以下属性来做到这一点。
+```properties
+spring.cloud.stream.kafka.streams.bindings.myBiConsumer-in-0.consumer.startOffset: latest
+spring.cloud.stream.kafka.streams.bindings.myBiConsumer-in-1.consumer.startOffset: latest
+```
+如果您只希望一个绑定从最新的偏移量开始，而另一个绑定从默认最早的偏移量开始，则将后者绑定从配置中排除。请记住，一旦存在已提交的偏移量，这些设置就不会被兑现，并且以提交的偏移量优先。
+## Keeping track of successful sending of records (producing) in Kafka
+我有一个 Kafka 生产者应用程序，我想跟踪我所有成功的 sendings。让我们假设我们在应用程序中有以下supplier.
+```java
+@Bean
+	public Supplier<Message<String>> supplier() {
+		return () -> MessageBuilder.withPayload("foo").setHeader(KafkaHeaders.MESSAGE_KEY, "my-foo").build();
+	}
+```
+然后，我们需要定义一个新的MessageChannel类型的bean来获取所有的成功发送的信息
+```java
+@Bean
+	public MessageChannel fooRecordChannel() {
+		return new DirectChannel();
+	}
+```
+然后，设置下面的属性`spring.cloud.stream.kafka.bindings.supplier-out-0.producer.recordMetadataChannel: fooRecordChannel`此时此刻，发送相关的信息会被发送到fooRecordChannel，你可以写一个想下面这样的IntegrationFlow:
+```java
+@Bean
+public IntegrationFlow integrationFlow() {
+    return f -> f.channel("fooRecordChannel")
+                 .handle((payload, messageHeaders) -> payload);
+}
+```
+在 handle 方法中，有效负载是发送到 Kafka 的内容，并且消息头包含一个名为 kafka_recordMetadata 的特殊键。 它的值是一个 RecordMetadata，其中包含有关主题分区、当前偏移量等信息。
+## Adding custom header mapper in Kafka
+我有一个 Kafka 生产者应用程序，它设置了一些标头，但它们在消费者应用程序中丢失了。 这是为什么？正常情况下，header都能正常接收，假如你有如下的生产者:
+```java
+@Bean
+public Supplier<Message<String>> supply() {
+    return () -> MessageBuilder.withPayload("foo").setHeader("foo", "bar").build();
+}
+```
+在消费者这里，你是可以看到foo头信息的如下:
+```java
+@Bean
+public Consumer<Message<String>> consume() {
+    return s -> {
+        final String foo = (String)s.getHeaders().get("foo");
+        System.out.println(foo);
+    };
+}
+```
+如果你在应用🀄️提供了自定义的header mapper，那么就看得不到头信息了，因为mapper是空的，如下:
+```java
+@Bean
+public KafkaHeaderMapper kafkaBinderHeaderMapper() {
+    return new KafkaHeaderMapper() {
+        @Override
+        public void fromHeaders(MessageHeaders headers, Headers target) {
+
+        }
+
+        @Override
+        public void toHeaders(Headers source, Map<String, Object> target) {
+
+        }
+    };
+}
+```
+很有可能，您可能在这些 KafkaHeaderMapper 方法中有一些逻辑。 您需要以下内容来填充 foo 标头。
+```java
+@Bean
+public KafkaHeaderMapper kafkaBinderHeaderMapper() {
+    return new KafkaHeaderMapper() {
+        @Override
+        public void fromHeaders(MessageHeaders headers, Headers target) {
+            final String foo = (String) headers.get("foo");
+            target.add("foo", foo.getBytes());
+        }
+
+        @Override
+        public void toHeaders(Headers source, Map<String, Object> target) {
+            final Header foo = source.lastHeader("foo");
+			target.put("foo", new String(foo.value()));
+        }
+    }
+
+```
+在 Spring Cloud Stream 中，id 标头是一个特殊的标头，但某些应用程序可能希望消息中含有特殊的自定义 id 标头 - 例如 custom-id 或 ID 或 Id标头等。 第一个（custom-id）将在没有任何自定义标头映射器的情况下从生产者传播到消费者。 但是，如果您使用框架保留 id 标头的变体相关的标头例如 ID、Id、iD 等，那么您将遇到框架内部的问题。 有关此用例的更多上下文，请参阅此 StackOverflow 线程。 在这种情况下，您必须使用自定义 KafkaHeaderMapper 来映射区分大小写的 id 标头。 例如，假设您有以下生产者。
+```java
+@Bean
+public Supplier<Message<String>> supply() {
+    return () -> MessageBuilder.withPayload("foo").setHeader("Id", "my-id").build();
+}
+```
+上面的标头 ID 将从消费端消失，因为它与框架 ID 标头冲突。 您可以提供自定义 KafkaHeaderMapper 来解决此问题。
+```java
+@Bean
+public KafkaHeaderMapper kafkaBinderHeaderMapper1() {
+    return new KafkaHeaderMapper() {
+        @Override
+        public void fromHeaders(MessageHeaders headers, Headers target) {
+            final String myId = (String) headers.get("Id");
+			target.add("Id", myId.getBytes());
+        }
+
+        @Override
+        public void toHeaders(Headers source, Map<String, Object> target) {
+            final Header Id = source.lastHeader("Id");
+			target.put("Id", new String(Id.value()));
+        }
+    };
+}
+```
+## Producing to multiple topics in transaction
+如何为多个 Kafka 主题生成事务消息? 在 Kafka binder中对事务使用事务支持，然后提供一个AfterRollbackProcessor对象。 为了生成消息到多个主题，请使用 StreamBridge API。以下是为此的代码片段：
+```java
+@Autowired
+StreamBridge bridge;
+
+@Bean
+Consumer<String> input() {
+    return str -> {
+        System.out.println(str);
+        this.bridge.send("left", str.toUpperCase());
+        this.bridge.send("right", str.toLowerCase());
+        if (str.equals("Fail")) {
+            throw new RuntimeException("test");
+        }
+    };
+}
+
+@Bean
+ListenerContainerCustomizer<AbstractMessageListenerContainer<?, ?>> customizer(BinderFactory binders) {
+    return (container, dest, group) -> {
+        ProducerFactory<byte[], byte[]> pf = ((KafkaMessageChannelBinder) binders.getBinder(null,
+                MessageChannel.class)).getTransactionalProducerFactory();
+        KafkaTemplate<byte[], byte[]> template = new KafkaTemplate<>(pf);
+        DefaultAfterRollbackProcessor rollbackProcessor = rollbackProcessor(template);
+        container.setAfterRollbackProcessor(rollbackProcessor);
+    };
+}
+
+DefaultAfterRollbackProcessor rollbackProcessor(KafkaTemplate<byte[], byte[]> template) {
+    return new DefaultAfterRollbackProcessor<>(
+            new DeadLetterPublishingRecoverer(template), new FixedBackOff(2000L, 2L), template, true);
+}
+
+```
+需要的配置如下:
+```properties
+spring.cloud.stream.kafka.binder.transaction.transaction-id-prefix: tx-
+spring.cloud.stream.kafka.binder.required-acks=all
+spring.cloud.stream.bindings.input-in-0.group=foo
+spring.cloud.stream.bindings.input-in-0.destination=input
+spring.cloud.stream.bindings.left.destination=left
+spring.cloud.stream.bindings.right.destination=right
+
+spring.cloud.stream.kafka.bindings.input-in-0.consumer.maxAttempts=1
+```
+为了测试，可以使用下面的代码:
+```java
+```
 
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
