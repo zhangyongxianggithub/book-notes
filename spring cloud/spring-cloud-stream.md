@@ -1760,6 +1760,8 @@ spring.cloud.stream.kafka.bindings.<binding-name>.producer.configurarion.value.d
 ```
 你也可以在binder级别来设置它们，你可以设置强制使用native解码器的属性
 `spring.cloud.stream.kafka.bindings.<binding-name>.consumer.useNativeDecoding: true`但是，对于 Kafka binder，这是不必要的，因为当它到达 binder 时，Kafka 已经使用配置的反序列化器对它们进行反序列化。
+## explain how offset resetting work in kafka stream binder
+
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
