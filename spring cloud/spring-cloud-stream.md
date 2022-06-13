@@ -1927,8 +1927,23 @@ spring.cloud.stream.kafka.bindings.input-in-0.consumer.maxAttempts=1
 ```
 为了测试，可以使用下面的代码:
 ```java
+@Bean
+public ApplicationRunner runner(KafkaTemplate<byte[], byte[]> template) {
+    return args -> {
+        System.in.read();
+        template.send("input", "Fail".getBytes());
+        template.send("input", "Good".getBytes());
+    };
+}
 ```
-
+需要注意的点，请确保您在应用程序配置上没有任何 DLQ 设置，因为我们手动配置 DLT（默认情况下，它将基于初始消费者功能发布到名为 input.DLT 的主题）。 此外，将消费者绑定的 maxAttempts 重置为 1，以避免绑定器重试。 在上面的示例中，总共最多尝试 3 次（初始尝试 + FixedBackoff 中的 2 次尝试）。有关如何测试此代码的更多详细信息，请参阅 StackOverflow 线程。 如果您使用 Spring Cloud Stream 通过添加更多消费者函数来对其进行测试，请确保将消费者绑定上的隔离级别设置为已提交读。
+## Pitfalls to avoid when running multiple pollable consumers
+如何运行可轮询消费者的多个实例并为每个实例生成唯一的 client.id？假如我有如下的定义:
+```properties
+spring.cloud.stream.pollable-source: foo
+spring.cloud.stream.bindings.foo-in-0.group: my-group
+```
+当运行应用程序时，Kafka消费者会自动生成client.id(有点类似于consumer-my-group-1).对于要运行的应用的每个实例来说，client.id的值是一样的，这可能会造成一些不可预料的异常。为了解决这个问题，你可以添加如下的属性`spring.cloud.stream.kafka.bindings.foo-in-0.consumer.configuration.client.id=${client.id}`
 # Spring Cloud Alibaba RocketMQ Binder
 RocketMQ Binder的实现依赖RocketMQ-Spring框架，它是RocketMQ与Spring Boot的整合框架，主要提供了3个特性：
 - 使用RocketMQTemplate来统一发送消息，包括同步、异步与事务消息;
