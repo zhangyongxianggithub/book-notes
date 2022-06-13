@@ -1438,5 +1438,98 @@ while(a sequence of flights from the origin to the destination has not been foun
     }
 }
 ```
+while循环的不变式是`栈包含从栈底城市出发到栈顶城市的有向路径`，已经访问过的城市无序再次访问，因为有2种情况
+- 可能是一个loop，那么可以忽略loop,直接访问;
+- 当前访问的节点的下游路径都已经尝试过，不能到达目的地，无序再次尝试;
+所以需要对访问过的节点做标记,新的算法如下:
+```java
+aStack.createStack();
+clear marks on all cities
+aStack.push(originCity);// push origin city onto stack
+mark the origin as visited
+while(a sequence of flights from the origin to the destination has not been found){
+    if(no flights exist from the city on the top of the stack to unvisited cities){
+        temp=aStack.pop();
+    }else{
+        select a destination city C for s flight from the city on the top of the stack;
+        aStack.push(C);
+        mark C as visisted;
+    }
+}
+```
+判断循环的终止条件
+```java
++searchS(in originCity: city, in  destinationCity:city)
+// searches for a sequence of flights from originCity to destinationCity
+aStack.createStack();
+clear marks on all cities
+aStack.push(originCity);// push origin city onto stack
+mark the origin as visited
+while(!aStack().isEmpty() and destination city is not at the top of the stack){
+    if(no flights exist from the city on the top of the stack to unvisited cities){
+        temp=aStack.pop();
+    }else{
+        select a destination city C for s flight from the city on the top of the stack;
+        aStack.push(C);
+        mark C as visisted;
+    }
+}
+return !aStack.isEmpty();
+```
+可以将航班图抽象为一个ADT，这个ADT的操作有：将数据放入航班图、插入一个城市的临接城市、显示航班图、显示所有城市的列表、显示给定城市的所有临接城市、查找出发城市到目的城市的路径等。UML表示如下:
++createFlightMap();
+// creates an empty flight map
++readFlightMap(in cityFileName:string, in flightFileName:string )
+// reads flight information into the flight map
++displayFlightMap() {query}
+// display flight information
++displayAllCities() {query}
+// displays the names of all cities that HPAir serves
++displayAdjacentCities(in aCity:City) {query}
+// display all cities that are adjacent to a given city
++markVisisted(in aCity:City)
+// marks a city as visited
++unvisitAll()
+// clears marks on all cities
++isVisited(in aCity:City):boolean {query}
+// determines whether a city was visited
++insertAdjacent(in aCity:City, in asjCity: City)
+// insert a city adjacent to another city in a flight map
++getNextCity(in fromCity:City, out nextCity:City):boolean
+// returns the next unvisited city, if any, that is adjacent to a given city, returns true if an unvisited adjacent city was found, false otherwise
++isPath(in originCity:City, in destinationCity:City):boolean
+// determines whether a sequence of flights exists between two cities
+下面的java方法使用searchS算法实现isPath，使用Map存储航班图
+```java
+public boolean isPath(City originCity, City destinationCity){
+/**
+ * determines whether a sequence of flights between two cities exists.Nonrecursive stack version.
+ * Precondition: originCity and destinationCity are the origin and destination cities, respectively.
+ * Postcondition: return true if originCity to desitnationCity, otherwise returns false. cities visited during the
+ * search are marked as visited in th flight map.
+ * implementation notes: uses a stack for the cities of a potential path. calls unvisitAll, markVisited, and getNextCity
+ */
+ StackReferenceBased stack=new StackReferenceBased();
+ City topCity, nextCity;
+ stack.push(originCity);
+ markVisited(originCity);
+ topCity=stack.peek();
+ while(!stack.isEmpty()&&topCity.compareTo(destinationCity)!=0){
+     // loop invariant: stack contains a directed path from the origin city at the bottom of the stack to the city at the top of the stack
+     // find an unvisited city adjacent to the city on the top if the stack
+     nextCity=getNextCity(topCity);
+     if(nextCity==null){
+         stack.pop();
+     }else{
+         stack.push(nextCity);
+         markVisited(nextCity);
+     }
+      topCity=stack.peek();
+ }
+ return !stack.isEmpty();
+}
+```
+2. 递归解决方案
+
 
 
