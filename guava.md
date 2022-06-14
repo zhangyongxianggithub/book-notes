@@ -41,7 +41,7 @@ public static final ImmutableSet<Color> GOOGLE_COLORS =
        .add(new Color(0, 191, 255))
        .build();
 ```
-除了排序集合，元素迭代的顺序是构建的顺序。copyOf方法比你想的更智能。在数据安全的情况下，ImmutableXXX.copyOf不会拷贝数据，具体的细节未指定，但是内部实现是很智能的，比如:
+除了排序集合，元素迭代的顺序是构建的顺序。copyOf方法比你想的更智能。当不需要拷贝数据的时候，ImmutableXXX.copyOf会尝试不拷贝数据，具体的细节未指定，但是内部实现是很智能的，比如:
 ```java
 ImmutableSet<String> foobar = ImmutableSet.of("foo", "bar", "baz");
 thingamajig(foobar);
@@ -51,4 +51,25 @@ void thingamajig(Collection<String> collection) {
    ...
 }
 ```
-在这段代码中，ImmutableList.copyOf(foobar) 将足够聪明，只返回 foobar.asList()，这是 ImmutableSet 的常量时间视图。
+在这段代码中，ImmutableList.copyOf(foobar)足够智能只返回 foobar.asList()，ImmutableSet返回list视图只需要花费常量时间。作为一般的启发式方法，ImmutableXXX.copyOf(ImmutableCollection)会试图避免线性拷贝，需要的条件是:
+- 是否可以直接使用底层数据结构，比如ImmutableSet.copyOf(ImmutableList)就不行，需要经过处理;
+- 不会造成内存泄漏，比如，如果你有一个集合`ImmutableList<String> hugeList`，并且做了如下操作`ImmutableList.copyOf(hugeList.subList(0, 10))`，此时会执行显式复制，以避免意外持有不在hugeList中的引用;
+- 不会改变语义，因此 ImmutableSet.copyOf(myImmutableSortedSet) 将执行显式复制，因为 ImmutableSet 使用的 hashCode() 和 equals 与 ImmutableSortedSet 基于比较器的行为具有不同的语义。
+这些都会帮助提升性能。所有的不可变几何都提供了asList()方法会得到ImmutableList视图，所以，如果你有一个`ImmutableSortedSet`，通过`sortedSet.asList().get(k)`你可以得到第k个最小的元素。返回的 ImmutableList 经常——不总是，但经常——一个常量开销视图，而不是显式副本。 也就是说，它通常比普通的 List 更聪明——例如，它将使用支持集合的有效 contains 方法。集合对应关系.
+
+|interface|jdk or Guava|Immutable Version|
+|:---|:---|:---|
+|Collection|JDK|ImmutableCollection|
+|List|JDK|ImmutableList|
+|Set|JDK|ImmutableSet|
+|SortedSet/NavigableSet|JDK|ImmutableSortedSet|
+|Map|JDK|ImmutableMap|
+|SortedMap|JDK|ImmutableSortedMap|
+|Multiset|Guava|ImmutableMultiset|
+|SortedMultiset|Guava|ImmutableSortedMultiset|
+|Multimap|Guava|ImmutableMultimap|
+|ListMultimap|Guava|ImmutableListMultimap|
+|SetMultimap|Guava|ImmutableSetMultimap|
+|BiMap|Guava|ImmutableBiMap|
+|ClassToInstanceMap|Guava|ImmutableClassToInstanceMap|
+|Table|Guava|ImmutableTable|
