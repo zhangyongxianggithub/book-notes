@@ -1530,6 +1530,35 @@ public boolean isPath(City originCity, City destinationCity){
 }
 ```
 2. 递归解决方案
+```java
+public boolean isPath(City originCity, City destinationCity){
+    City nextCity;
+    boolean done;
+    markVisited(originCity);
+    // base case: the destinationCity is reached
+    if(originCity.compareTo(destinationCity) == 0){
+        return true;
+    }else{// try a flight to each unvisited city
+        done=false;
+        nextCity=getNextCity(originCity);
+        while(nextCity!=null&&!done){
+            done=isPath(nextCity,destinationCity);
+            if(!done){
+                nextCity=getNextCity(originCity);
+            }
+        }
+        return done;
+    }
+}
+```
+## 栈和递归的关系
+ADT栈隐含递归概念，总是可以用栈来完成递归方法的操作。
+## 小结
+- ADT栈有后进先出的特性;
+- 栈可以非常方便的计算后缀代数表达式;
+# 第8章 队列
+队列先进先出，通常用于解决涉及等待的问题。
+## ADT队列
 
 
 
