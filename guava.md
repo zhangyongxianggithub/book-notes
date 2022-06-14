@@ -96,6 +96,23 @@ Guava的Multiset API组合了2种看待multiset的操作API，如下:
 - 当作为一个普通的Collection看待时，Multiset表现的更像一个无序的ArrayList，调用add(E)就是添加了一个给定的元素，iterator()方法迭代每个出现的元素，size()方法是所有元素的数量;
 - 额外的查询操作与性能特点更像一个Map<E,Integer>，count(Object)返回元素个数，对于HashMultiset来说，count的时间复杂度是O(1)，对于TreeMultiset，count的时间复杂度是O(logn)等，entrySet()返回一个Set<Multiset.Entry<E>>类似于Map的entrySet，elementSet()返回multiset的所有去重的元素的Set，就像Map的keySet()一样，Multiset的内存消耗与元素数成正比。
 明显的是，Multiset完全符合Collection接口的规范，除了极少数的情况下，比如TreeMultiset与TreeSet使用comparison来表示相等而不是Object.equals，特别是，Multiset.addAll(Collection) 为 Collection 中的每个元素每次出现添加一次，这比上面 Map 方法所需的 for 循环方便得多。请注意，Multiset<E>不是一个Map\<E, Integer>，虽然它可能是Mutliset实现的一部分，Mutliset是一个真正的Collection类型，满足所有的规范约束，其他明显的不同有:
-- Multiset\<E>
-- 
+- Multiset\<E>元素的个数必须是正的，不能有负值，0表示元素不在set中，所以不会在elementSet()与entrySet()中;
+- multiset.size()返回集合的大小，等于所有元素个数的总和，对于去重元素数使用elementSet().size();
+- multiset.iterator()迭代每个元素，所以迭代的长度=multiset.size();
+- Multiset<E>支持添加元素、移除元素、直接设置元素的数量;
+- setCount(elem,0)等价于把所有的elem移除;
+- multiset.count(elem)对于不在集合中的elem返回0;
+
+multiset的实现粗略的等价于JDK的map实现
+
+|Map|Corresponding Multiset|是否支持null|
+|:---|:---|:---|
+|HashMap|HashMultiset|Yes|
+|TreeMap|TreeMultiset|Yes|
+|LinkedHashMap|LinkedHashMultiset|Yes|
+|ConcurrentHashMap|ConcurrentHashMultiset|No|
+|ImmutableMap|ImmutableMultiset|No|
+
+`SortedMultiset`是`Multiset`接口的变体，它支持在指定范围内有效地获取子多集。 例如，您可以使用 latencies.subMultiset(0, BoundType.CLOSED, 100, BoundType.OPEN).size() 来确定在 100 毫秒延迟时间内对您的站点进行的点击次数，然后将其与 latencies.size() 进行比较 确定总体比例。TreeMultiset 实现了 SortedMultiset 接口。 在撰写本文时，ImmutableSortedMultiset 仍在测试 GWT 兼容性。
+
 
