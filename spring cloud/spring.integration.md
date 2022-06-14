@@ -18,3 +18,4 @@
 …
 </beans>
 ```
+命名空间前缀可以自由选择。 您甚至可以选择根本不使用任何命名空间前缀。 因此，您应该应用最适合您的应用程序的约定。 但请注意，SpringSource Tool Suite™ (STS) 使用与本参考指南中相同的 Spring Integration 命名空间约定。
