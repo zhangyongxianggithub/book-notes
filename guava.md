@@ -73,3 +73,20 @@ void thingamajig(Collection<String> collection) {
 |BiMap|Guava|ImmutableBiMap|
 |ClassToInstanceMap|Guava|ImmutableClassToInstanceMap|
 |Table|Guava|ImmutableTable|
+
+## New Collection Types
+Guava引进了大量的新的集合类型，这些集合类型不在JDK中，但是也是广泛使用的，这些新的集合类型被设计为完美的兼容JDK结合类型。作为一个普遍存在的规则，Guava集合实现遵守JDK接口规范。
+### Multiset
+传统的Java书写方式以计算文档中一个单词的出现次数为例，如下:
+```java
+Map<String, Integer> counts = new HashMap<String, Integer>();
+for (String word : words) {
+  Integer count = counts.get(word);
+  if (count == null) {
+    counts.put(word, 1);
+  } else {
+    counts.put(word, count + 1);
+  }
+}
+```
+这很尴尬，容易出错，并且不支持收集各种有用的统计数据，比如总字数。 我们可以做得更好。
