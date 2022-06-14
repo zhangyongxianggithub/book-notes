@@ -89,4 +89,10 @@ for (String word : words) {
   }
 }
 ```
-这很尴尬，容易出错，并且不支持收集各种有用的统计数据，比如总字数。 我们可以做得更好。
+这很尴尬，容易出错，并且不支持收集各种有用的统计数据，比如总单词数。我们可以做得更好。Guava提供了一个新的集合类型Multiset，支持添加多个元素。维基百科定义的multiset，在数学上，multiset是集合的概括，其中集合中的元素可以多次出现，相比于元组，元素的顺序是无关的，multiset {a,a,b}与{a,b,a}是相等的。可以以2种方式来看待multiset:
+- 类似于ArrayList<E>，但是没有顺序相关性，因为顺序不重要;
+- 类似于Map<E,Integer>，带有元素与元素的数量;
+Guava的Multiset API组合了2种看待multiset的操作API，如下:
+- 当作为一个普通的Collection看待时，Multiset表现的更像一个无序的ArrayList，调用add(E)就是添加了一个给定的元素，iterator()方法迭代每个出现的元素，size()方法是所有元素的数量;
+- 额外的查询操作与性能特点更像一个Map<E,Integer>，count(Object)返回元素个数，对于HashMultiset来说，count的时间复杂度是O(1)，对于TreeMultiset，count的时间复杂度是O(logn)等，entrySet()返回一个Set<Multiset.Entry<E>>类似于Map的entrySet，
+
