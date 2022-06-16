@@ -680,7 +680,9 @@ SeaweedFS可以支持复制，复制是基于volume实现不是文件级别.
 - 启动volume
 >./weed volume -port=8081 -dir=/tmp/1 -max=100 -mserver="master_address:9333" -dataCenter=dc1 -rack=rack1
 >./weed volume -port=8082 -dir=/tmp/2 -max=100 -mserver="master_address:9333" -dataCenter=dc1 -rack=rack1
+
 复制类型的表格如下：
+
 |Value|含义|
 |:---|:---|
 |000|不复制，只有一份数据|
@@ -690,12 +692,27 @@ SeaweedFS可以支持复制，复制是基于volume实现不是文件级别.
 |200|在2个不同的dc内复制2次|
 |110|在一个dc内的不同的rack内复制一次，在不同的dc内复制一次|
 如果复制模式是xyz，含义如下:
-|:--- |:---|
+
 |Column|Meaning|
+|:--- |:---|
 |x|在其他的dc内的复制数量|
 |y|number of replica in other racks in the same data center|
 |z|number of replica in other servers in the same rack|
-x\y\x可以是0，1，2；所以存在9种可能的类型，非常方便扩展，每一种复制类型将会创建x+y+z+1份volume的拷贝.
 
+x\y\x可以是0，1，2；所以存在9种可能的类型，非常方便扩展，每一种复制类型将会创建x+y+z+1份volume的拷贝.
+## 在特定的数据中心上分配File Key
+现在当请求一个文件key的时候，dataCenter参数可以限制分配的volume是特定的data center的，如下:
+> http://localhost:9333/dir/assign?dataCenter=dc1
+
+## Write and Read
+对于读写操作的一致性来说，W=N，R=1，也就是写入操作必须保证N个副本都写入成功，如果一个副本写入操作失败，那么整个写入失败，这使得读比较快速方便，因为读任意一个副本就可以，不需要比较数据是否一致，对于写入失败的操作，有些节点可能写入成功了，那么这些节点的内容应该删掉，因为volume是追加方式写入的，所以物理volume的大小可能优点违反直觉.当一个客户端请求写入时，流程如下:
+- 客户端发送一个同步请求到master并获得一个fid;
+- master接收到同步请求，选择一个volume server来处理;
+- 客户端发送写入请求到其中一个volume服务器，并等待ACK;
+- volumme持久化存储文件，根据需要复制文件;
+- 如果一切都OK，那么客户端得到OK相应;
+如果写入是对filer的，在步骤1之前还有一个步骤，filer在步骤1～5就是客户端的角色.如果一个副本丢失了，不会马上自动修复，如果缺少一个副本，则不会立即进行自动修复。 这是为了防止由于临时卷服务器故障或断开连接而导致过度复制。 相反，该卷将变为只读。 对于任何新的写入，只需将不同的文件 ID 分配给不同的卷。要修复丢失的副本，您可以在杂草外壳中使用 volume.fix.replication。
+在weed shell中，你可以改变volume的复制相关的设置，通过`volume.configure.replication`配置。
+# Store file with Time To Live
 
 
