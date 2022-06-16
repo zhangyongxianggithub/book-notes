@@ -1562,4 +1562,75 @@ ADT栈隐含递归概念，总是可以用栈来完成递归方法的操作。
 队列类似于人员排队，队列的操作只在2端发生，具有FIFO特性，包含的操作
 ## ADT队列的简单应用
 1. 读取字符串
-
+2. 识别回文
+## 实现
+1. 基于引用的实现
+使用线性链表，
+```java
+public class QueueReferenceBased<T extends Comparable<T>>
+        implements QueueInterface<T> {
+    
+    private Node<T> lastNode;
+    
+    private QueueReferenceBased() {
+        this.lastNode = null;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return lastNode == null;
+    }
+    
+    @Override
+    public void enqueue(final T newItem) throws QueueException {
+        final Node<T> newNode = new Node<>(newItem);
+        if (isEmpty()) {
+            newNode.setNext(newNode);
+        } else {
+            newNode.setNext(lastNode.getNext());
+            lastNode.setNext(newNode);
+        }
+        lastNode = newNode;
+    }
+    
+    @Override
+    public T dequeue() throws QueueException {
+        if (!isEmpty()) {
+            final Node<T> firstNode = lastNode.getNext();
+            if (firstNode == lastNode) {
+                lastNode = null;
+            } else {
+                lastNode.setNext(firstNode.getNext());
+            }
+            return firstNode.getItem();
+        } else {
+            throw new QueueException("empty queue");
+        }
+    }
+    
+    @Override
+    public void dequeueAll() {
+        this.lastNode = null;
+    }
+    
+    @Override
+    public T peek() throws QueueException {
+        if (!isEmpty()) {
+            
+            return lastNode.getNext().getItem();
+        } else {
+            throw new QueueException("empty queue");
+        }
+    }
+    
+    public static void main(final String[] args) throws QueueException {
+        final QueueInterface<Integer> queue = new QueueReferenceBased<>();
+        
+        for (int i = 0; i < 9; i++) {
+            queue.enqueue(i);
+        }
+    }
+}
+```
+2. 基于数组的实现
+队列的基于数组的实现可以实现循环队列，需要有一个front与end指针。
