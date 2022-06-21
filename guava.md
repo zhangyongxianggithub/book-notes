@@ -1,3 +1,4 @@
+[TOC]
 # Collections
 ## Immutable Collections
 例子:
@@ -114,5 +115,37 @@ multiset的实现粗略的等价于JDK的map实现
 |ImmutableMap|ImmutableMultiset|No|
 
 `SortedMultiset`是`Multiset`接口的变体，它支持在指定范围内有效地获取子多集。 例如，您可以使用 latencies.subMultiset(0, BoundType.CLOSED, 100, BoundType.OPEN).size() 来确定在 100 毫秒延迟时间内对您的站点进行的点击次数，然后将其与 latencies.size() 进行比较 确定总体比例。TreeMultiset 实现了 SortedMultiset 接口。 在撰写本文时，ImmutableSortedMultiset 仍在测试 GWT 兼容性。
+### Multimap
+每个有经验的Java程序员都曾在某一时刻实现过Map<K,List<V>>或者Map<K,Set<V>>这样的结构，并处理了该结构的笨拙的问题。例如，Map<K, Set<V>> 是表示无标签有向图的典型方式。 Guava 的 Multimap 框架可以轻松处理从键到多个值的映射。 Multimap 是将键与任意多个值相关联的通用方法。有两种方法可以从概念上考虑 Multimap：作为从单个键到单个值的映射的集合或者作为从唯一键到值集合的映射。一般来说，Multimap 接口是第一选择，但允许您使用 asMap() 视图的方式查看它，该视图返回 Map<K, Collection<V>>接口，最重要的是，key不能映射到空集合，键要么映射到至少一个值，要么根本不存在于 Multimap 中。但是，也很少直接使用 Multimap接口； 更多时候你会使用 ListMultimap 或 SetMultimap，它们分别将键映射到 List 或 Set。
+1. Construction
+创建一个Multimap的最直接的方式是使用MultimapBuilder，可以配置key与value的表现，比如
+```java
+// creates a ListMultimap with tree keys and array list values
+ListMultimap<String, Integer> treeListMultimap =
+    MultimapBuilder.treeKeys().arrayListValues().build();
+
+// creates a SetMultimap with hash keys and enum set values
+SetMultimap<Integer, MyEnum> hashEnumMultimap =
+    MultimapBuilder.hashKeys().enumSetValues(MyEnum.class).build();
+
+```
+您也可以选择直接在实现类上使用 create() 方法，但不建议使用最好使用MultimapBuilder。
+2. Modifying
+Multimap.get(key) 返回与指定键关联的值的视图集合，即使当前没有。 对于 ListMultimap，它返回一个 List，对于 SetMultimap，它返回一个 Set。修改写入底层 Multimap。 例如:
+```java
+Set<Person> aliceChildren = childrenMultimap.get(alice);
+aliceChildren.clear();
+aliceChildren.add(bob);
+aliceChildren.add(carol);
+```
+修改multimap的其他方式包括.
+3. Views
+Multimap也支持返回其他功能强大的接口:
+- asMap返回Map<K, Collection<V>>；
+- entries;
+- keySet();
+- keys;
+- values();
+
 
 
