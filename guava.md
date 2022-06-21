@@ -147,6 +147,27 @@ Multimap也支持返回其他功能强大的接口:
 - keys;
 - values();
 4. Multimap is not a Map
-一个Multimap<K,V>并不是Map<K,Colections<V>>，尽管这样的map可能在实现中使用，但是显著的差役
+一个Multimap<K,V>并不是Map<K,Colections<V>>，尽管这样的map可能在Multimap的实现者中使用，比较明显的差异有:
+- Multimap.get(key)总是返回一个非null的可能是空的集合。这并不意味着Multimap会为key额外分配内存，而是返回的集合是一个视图，允许您根据需要添加与键的关联;
+- 如果您更喜欢类似Map的行为，比如为Multimap中不存在的key返回null，请使用asMap()视图获取Map<K, Collection<V>>。（或者，要从 ListMultimap中获取 Map<K,List<V>>，请使用静态 Multimaps.asMap()方法。SetMultimap和SortedSetMultimap存在类似的方法。）
+- Multimap.containsKey(key) 当且仅当存在与指定键关联的任何元素时才为真。 特别是，如果一个键 k 先前与一个或多个值相关联，而这些值已经从 multimap 中删除，则 Multimap.containsKey(k) 将返回 false;
+- Multimap.entries() 返回 Multimap 中所有键的所有条目。 如果您想要所有密钥集合条目，请使用 asMap().entrySet();
+- Multimap.size() 返回整个多图中的条目数，而不是不同键的数量。 改为使用 Multimap.keySet().size() 来获取不同键的数量。
+
+5. 实现
+Multimap有多个实现，最好使用MultimapBuilder创建Multimap实例
+
+|Implementation|Keys behave like|Values behave like|
+|:---|:---|:---|
+|ArrayListMultimap|HashMap|ArrayList|
+|HashMultimap|HashMap|HashSet|
+|LInkedListMultimap|LinkedHashMap|LinkedList|
+|LinkedHashMultimap|LinkedHashMap|LinkedHashSet|
+|TreeMultimap|TreeMap|TreeSet|
+|ImmutableLIstMultimap|ImmutableMap|ImmutableList|
+|ImmutableSetMultimap|ImmutableMap|ImmutableSet|
+这些实现中的每一个，除了不可变的，都支持空键和值。请注意，并非所有实现实际上都作为 Map<K, Collection<V>> 与列出的实现一起实现！ （特别是，一些 Multimap 实现使用自定义哈希表来最小化开销。）如果您需要更多自定义，请使用 Multimaps.newMultimap(Map, Supplier<Collection>) 或列表和集合版本以使用自定义集合、列表或集合实现来支持您的多图。
+
+### BiMap
 
 
