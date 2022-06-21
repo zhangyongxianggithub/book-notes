@@ -146,6 +146,7 @@ Multimap也支持返回其他功能强大的接口:
 - keySet();
 - keys;
 - values();
-
+4. Multimap is not a Map
+一个Multimap<K,V>并不是Map<K,Colections<V>>，尽管这样的map可能在实现中使用，但是显著的差役
 
 
