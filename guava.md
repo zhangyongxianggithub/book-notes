@@ -196,6 +196,22 @@ String userForId = userId.inverse().get(id);
 |EnumMap|EnumMap|EnumBiMap|
 |EnumMap|HashMap|EnumHashBiMap|
 ### Table
+```java
+Table<Vertex, Vertex, Double> weightedGraph = HashBasedTable.create();
+weightedGraph.put(v1, v2, 4);
+weightedGraph.put(v1, v3, 20);
+weightedGraph.put(v2, v3, 5);
+
+weightedGraph.row(v1); // returns a Map mapping v2 to 4, v3 to 20
+weightedGraph.column(v3); // returns a Map mapping v1 to 20, v2 to 5
+```
+通常，当您尝试对多个键进行索引时，您最终会得到类似Map<FirstName, Map<LastName, Person>>的东西，这很丑陋且难以使用。 
+Guava提供了一种新的集合类型Table，它支持任何"行"类型和"列"类型的这种用例。表格支持多种视图，让您可以从任何角度使用数据，包括:
+- rowMap()将会把Table<R,C,V>视为一个Map<R,Map<C,V>>，简单的，rowKeySet()会返回一个Set<R>
+- row(r)将会返回一个非null的Map<C,V>，对返回的map做变更也会修改底层的Table;
+- 也提供了列相关的类似的方法: columnMap(),columnKeySet(),column(c)，基于列的访问在效率上比基于行的访问的效率低;
+- cellSet()会返回Table的Set<Table.Cell<R,C,V>>，Cell类似于Map.Entry，只是key是以行/列的组合值的方式区分的.
+
 Table的几个简单的实现如下:
 - HashBasedTable, 底层是通过HashMap<R,HashMap<C,V>>实现的;
 - TreeBasedTable, 底层是通过TreeMap<R,TreeMap<C,V>>实现的;
