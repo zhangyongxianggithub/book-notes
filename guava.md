@@ -169,5 +169,32 @@ Multimap有多个实现，最好使用MultimapBuilder创建Multimap实例
 这些实现中的每一个，除了不可变的，都支持空键和值。请注意，并非所有实现实际上都作为 Map<K, Collection<V>> 与列出的实现一起实现！ （特别是，一些 Multimap 实现使用自定义哈希表来最小化开销。）如果您需要更多自定义，请使用 Multimaps.newMultimap(Map, Supplier<Collection>) 或列表和集合版本以使用自定义集合、列表或集合实现来支持您的多图。
 
 ### BiMap
+将值映射回键的传统方法是维护两个单独的映射并使它们保持同步，但这很容易出错并且当映射中已经存在值时会变得非常混乱。 例如:
+```java
+Map<String, Integer> nameToId = Maps.newHashMap();
+Map<Integer, String> idToName = Maps.newHashMap();
+
+nameToId.put("Bob", 42);
+idToName.put(42, "Bob");
+// what happens if "Bob" or 42 are already present?
+// weird bugs can arise if we forget to keep these in sync...
+```
+一个BiMap<K,V>就是一个Map<K,V>:
+- 允许你通过`inverse()`方法获得BiMap的相反的映射;
+- 保证值是唯一的，`values()`返回值是一个Set.
+如果调用biMap.put(key,value)时，value已存在，那么调用抛出IllegalArgumentException，如果你想要删除一个key，那么调用
+`BiMap.forcePut(key,value)`:
+```java
+BiMap<String, Integer> userId = HashBiMap.create();
+String userForId = userId.inverse().get(id);
+```
+
+|Key-Value Map Impl|Value-Key Map Impl|Corresponding BiMap|
+|:---|:---|:---|
+|HashMap|HashMap|HashBiMap|
+|ImmutableMap|ImmutableMap|ImmutableBiMap|
+|EnumMap|EnumMap|EnumBiMap|
+|EnumMap|HashMap|EnumHashBiMap|
+### Table
 
 
