@@ -196,5 +196,18 @@ String userForId = userId.inverse().get(id);
 |EnumMap|EnumMap|EnumBiMap|
 |EnumMap|HashMap|EnumHashBiMap|
 ### Table
+Table的几个简单的实现如下:
+- HashBasedTable, 底层是通过HashMap<R,HashMap<C,V>>实现的;
+- TreeBasedTable, 底层是通过TreeMap<R,TreeMap<C,V>>实现的;
+- ImmutableTable;
+- ArrayTable, 需要在创建时指定完整的行列，底层实现是一个二维数组，当不是稀疏表的时候，可以提高速度与减少内存占用;
+### ClassToInstanceMap
+Map的key是类型也就是class，值是该class的对象，可以用ClassToInstanceMap来实现;除了继承的Map接口的操作意外，还支持`T getInstance(Class<T>)`与`T putInstance(Class<T>, T)`操作，避免类型转换保证了类型安全。ClassToInstanceMap 有一个类型参数，通常命名为 B，表示映射管理的类型的上限。 例如：
+```java
+ClassToInstanceMap<Number> numberDefaults = MutableClassToInstanceMap.create();
+numberDefaults.putInstance(Integer.class, Integer.valueOf(0));
+```
+从技术上来讲，ClassToInstanceMap<B>实现了Map<Class<? extends B>, B>，或者换句话说，一个从B的子类到B的实例的映射。这会使ClassToInstanceMap中涉及的泛型类型有点混乱，但请记住B始终是Map中类型key的上限，通常，B只是一个Object。Guava提供了名为 MutableClassToInstanceMap 和 ImmutableClassToInstanceMap 的2个实现，重要提示：与任何其他 Map<Class, Object> 一样，ClassToInstanceMap 可能包含原始类型的条目，并且原始类型及其对应的包装器类型可能映射到不同的值。
+### RangeSet
 
 
