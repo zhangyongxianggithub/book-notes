@@ -225,5 +225,25 @@ numberDefaults.putInstance(Integer.class, Integer.valueOf(0));
 ```
 从技术上来讲，ClassToInstanceMap<B>实现了Map<Class<? extends B>, B>，或者换句话说，一个从B的子类到B的实例的映射。这会使ClassToInstanceMap中涉及的泛型类型有点混乱，但请记住B始终是Map中类型key的上限，通常，B只是一个Object。Guava提供了名为 MutableClassToInstanceMap 和 ImmutableClassToInstanceMap 的2个实现，重要提示：与任何其他 Map<Class, Object> 一样，ClassToInstanceMap 可能包含原始类型的条目，并且原始类型及其对应的包装器类型可能映射到不同的值。
 ### RangeSet
+RangeSet是一个不连接的非空的range集合，当添加一个range到RangeSet时，任何连接的range都会被合并，空的range会被忽略，如下:
+```java
+   RangeSet<Integer> rangeSet = TreeRangeSet.create();
+   rangeSet.add(Range.closed(1, 10)); // {[1, 10]}
+   rangeSet.add(Range.closedOpen(11, 15)); // disconnected range: {[1, 10], [11, 15)}
+   rangeSet.add(Range.closedOpen(15, 20)); // connected range; {[1, 10], [11, 20)}
+   rangeSet.add(Range.openClosed(0, 0)); // empty range; {[1, 10], [11, 20)}
+   rangeSet.remove(Range.open(5, 10)); // splits [1, 10]; {[1, 5], [10, 10], [11, 20)}
+```
+假如你想merge `Range.closed(1, 10)`与`Range.closedOpen(11, 15)`，你必须首先对Range做预处理`Range.canonical(DiscreteDomain)`，比如设置`DiscreteDomain.integers()`。RangeSet在JDK1.6之后才支持。RangeSet的实现也支持很多其他接口的返回，比如:
+- complement(): 一个RangeSet的补集，也是一个RangeSet;
+- subRangeSet(Range<C>): 返回RangeSet与range的交集;
+- asRanges(): 返回Range的set形式;
+- asSet(DiscreteDomain<C>): 将RangeSet<C>作为ImmutableSortedSet<C>返回;
+除了返回视图接口的操作，也支持查询操作，如下:
+- contains(C): 最基础的操作，返回C是否在RangeSet中;
+- rangeContaining(C): 返回包含C的range,没找到返回null;
+- enclose(Range(C)): 测试Range是否包含在RangeSet中;
+- span(): 返回包含RangeSet中每个Range的最小的Range;
+### RangeMap
 
 
