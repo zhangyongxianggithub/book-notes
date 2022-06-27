@@ -1633,4 +1633,132 @@ public class QueueReferenceBased<T extends Comparable<T>>
 }
 ```
 2. 基于数组的实现
-队列的基于数组的实现可以实现循环队列，需要有一个front与end指针。
+队列的基于数组的实现可以实现循环队列，需要有一个front与end指针。一般使用环形数组，也就是循环数组。困难时检测队列为空还是满，因为队列为空与满的状态都是一样的，都是front超过end一个位置。使用模运算完成循环队列的增加.
+- 有一种办法区分就是记录队列中的项数；
+- 使用full标志;
+- 留一个位置用于标志位，这个位置代表队头位置，就是表示head，这个head就是一直是无效数据的，因为数据已经在最近一次操作中移走了，当(back+1)%(MAX_QUEUE+1)时，则队列满，当front==back时，队列空。
+```java
+public class QueueArrayBased<T> implements QueueInterface<T> {
+    
+    private static final int MAX_QUEUE = 50;// maximum size of queue
+    
+    private final Object[] items;
+    
+    private int front;
+    private int back;
+    private int count;
+    
+    public QueueArrayBased() {
+        this.items = new Object[MAX_QUEUE];
+        front = 0;
+        back = MAX_QUEUE - 1;
+        count = 0;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return count == 0;
+    }
+    
+    private boolean isFull() {
+        return count == MAX_QUEUE;
+    }
+    
+    @Override
+    public void enqueue(final T newItem) throws QueueException {
+        if (!isFull()) {
+            back = (back + 1) % MAX_QUEUE;
+            items[back] = newItem;
+            ++count;
+        } else {
+            throw new QueueException("queue is full");
+        }
+    }
+    
+    @Override
+    public T dequeue() throws QueueException {
+        if (!isEmpty()) {
+            final T element = (T) items[front];
+            front = (front + 1) % MAX_QUEUE;
+            --count;
+            return element;
+        } else {
+            throw new QueueException("queue is empty");
+        }
+    }
+    
+    @Override
+    public void dequeueAll() {
+        front = 0;
+        back = MAX_QUEUE - 1;
+        count = 0;
+    }
+    
+    @Override
+    public T peek() throws QueueException {
+        if (!isEmpty()) {
+            return (T) items[front];
+        } else {
+            throw new QueueException("queue is empty");
+        }
+    }
+}
+```
+3. 使用ADT列表的实现
+ADT列表可以实现队列。队列头表示元素1，队列尾表示元素list.size()+1.
+```java
+public class QueueListBased<T extends Comparable<T>>
+        implements QueueInterface<T> {
+    
+    private final ListInterface<T> list;
+    
+    public QueueListBased() {
+        list = new LinkedList<>();
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return list.isEmpty();
+    }
+    
+    @Override
+    public void enqueue(final T newItem) throws QueueException {
+        list.add(list.size() + 1, newItem);
+    }
+    
+    @Override
+    public T dequeue() throws QueueException {
+        if (!isEmpty()) {
+            final T element = list.get(1);
+            list.remove(1);
+            return element;
+        } else {
+            throw new QueueException("queue is empty");
+        }
+    }
+    
+    @Override
+    public void dequeueAll() {
+        list.removeAll();
+    }
+    
+    @Override
+    public T peek() throws QueueException {
+        if (!isEmpty()) {
+            return list.get(1);
+        } else {
+            throw new QueueException("queue is empty");
+        }
+    }
+}
+```
+4. JCF接口Queue
+JCF提供了Queue接口，继承与Collection接口，还添加了一些自己的方法:
+- poll()与remove()移除队头，如果为空，poll()返回null，remove()抛出异常;
+- element()与peek()检索队头，如果为空，element()抛出异常，peek()返回null;
+- add()与offer()添加元素，添加失败时，add()返回未检查异常，offer()返回false;
+Queue的实现有LinkedList与PriorityQueue，LinkedList用作队列实现要注意，LinkedList允许元素为null，poll返回null的时候要注意区分，确认队列的大小，最好不要有null元素。
+5. 比较实现
+## 基于位置的ADT概览
+
+
