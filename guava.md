@@ -302,3 +302,48 @@ Multiset<String> multiset = HashMultiset.create();
 ### Ierrables
 只要有可能，Guava更喜欢提供接受Iterable而不是Collection的实用程序，在Google，经常遇到的情况是，collection不止存储在内存中，还可能在一个数据库中或者来自其他的数据中心，因为无法一次性获取所有的元素，而不支持类似于size()的操作。因此，你希望的所有的collection相关的操作基本都可以在Iterables中找到，此外，大部分的Iterables方法在Iterators中也有对应的版本。Iterables中的绝大部分操作都是惰性的，它们仅在绝对必要时执行内部迭代，本身返回Iterables的方法返回延迟计算的视图，而不是显式地在内存中构造一个集合。从Guava 12开始，从 Guava 12 开始，Iterables 得到了 FluentIterable 类的补充，该类包装了一个 Iterable 并为其中许多操作提供了流式的语法。以下是最常用的实用程序的选择，尽管Iterables中的许多更函数式的方法在Guava的函数式术语中进行了讨论。
 
+|Method|Description|See Also|
+|:---|:---|:---|
+|concat(Iterable<Iterable>)|返回拼接迭代后的惰性视图|concat(Iterable...)|
+|frequency(Iterable, Object)|返回对象的出现次数|类似与Collections.frequency(Collection,Object),可以看Multiset|
+|partition(Oterable,int)|返回划分为指定大小块的可迭代的不可修改视图|Lists.partition(List, int), paddedPartition(Iterable, int)||||getFirst(Iterable, T default)|返回迭代的第一个元素如果是空就返回默认值|Iterable.iterator().next(), FluentIterable.first()|
+|getLast(Iterable)|返回迭代的最后一个元素，如果没有就抛出NoSuchElementException异常|getLast(Iterable, T default), FluentIterable.last()|
+|elementsEqual(Iterable, Iterable)|迭代的元素值与顺序相同，判断|Compare List.equals(Object)|
+|unmodifiableIterable(Iterable)|返回不可变更视图|Collections.unmodifiableCollection(Collection)|
+|limit(Iterable, int)|返回迭代中前n个元素|FluentIterable.limit(int)|
+|getOnlyElement(Iterable)|返回Iterable中的唯一元素，如果空或者迭代有多个元素则失败|getOnlyElement(Iterable, T default)|
+
+```java
+Iterable<Integer> concatenated = Iterables.concat(
+  Ints.asList(1, 2, 3),
+  Ints.asList(4, 5, 6));
+// concatenated has elements 1, 2, 3, 4, 5, 6
+
+String lastAdded = Iterables.getLast(myLinkedHashSet);
+
+String theElement = Iterables.getOnlyElement(thisSetIsDefinitelyASingleton);
+  // if this set isn't a singleton, something is wrong!
+```
+一般来说，集合通常都支持相同的自然的操作，但是可迭代对象可以不支持一些操作。当输入实际上是一个 Collection 时，这些操作中的每一个都委托给相应的 Collection 接口方法。 例如，如果向 Iterables.size 传递一个 Collection，它将调用 Collection.size 方法，而不是遍历迭代器。
+
+|Method|Analogous Collection method|FluentIterable equivalent|
+|:---|:---|:---|
+|addAll(Collection addTo, Iterable toAdd)|Collection.addAll(Collection)	||
+|contains(Iterable, Object)|Collection.contains(Object)|FluentIterable.contains(Object)|
+|removeAll(Iterable removeFrom, Collection toRemove)|	Collection.removeAll(Collection)||	
+|retainAll(Iterable removeFrom, Collection toRetain)|Collection.retainAll(Collection)	||
+|size(Iterable)|Collection.size()|FluentIterable.size()
+|toArray(Iterable, Class)|	Collection.toArray(T[])	|FluentIterable.toArray(Class)|
+|isEmpty(Iterable)|Collection.isEmpty()|FluentIterable.isEmpty()|
+|get(Iterable, int)|List.get(int)|FluentIterable.get(int)|
+|toString(Iterable)|Collection.toString()|FluentIterable.toString()|
+
+除了上面介绍的方法和函数式术语中介绍的方法外，FluentIterable还有一些方便的方法用于复制到不可变集合中:
+
+|Result Type|Method|
+|:---|:---|
+|ImmutableList|toImmutableList()|
+|ImmutableSet|toimmutableSet()|
+|ImmutableSortedSet|toImmutableSortedSet(Comparator)|
+
+
