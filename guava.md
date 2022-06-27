@@ -364,4 +364,5 @@ List<List<Integer>> parts = Lists.partition(countUp, 2); // {{1, 2}, {3, 4}, {5}
 |using a custom Comparator(e.g., MyType with myComparator)|Comparators.max(a, b, cmp)|Collections.max(asList(a,b,c),cmp)|
 
 ### Sets
+Sets包含了很多非常好的方法。集合理论相关的操作。
 
