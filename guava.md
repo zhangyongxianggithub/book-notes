@@ -300,3 +300,5 @@ Set<Type> approx100Set = Sets.newHashSetWithExpectedSize(100);
 Multiset<String> multiset = HashMultiset.create();
 ```
 ### Ierrables
+只要有可能，Guava更喜欢提供接受Iterable而不是Collection的实用程序，在Google，经常遇到的情况是，collection不止存储在内存中，还可能在一个数据库中或者来自其他的数据中心，因为无法一次性获取所有的元素，而不支持类似于size()的操作。因此，你希望的所有的collection相关的操作基本都可以在Iterables中找到，此外，大部分的Iterables方法在Iterators中也有对应的版本。Iterables中的绝大部分操作都是惰性的，它们仅在绝对必要时执行内部迭代，本身返回Iterables的方法返回延迟计算的视图，而不是显式地在内存中构造一个集合。从Guava 12开始，从 Guava 12 开始，Iterables 得到了 FluentIterable 类的补充，该类包装了一个 Iterable 并为其中许多操作提供了流式的语法。以下是最常用的实用程序的选择，尽管Iterables中的许多更函数式的方法在Guava的函数式术语中进行了讨论。
+
