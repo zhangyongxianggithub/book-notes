@@ -245,5 +245,39 @@ RangeSet是一个不连接的非空的range集合，当添加一个range到Range
 - enclose(Range(C)): 测试Range是否包含在RangeSet中;
 - span(): 返回包含RangeSet中每个Range的最小的Range;
 ### RangeMap
+RangeMap是一个集合类型，这个集合类型把Range映射为一个值，与RangeSet不同，RangeMap
+```java
+RangeMap<Integer, String> rangeMap = TreeRangeMap.create();
+rangeMap.put(Range.closed(1, 10), "foo"); // {[1, 10] => "foo"}
+rangeMap.put(Range.open(3, 6), "bar"); // {[1, 3] => "foo", (3, 6) => "bar", [6, 10] => "foo"}
+rangeMap.put(Range.open(10, 20), "foo"); // {[1, 3] => "foo", (3, 6) => "bar", [6, 10] => "foo", (10, 20) => "foo"}
+rangeMap.remove(Range.closed(5, 11)); // {[1, 3] => "foo", (3, 5) => "bar", (11, 20) => "foo"}
+```
+RangeMap提供了2个视图接口:
+- asMapOfRanges(): 将RangeMap视为Map<Range<K>,V>;
+- subRangeMap(Ranges(K)>)；
 
+## 工具类
+任何具有JDK Collections Framework经验的程序员都知道并喜欢java.util.Collections包下提供的实用程序。 Guava在这些方面提供了更多实用程序：适用于所有集合的静态方法。 这些是Guava中最受欢迎和最成熟的部分。与特定接口对应的方法以相对直观的方式进行分组:
+|Interface|JDK or Guava|Corresponding Guava utility class|
+|:---|:---|:---|
+|Collection|JDK|Collection2|
+|List|JDK|Lists|
+|Set|JDK|Sets|
+|SortedSet|JDK|Sets|
+|Map|JDK|Maps|
+|SortedMap|JDK|Maps|
+|Queue|JDK|Queues|
+|Multiset|Guava|Multisets|
+|Multimap|Guava|Multimaps|
+|BiMap|Guava|Maps|
+|Table|Guava|Tables|
+寻找变换、过滤器等？ 这些东西在我们的函数式编程文章中，在函数式术语下。
+### 静态构造函数
+在JDK 7之前，构建新的泛型集合需要令人不快的代码重复，我想我们都同意这是不愉快的。 Guava提供了使用泛型推断右侧类型的静态方法: 
+```java
+List<TypeThatsTooLongForItsOwnGood> list = Lists.newArrayList();
+Map<KeyType, LongishValueType> map = Maps.newLinkedHashMap();
+```
 
+### Ierrables
