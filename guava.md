@@ -279,5 +279,24 @@ RangeMap提供了2个视图接口:
 List<TypeThatsTooLongForItsOwnGood> list = Lists.newArrayList();
 Map<KeyType, LongishValueType> map = Maps.newLinkedHashMap();
 ```
-
+可以肯定的是，JDK 7 中的菱形运算符减少了这方面的麻烦:
+```java
+List<TypeThatsTooLongForItsOwnGood> list = new ArrayList<>();
+```
+但Guava比这更进一步。使用工厂方法模式，我们可以非常方便地使用它们的起始元素来初始化集合。
+```java
+Set<Type> copySet = Sets.newHashSet(elements);
+List<String> theseElements = Lists.newArrayList("alpha", "beta", "gamma");
+```
+此外，通过命名的工厂方法的能力（effective Java条目1），我们可以提高初始化结合的可读性:
+```java
+List<Type> exactly100 = Lists.newArrayListWithCapacity(100);
+List<Type> approx100 = Lists.newArrayListWithExpectedSize(100);
+Set<Type> approx100Set = Sets.newHashSetWithExpectedSize(100);
+```
+下面列出了提供的精确静态工厂方法及其相应的实用程序类。
+注意：Guava 引入的新集合类型不公开原始构造函数，或者在实用程序类中具有初始化程序。 相反，它们直接公开静态工厂方法，例如：
+```java
+Multiset<String> multiset = HashMultiset.create();
+```
 ### Ierrables
