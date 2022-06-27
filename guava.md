@@ -346,4 +346,22 @@ String theElement = Iterables.getOnlyElement(thisSetIsDefinitelyASingleton);
 |ImmutableSet|toimmutableSet()|
 |ImmutableSortedSet|toImmutableSortedSet(Comparator)|
 
+### Lists
+除了静态构造方法和函数式编程方法之外，Lists 还为 List 对象提供了许多有价值的实用方法。
+- partition(List, int)返回分片后的数组;
+- reverse(List) 返回数组的相反顺序的数组，如果数组是Immutable的，考虑使用ImmutableList.reverse()方法
+```java
+List<Integer> countUp = Ints.asList(1, 2, 3, 4, 5);
+List<Integer> countDown = Lists.reverse(theList); // {5, 4, 3, 2, 1}
+List<List<Integer>> parts = Lists.partition(countUp, 2); // {{1, 2}, {3, 4}, {5}}
+```
+一个看似简单的任务（找到某些元素的最小值或最大值）由于希望最小化位于不同位置的分配、装箱和 API 而变得复杂。下表总结了此任务的最佳实践。
+下表仅显示了 max() 解决方案，但同样的建议也适用于查找 min()。
+|What you're comparing|Exactly 2 instances|More than 2 instances|
+|:---|:---|:---|
+|unboxed numeric primitives(e.g., long, int, double, or float)|Math.max(a, b)|Longs.max(a, b, c),Ints.max(a, b, c),etc.|
+|Comparable instances(e.g., Duration, String, Long, etc.)|	Comparators.max(a, b)|Collections.max(asList(a, b, c))
+|using a custom Comparator(e.g., MyType with myComparator)|Comparators.max(a, b, cmp)|Collections.max(asList(a,b,c),cmp)|
+
+### Sets
 
