@@ -277,7 +277,7 @@ public interface UserRepository extends Repository<User, Long> {
 @Query("update User u set u.firstname = ?1 where u.lastname = ?2")
 int setFixedFirstnameFor(String firstname, String lastname);
 ```
-上面的写法会让查询从一个查询方法编程一个变更查询，因为EntityManager在变更查询执行完后可能包含过期的实体，我们不会自动清空它（可以参考EntityManager.clear()方法获得更多详细的细节），由于在执行修改查询后 EntityManager 可能包含过时的实体，我们不会自动清除它（有关详细信息，请参阅 EntityManager.clear() 的 JavaDoc），因为这有效地删除了 EntityManager 中仍待处理的所有未刷新的更改。 如果您希望 EntityManager 自动清除，可以将 @Modifying 注解的 clearAutomatically 属性设置为 true。@Modifying注解仅与@Query注解结合使用。 派生查询方法或自定义查询方法不需要此注解。
+上面的写法会让查询从一个查询方法变成一个变更查询，因为EntityManager在变更查询执行完后可能包含过期的实体，我们不会自动清空它（可以参考EntityManager.clear()方法获得更多详细的细节），由于在执行修改查询后 EntityManager 可能包含过时的实体，我们不会自动清除它（有关详细信息，请参阅 EntityManager.clear() 的 JavaDoc），因为这有效地删除了 EntityManager 中仍待处理的所有未刷新的更改。 如果您希望 EntityManager 自动清除，可以将 @Modifying 注解的 clearAutomatically 属性设置为 true。@Modifying注解仅与@Query注解结合使用。 派生查询方法或自定义查询方法不需要此注解。
 Spring Data JPA也支持派生的删除查询，你可以不用明确的声明JPQL查询，如下面的例子所示
 ```java
 interface UserRepository extends Repository<User, Long> {
@@ -478,10 +478,10 @@ public class UserManagementImpl implements UserManagement {
   }
 }
 ```
-这个例子让对方法addRoleToAllUsers()方法的调用运行在一个事务里面（参与到一个已存在的事务或者没有事务就创建一个新的事务），repository的事务配置会被忽略，因为外层的事务配置才是真正使用的事务。需要注意的是，你必须声明`<tx:annotation-driven />`或者声明`@EnableTransactionManagement`来明确的让门面上的注解事务配置生效，这个例子假设你使用了组件扫描。
-需要注意的是，从JPA视角来看，没有必要调用save方法，当时接口中也应该提供save方法，这是为了保证spring data提供的repository接口定义的一致性。
+这个例子让对方法`addRoleToAllUsers()`方法的调用运行在一个事务里面（参与到一个已存在的事务或者没有事务就创建一个新的事务），repository的事务配置会被忽略，因为外层的事务配置才是真正使用的事务。需要注意的是，你必须声明`<tx:annotation-driven />`或者声明`@EnableTransactionManagement`来明确的让门面上的注解事务配置生效，这个例子假设你使用了组件扫描。
+需要注意的是，从JPA视角来看，没有必要调用save方法，但是接口中也应该提供save方法，这是为了保证spring data提供的repository接口定义的一致性。
 #### 事务查询方法
-为了给查询添加事务特性，在你定义的repository接口上声明@Transactional，如下面的例子所示
+为了给查询添加事务特性，在你定义的repository接口上声明`@Transactional`，如下面的例子所示
 ```java
 @Transactional(readOnly = true)
 interface UserRepository extends JpaRepository<User, Long> {
@@ -495,8 +495,8 @@ interface UserRepository extends JpaRepository<User, Long> {
 }
 
 ```
-通常，您希望将 readOnly 标志设置为 true，因为大多数查询方法只读取数据。 与此相反，deleteInactiveUsers() 使用 @Modifying 注释这会覆盖事务配置。 因此，该方法运行时，readOnly配置是false。
-你可以在只读查询上使用事务，并通过设置readOnly=true来标记它们，但是，这么做并不能保证你不会触发一个变更查询（虽然有的数据哭拒绝在只读事务中执行insert或者update语句），但是readOnly标记可以作为一个提示传播到底层的JDBC驱动中，驱动程序可以用来做性能优化。此外spring对底层的JPA提供程序做了一些优化。比如：当与Hibernate一起使用时，当事务被配置为readOnly=true时，flush modo会被设置为NEVER，这会让Hibernate跳过脏检查（对大量的对象树的检索会带来明显的提升）
+通常，您希望将 readOnly 标志设置为 true，因为大多数查询方法只读取数据。 与此相反，`deleteInactiveUsers()`使用 `@Modifying`注释这会覆盖事务配置。 因此，该方法运行时，readOnly配置是false。
+你可以在只读查询上使用事务，并通过设置`readOnly=true`来标记它们，但是，这么做并不能保证你不会触发一个变更查询（虽然有的数据拒绝在只读事务中执行insert或者update语句），但是readOnly标记可以作为一个提示传播到底层的JDBC驱动中，驱动程序可以用来做性能优化。此外spring对底层的JPA提供程序做了一些优化。比如：当与Hibernate一起使用时，当事务被配置为`readOnly=true`时，flush modo会被设置为NEVER，这会让Hibernate跳过脏检查（对大量的对象树的检索会带来明显的提升）
 ## Locking
 为了指定要使用的lock模式，你可以在查询方法上使用@Lock注解，如下面的代码所示
 ```java
