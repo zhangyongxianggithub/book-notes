@@ -364,5 +364,71 @@ List<List<Integer>> parts = Lists.partition(countUp, 2); // {{1, 2}, {3, 4}, {5}
 |using a custom Comparator(e.g., MyType with myComparator)|Comparators.max(a, b, cmp)|Collections.max(asList(a,b,c),cmp)|
 
 ### Sets
-Sets包含了很多非常好的方法。集合理论相关的操作。
+Sets包含了很多非常好的方法。集合理论相关的操作。这些方法都返回一个SetView，可以用于:
+- 作为一个set，因为它实现了Set接口;
+- 通过copyInto(Set)拷贝到别的集合中;
+- 生成不可变更集合(immutableCopy)；
+主要的方法有：union(Set,Set)，intersection(Set, Set)，difference(Set,Set)，symmetricDifference(Set,Set)；比如:
+```java
+Set<String> wordsWithPrimeLength = ImmutableSet.of("one", "two", "three", "six", "seven", "eight");
+Set<String> primes = ImmutableSet.of("two", "three", "five", "seven");
+
+SetView<String> intersection = Sets.intersection(primes, wordsWithPrimeLength); // contains "two", "three", "seven"
+// I can use intersection as a Set directly, but copying it can be more efficient if I use it a lot.
+return intersection.immutableCopy();
+```
+其他比较有用的工具方法如下:
+- cartesianProduct(List<Set>), Set中的每个元素都2*2配对都生成一个list，来返回就是生成笛卡尔积;
+- powerSet(Set)，返回指定集合的所有子集的集合.
+
+```java
+Set<String> animals = ImmutableSet.of("gerbil", "hamster");
+Set<String> fruits = ImmutableSet.of("apple", "orange", "banana");
+
+Set<List<String>> product = Sets.cartesianProduct(animals, fruits);
+// {{"gerbil", "apple"}, {"gerbil", "orange"}, {"gerbil", "banana"},
+//  {"hamster", "apple"}, {"hamster", "orange"}, {"hamster", "banana"}}
+
+Set<Set<String>> animalSets = Sets.powerSet(animals);
+// {{}, {"gerbil"}, {"hamster"}, {"gerbil", "hamster"}}
+```
+### Maps
+Maps有很多有价值的方法
+1. uniqueIndex
+Maps.uniqueIndex(Iterable, Function) 解决了一堆对象转化为Map常见情况，其中每个对象都有一些唯一的主键属性，并且希望能够根据该属性查找这些对象。假设我们有一堆我们知道具有唯一长度的字符串，并且我们希望能够查找具有特定长度的字符串。
+```java
+ImmutableMap<Integer, String> stringsByIndex = Maps.uniqueIndex(strings, new Function<String, Integer> () {
+    public Integer apply(String string) {
+      return string.length();
+    }
+  });
+```
+如果索引不是唯一的，那么可以使用Multimaps.index。
+2. difference
+`Maps.difference(Map,Map)`允许你比较2个map的不同，它会返回一个MapDifference对象，会生成维恩图的一些方法如下:
+|Method|Description|
+|:---|:---|
+|`entriesInCommon()`|返回2个map中相同的entry，key与value都相同|
+|`entriesDiffering()`|返回2个map中相同key，不同value的entry，不同的value以`MapDifference.ValueDifference`的形式表示，可以看到2个不一样的值|
+|`entriesOnlyOnLeft()`|返回key出现在左面，没有在右面的entry|
+|`entriesOnlyOnRight()`|返回key出现在右面没有出现在左面的entry|
+
+```java
+Map<String, Integer> left = ImmutableMap.of("a", 1, "b", 2, "c", 3);
+Map<String, Integer> right = ImmutableMap.of("b", 2, "c", 4, "d", 5);
+MapDifference<String, Integer> diff = Maps.difference(left, right);
+
+diff.entriesInCommon(); // {"b" => 2}
+diff.entriesDiffering(); // {"c" => (3, 4)}
+diff.entriesOnlyOnLeft(); // {"a" => 1}
+diff.entriesOnlyOnRight(); // {"d" => 5}
+```
+BiMap的工具方法也在Maps类中，因为BiMap也是一个Map
+
+|BiMap工具方法|对应的Map工具方法|
+|:---|:---|
+|`synchronizedBiMap(BiMap)`|`Collections.synchronizedMap(Map)`|
+|`unmodifiableBiMap(BiMap)`|`Collections.unmodifiableMap(Map)`|
+
+Maps提供了很多的静态工厂方法
 
