@@ -431,4 +431,46 @@ BiMap的工具方法也在Maps类中，因为BiMap也是一个Map
 |`unmodifiableBiMap(BiMap)`|`Collections.unmodifiableMap(Map)`|
 
 Maps提供了很多的静态工厂方法
+### Multisets
+标准的`Collection`操作，比如`containAll``，会忽略multiset中的元素数量，只关注元素是否出现在multiset中，Multisets提供了很多的工具函数，这些工具函数都可以处理Multiset中的多值情况。
+
+|Method|Explanation|Difference from Collection method|
+|:---:|:---:|:---:|
+|`containsOccurrences(Multiset sup, Multiset sub)`|如果对于所有的o，sub.count(o)<=supper.count(o) 则返回true|`Collection.containsAll`会忽略元素数量，只检测元素是否在集合中|
+|`removeOccurrences(Multiset removeFrom, Multiset toRemove)`|Removes one occurrence in removeFrom for each occurrence of an element in toRemove.|Collection.removeAll removes all occurrences of any element that occurs even once in toRemove|
+|retainOccurrences(Multiset removeFrom, Multiset toRetain)|Guarantees that removeFrom.count(o) <= toRetain.count(o) for all o.|Collection.retainAll keeps all occurrences of elements that occur even once in toRetain.|
+|intersection(Multiset, Multiset)|Returns a view of the intersection of two multisets; a nondestructive alternative to retainOccurrences||
+
+```java
+Multiset<String> multiset1 = HashMultiset.create();
+multiset1.add("a", 2);
+
+Multiset<String> multiset2 = HashMultiset.create();
+multiset2.add("a", 5);
+
+multiset1.containsAll(multiset2); // returns true: all unique elements are contained,
+  // even though multiset1.count("a") == 2 < multiset2.count("a") == 5
+Multisets.containsOccurrences(multiset1, multiset2); // returns false
+
+Multisets.removeOccurrences(multiset2, multiset1); // multiset2 now contains 3 occurrences of "a"
+
+multiset2.removeAll(multiset1); // removes all occurrences of "a" from multiset2, even though multiset1.count("a") == 2
+multiset2.isEmpty(); // returns true
+```
+Multisets中包含的其他的工具函数有:
+- copyHighestCountFirst(Multiset), 返回multiset的不可变更拷贝，这个拷贝中的元素是按照出现的频率降序排列的;
+- unmodifiableMultiset(Multiset), 返回multiset的不可变更的视图;
+- unmodifiableSortedMultiset(SortedMultiset), 返回排序的multiset的不可变更的视图;
+
+```java
+Multiset<String> multiset = HashMultiset.create();
+multiset.add("a", 3);
+multiset.add("b", 5);
+multiset.add("c", 1);
+
+ImmutableMultiset<String> highestCountFirst = Multisets.copyHighestCountFirst(multiset);
+
+// highestCountFirst, like its entrySet and elementSet, iterates over the elements in order {"b", "a", "c"}
+```
+### Multimaps
 
