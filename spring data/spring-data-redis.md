@@ -7,6 +7,7 @@ Spring Data使用了Spring框架的核心功能，包括：
 - 表达式语言
 - JMX整合
 - DAO异常体系。
+
 虽然您不需要了解 Spring API，但了解它们背后的概念很重要。 至少，控制反转 (IoC) 背后的想法应该很熟悉，并且您应该熟悉您选择使用的任何 IoC 容器。
 
 Redis支持的核心功能可以直接使用，无需调用Spring Container的IoC服务。 这很像 JdbcTemplate，它可以“独立”使用，无需 Spring 容器的任何其他服务。 要利用 Spring Data Redis 的所有功能，例如存储库支持，您需要配置库的某些部分以使用 Spring。
@@ -267,6 +268,7 @@ public void useCallback() {
 有多种实现可用（包括本文档中已经提到的两种）：
 - JdkSerializationRedisSerializer，默认用于 RedisCache 和 RedisTemplate。
 - StringRedisSerializer。
+
 但是，可以通过 Spring OXM 支持使用 OxmSerializer 进行对象/XML 映射，或者使用 Jackson2JsonRedisSerializer 或 GenericJackson2JsonRedisSerializer 以 JSON 格式存储数据。请注意，存储格式不仅限于值。它可以用于键、值或散列，没有任何限制。
 默认情况下，RedisCache 和 RedisTemplate 配置为使用 Java 原生序列化。 Java 本机序列化以允许运行由有效载荷引起的远程代码而闻名，该有效载荷利用注入未经验证的字节码的易受攻击的库和类。 被操纵的输入可能会导致在反序列化步骤期间在应用程序中运行不需要的代码。 因此，不要在不受信任的环境中使用序列化。 通常，我们强烈推荐使用任何其他消息格式（例如 JSON）。
 
@@ -282,6 +284,7 @@ public void useCallback() {
 - BeanUtilsHashMapper 使用 Spring 的 BeanUtils。
 - ObjectHashMapper使用Object-to-Hash Mapping。
 - Jackson2HashMapper 使用 FasterXML Jackson。
+
 以下示例显示了一种实现哈希映射的方法：
 ```java
 public class Person {
@@ -336,4 +339,71 @@ public class Address {
 战平的json化的结构
 ![](redis/flat.png)
 展平要求所有属性名称不干扰 JSON 路径。 使用扁平化时，不支持在映射键中使用点或括号或作为属性名称。 生成的哈希无法映射回对象。java.util.Date and java.util.Calendar are represented with milliseconds. JSR-310 Date/Time types are serialized to their toString form if jackson-datatype-jsr310 is on the class path.
-# Redis Repository
+# Reactive Redis support
+# Redis Cluster
+# Redis Repositories
+使用Redis Repository可以让你自由的在领域对象与Redis Hash之间相互转化，应用自定义的映射策略，使用第二索引。Redis Repositories不支持事务，确保使用的RedisTemplate关闭了事务。
+## Usage
+Spring Data Redis让你可以非常方便的实现领域实体，如下面的例子所示
+```java
+@RedisHash("people")
+public class Person {
+
+  @Id String id;
+  String firstname;
+  String lastname;
+  Address address;
+}
+```
+我们在这里有一个非常简单的领域对象，注意到在类上有一个@RedisHash注解，一个叫做id的属性上有一个@Id注解，这2个可以用来创建存储hash值的实际使用的key，使用@Id表示的属性或者名字叫id的属性通常都会考虑作为标识属性。为了存储与检索，我们需要定义Repo，如下:
+```java
+public interface PersonRepository extends CrudRepository<Person, String> {
+
+}
+```
+因为我们的repo继承于CrudRepository，它提供了基本的CRUD与find操作，我们把这些东西组合起来需要做的事情就是配置Spring，如下所示:
+```java
+@Configuration
+@EnableRedisRepositories
+public class ApplicationConfig {
+
+  @Bean
+  public RedisConnectionFactory connectionFactory() {
+    return new JedisConnectionFactory();
+  }
+
+  @Bean
+  public RedisTemplate<?, ?> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
+
+    RedisTemplate<byte[], byte[]> template = new RedisTemplate<byte[], byte[]>();
+    template.setConnectionFactory(redisConnectionFactory);
+    return template;
+  }
+}
+```
+跟据前面的设置，我们可以注入PersonRepository，如下所示:
+```java
+@Autowired PersonRepository repo;
+
+public void basicCrudOperations() {
+
+  Person rand = new Person("rand", "al'thor");
+  rand.setAddress(new Address("emond's field", "andor"));
+
+  repo.save(rand);                                         
+
+  repo.findOne(rand.getId());                              
+
+  repo.count();                                            
+
+  repo.delete(rand);                                       
+}
+```
+如果当前值为null则生成一个新id或重用已设置的id值，并将Person类型的属性存储在Redis哈希中，其键具有keyspace:id的模式，在这种情况下，它可能是 people:5d67b7e1- 8640-4475-beeb-c666fab4c0e5。可以使用提供的id来检索存储在keyspace:id键的领域对象，计算keyspace=people下所有的实体数量。
+## Object Mapping Fundamentals
+这一节主要讲Spring Data对象映射、对象创建、属性访问变更的基本原理，请注意，本节仅适用于不使用底层数据存储（如JPA）的对象映射的Spring Data模块。 还请务必查阅特定于存储的部分以获取特定于存储的对象映射，例如索引、自定义列或字段名称等。Spring Data对象映射的核心责任是创建领域对象实例并映射存储的数据，这意味着我们需要2个基础的步骤:
+- 需要构造函数来创建实例;
+- 创建的实例需要设置属性
+
+# Appendixes
+

@@ -473,4 +473,95 @@ ImmutableMultiset<String> highestCountFirst = Multisets.copyHighestCountFirst(mu
 // highestCountFirst, like its entrySet and elementSet, iterates over the elements in order {"b", "a", "c"}
 ```
 ### Multimaps
+1. index
+Maps.uniqueIndex的兄弟方法，`Multimaps.index(Iterable, Function)`解决了，通过某些属性寻找对象的问题，找到的对象不唯一。也就是对对象分组或者分类的问题。
+```java
+ImmutableSet<String> digits = ImmutableSet.of(
+    "zero", "one", "two", "three", "four",
+    "five", "six", "seven", "eight", "nine");
+Function<String, Integer> lengthFunction = new Function<String, Integer>() {
+  public Integer apply(String string) {
+    return string.length();
+  }
+};
+ImmutableListMultimap<Integer, String> digitsByLength = Multimaps.index(digits, lengthFunction);
+/*
+ * digitsByLength maps:
+ *  3 => {"one", "two", "six"}
+ *  4 => {"zero", "four", "five", "nine"}
+ *  5 => {"three", "seven", "eight"}
+ */
+```
+2. invertFrom
+因为Multimap允许多个key指向一个value，或者一个key指向多个value，所以可以倒置，倒置也是很有用的还是multimap，`invertFrom(Multimap toInvert, Multimap dest)`就是干这个用的，如果你在使用`ImmutableMultimap`，那么可以直接使用`ImmutableMultimap.inverse()`倒置。
+```java
+ArrayListMultimap<String, Integer> multimap = ArrayListMultimap.create();
+multimap.putAll("b", Ints.asList(2, 4, 6));
+multimap.putAll("a", Ints.asList(4, 2, 1));
+multimap.putAll("c", Ints.asList(2, 5, 3));
+
+TreeMultimap<Integer, String> inverse = Multimaps.invertFrom(multimap, TreeMultimap.<Integer, String>create());
+// note that we choose the implementation, so if we use a TreeMultimap, we get results in order
+/*
+ * inverse maps:
+ *  1 => {"a"}
+ *  2 => {"a", "b", "c"}
+ *  3 => {"c"}
+ *  4 => {"a", "b"}
+ *  5 => {"c"}
+ *  6 => {"b"}
+ */
+```
+3. forMap
+在一个Map对象上使用Multimap的方法，forMap(Map)将Map视为一个SetMultimap，这非常有用，比如，与Multimaps.invertFrom联合使用
+```java
+Map<String, Integer> map = ImmutableMap.of("a", 1, "b", 1, "c", 2);
+SetMultimap<String, Integer> multimap = Multimaps.forMap(map);
+// multimap maps ["a" => {1}, "b" => {1}, "c" => {2}]
+Multimap<Integer, String> inverse = Multimaps.invertFrom(multimap, HashMultimap.<Integer, String> create());
+// inverse maps [1 => {"a", "b"}, 2 => {"c"}]
+```
+4. Wrappers
+Multimaps 提供了传统的包装方法，以及基于您选择的 Map 和 Collection 实现来获取自定义 Multimap 实现的工具。
+|Multimap type|Unmodifiable|Synchronized|Custom|
+|:---|:---|:---|:---|
+|Multimap|unmodifiableMultimap|synchronizedMultimap|newMultimap|
+|ListMultimap|unmodifiableListMultimap|synchronizedListMultimap|newListMultimap|
+|SetMultimap|unmodifiableSetMultimap|synchronizedSetMultimap|newSetMultimap|
+|SortedSetMultimap|unmodifiableSortedSetMultimap|synchronizedSortedSetMultimap|newSortedSetMultimap|
+
+自定义 Multimap 实现允许您指定应在返回的 Multimap 中使用的特定实现。警告包括：
+- multimap 假定完全拥有 map 和 factory 返回的列表。这些对象不应手动更新，提供时应为空，并且不应使用软引用、弱引用或幻像引用;
+- 不保证修改 Multimap 后 Map 的内容会是什么样子;
+- 当任何并发操作更新 multimap 时，multimap 不是线程安全的，即使 map 和工厂生成的实例是。不过，并发读取操作将正常工作。如有必要，请使用同步包装器解决此问题;
+- 如果 map、factory、factory 生成的列表和 multimap 的内容都是可序列化的，则 multimap 是可序列化的；
+- Multimap.get(key) 返回的集合与您的供应商返回的集合的类型不同，但如果您的供应商返回 RandomAccess 列表，则 Multimap.get(key) 返回的列表也将是随机访问;
+
+请注意，自定义 Multimap 方法需要一个 Supplier 参数来生成新的集合。这是一个编写由 TreeMap 映射到 LinkedList 支持的 ListMultimap 的示例。
+```java
+ListMultimap<String, Integer> myMultimap = Multimaps.newListMultimap(
+  Maps.<String, Collection<Integer>>newTreeMap(),
+  new Supplier<LinkedList<Integer>>() {
+    public LinkedList<Integer> get() {
+      return Lists.newLinkedList();
+    }
+  });
+```
+### Tables
+Tables提供了几个有用的工具。
+1. customTable
+` Tables.newCustomTable(Map, Supplier<Map>)`允许你指定Table的底层实现，
+```java
+// use LinkedHashMaps instead of HashMaps
+Table<String, Character, Integer> table = Tables.newCustomTable(
+  Maps.<String, Map<Character, Integer>>newLinkedHashMap(),
+  new Supplier<Map<Character, Integer>> () {
+    public Map<Character, Integer> get() {
+      return Maps.newLinkedHashMap();
+    }
+  });
+```
+2. transpose
+`transpose(Table<R, C, V>)`方法可以让你将`Table<R,C,V>`视为`Table<C,R,V>`
+3. wrappers
 
