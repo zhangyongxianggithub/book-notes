@@ -404,6 +404,34 @@ public void basicCrudOperations() {
 这一节主要讲Spring Data对象映射、对象创建、属性访问变更的基本原理，请注意，本节仅适用于不使用底层数据存储（如JPA）的对象映射的Spring Data模块。 还请务必查阅特定于存储的部分以获取特定于存储的对象映射，例如索引、自定义列或字段名称等。Spring Data对象映射的核心责任是创建领域对象实例并映射存储的数据，这意味着我们需要2个基础的步骤:
 - 需要构造函数来创建实例;
 - 创建的实例需要设置属性
+### Object creation
+Spring Data 自动尝试检测持久实体的构造函数以用于创建该类型的对象。 解析算法的工作原理如下:
+- 如果存在使用@PersistenceCreator的静态工厂方法，则使用它;
+- 如果存在一个构造函数，那么使用它;
+- 如果存在多个构造函数，并且只有其中一个使用了@PersistenceCreator注解，那么使用它;
+- 如果有一个无参的构造函数，那么使用它并忽略其他的构造函数.
+
+解析算法认为构造函数与工厂方法的参数名与实体中的属性名对应，这需要class文件支持参数名信息，或者早构造函数的参数上使用@ConstructorProperties标注，可以使用@Value自定义解析过程。为了避免反射的过多的消耗，Spring Data对象创建默认使用一个人自动生成的工厂类，这个工厂类会直接调用领域类的构造函数，比如如下:
+```java
+class Person {
+  Person(String firstname, String lastname) { … }
+}
+```
+系统会自动创建一个等价于下面类的工厂类
+```java
+class PersonObjectInstantiator implements ObjectInstantiator {
+
+  Object newInstance(Object... args) {
+    return new Person((String) args[0], (String) args[1]);
+  }
+}
+```
+相比于反射，这提升了大约10%的性能，此优化需要领域类满足一些条件
+- 不能是private类
+- 不能是非静态内部类
+- 不能是CGLib代理类
+- 构造函数不能是private的
+### Property population
 
 # Appendixes
 
