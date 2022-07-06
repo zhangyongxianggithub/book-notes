@@ -432,6 +432,58 @@ class PersonObjectInstantiator implements ObjectInstantiator {
 - 不能是CGLib代理类
 - 构造函数不能是private的
 ### Property population
+一旦创建了实体的实例，Spring Data接下来填充字段，除非字段通过构造函数的方式已经填充了，使用的填充算法如下:
+- 如果属性是不可变更的，并且实体暴漏了一个with...的方法，使用with...方法来创建一个新的实体;
+- 如果属性访问定义了setter与getter，那么调用setter方法;
+- 如果属性是可修改的，直接设置属性
+- 如果属性是不可变更的，使用构造函数创建实例的拷贝
+- 缺省情况下，直接设置属性
+与对象构造中的优化类，Spring Data也会生成访问者类，用于与实体类实例交互
+```java
+class Person {
+
+  private final Long id;
+  private String firstname;
+  private @AccessType(Type.PROPERTY) String lastname;
+
+  Person() {
+    this.id = null;
+  }
+
+  Person(Long id, String firstname, String lastname) {
+    // Field assignments
+  }
+
+  Person withId(Long id) {
+    return new Person(id, this.firstname, this.lastame);
+  }
+
+  void setLastname(String lastname) {
+    this.lastname = lastname;
+  }
+}
+```
+```java
+class PersonPropertyAccessor implements PersistentPropertyAccessor {
+
+  private static final MethodHandle firstname;              
+
+  private Person person;                                    
+
+  public void setProperty(PersistentProperty property, Object value) {
+
+    String name = property.getName();
+
+    if ("firstname".equals(name)) {
+      firstname.invoke(person, (String) value);             
+    } else if ("id".equals(name)) {
+      this.person = person.withId((Long) value);            
+    } else if ("lastname".equals(name)) {
+      this.person.setLastname((String) value);              
+    }
+  }
+}
+```
 
 # Appendixes
 
