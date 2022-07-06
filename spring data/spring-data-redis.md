@@ -466,9 +466,9 @@ class Person {
 ```java
 class PersonPropertyAccessor implements PersistentPropertyAccessor {
 
-  private static final MethodHandle firstname;              
+  private static final MethodHandle firstname;//缺省情况下，Spring Data使用field-access读写属性值，因为field的private的可见性规则，MethoidHandles用来与field交互           
 
-  private Person person;                                    
+  private Person person;//访问器含有一个可变更的对象实例，                                    
 
   public void setProperty(PersistentProperty property, Object value) {
 
@@ -477,10 +477,52 @@ class PersonPropertyAccessor implements PersistentPropertyAccessor {
     if ("firstname".equals(name)) {
       firstname.invoke(person, (String) value);             
     } else if ("id".equals(name)) {
-      this.person = person.withId((Long) value);            
+      this.person = person.withId((Long) value);//这个类暴漏了一个withId()的方法，用于设置标识符，当一个实例插入到数据库中时，生成一个标识符，调用withId(...)创建一个新的Person对象，所有后续的变更都会发生在新的实例上   
     } else if ("lastname".equals(name)) {
-      this.person.setLastname((String) value);              
+      this.person.setLastname((String) value);// 允许直接方法调用            
     }
+  }
+}
+```
+这大约给我们提升了25%的性能，相比于反射，执行这样优化的领域类需要满足的要求如下:
+- 类型不能在默认或者java包下
+- 类型与构造函数必须是public的;
+- 内部类的类型必须是static的;
+- 使用的 Java 运行时必须允许在原始 ClassLoader 中声明类。 Java 9 和更高版本施加了某些限制；
+
+缺省情况下，Spring Data尝试使用生成的属性访问器，如果不行，降级为基于反射的方式.让我们看一下下面的实体
+```java
+class Person {
+
+  private final @Id Long id;//标识符属性是final的，但是在构造函数中被设置为null，类暴漏了一个withId(...)的方法用来设置标识属性，原来的Person实例保持不变，因为创建了一个新的，                                             
+  private final String firstname, lastname;                                 
+  private final LocalDate birthday;
+  private final int age;                                                    
+
+  private String comment;                                                   
+  private @AccessType(Type.PROPERTY) String remarks;                        
+
+  static Person of(String firstname, String lastname, LocalDate birthday) { 
+
+    return new Person(null, firstname, lastname, birthday,
+      Period.between(birthday, LocalDate.now()).getYears());
+  }
+
+  Person(Long id, String firstname, String lastname, LocalDate birthday, int age) { 
+
+    this.id = id;
+    this.firstname = firstname;
+    this.lastname = lastname;
+    this.birthday = birthday;
+    this.age = age;
+  }
+
+  Person withId(Long id) {                                                  
+    return new Person(id, this.firstname, this.lastname, this.birthday, this.age);
+  }
+
+  void setRemarks(String remarks) {                                         
+    this.remarks = remarks;
   }
 }
 ```
