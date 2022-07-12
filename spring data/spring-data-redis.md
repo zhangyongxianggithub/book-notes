@@ -526,6 +526,7 @@ class Person {
   }
 }
 ```
-
+### General Recommendations
+- 
 # Appendixes
 
