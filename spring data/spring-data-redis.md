@@ -527,6 +527,67 @@ class Person {
 }
 ```
 ### General Recommendations
-- 
+
+
+### Geospatial Index
+	假设Address类型含有一个Point类型的location属性，Point类型含有特定地址的地理位置坐标，通过在属性上标注@GeoIndexed注解，Spring Data Redis会使用Redis的GEO命令添加这些值，如下面的例子所示:
+```java
+@RedisHash("people")
+public class Person {
+
+  Address address;
+
+  // ... other properties omitted
+}
+
+public class Address {
+
+  @GeoIndexed Point location;
+
+  // ... other properties omitted
+}
+
+public interface PersonRepository extends CrudRepository<Person, String> {
+
+  /**
+   * 在一个内嵌属性上建立的方法声明，使用Point与Distance
+   */
+  List<Person> findByAddressLocationNear(Point point, Distance distance);
+  /**
+   * 在一个内嵌属性上建立的方法声明，使用Circle来搜索
+   */
+  List<Person> findByAddressLocationWithin(Circle circle);                    
+}
+
+Person rand = new Person("rand", "al'thor");
+rand.setAddress(new Address(new Point(13.361389D, 38.115556D)));
+/**
+ * 底层执行的命令 GEOADD people:address:location 13.361389 38.115556 e2c7dcee-b8cd-4424-883e-736ce564363e
+ */
+repository.save(rand);                                                        
+/**
+ * 底层实际执行的命令 GEORADIUS people:address:location 15.0 37.0 200.0 km
+ */
+repository.findByAddressLocationNear(new Point(15D, 37D), new Distance(200)); 
+```
+在前面的例子中，经纬度通过Redis的GEOADD命令存储，使用对象的ID属性作为GEO类型的成员名字，Find方法允许使用Circle、Point或者Distance来查询这些值.
+## Query by Example
+### Introduction
+本章提供了对QBE的间隔简单的介绍并解释如何使用它。Query by Example (QBE) 是一种用户友好的查询技术，具有简单的接口。 它允许动态创建查询，并且不需要您编写包含字段名称的查询。 事实上，QBE根本不需要您使用特定于存储的查询语言来编写查询。
+### Usage
+QBE API包含3个部分
+- Probe: 带有填充值的领域对象;
+- ExampleMatcher: ExampleMatcher定义如何匹配特定字段的细节，可以被复用;
+- Example: 一个Example包含probe与ExampleMatcher，用来创建查询
+
+QBE适合的几种场景
+- 带有静态与动态约束限制的查询;
+- 领域对象需要频繁的重构，不需要担心破坏现有的查询;
+- 查询不依赖底层存储的API
+
+QBE也有一些不足，主要有:
+- 不支持内嵌的或者分醉的属性约束，比如`firstname = ?0 or (firstname = ?1 and lastname = ?2)`;
+- 字符串只支持starts/contains/ends/regex匹配，其他类型的属性只支持精确匹配
+
 # Appendixes
 
