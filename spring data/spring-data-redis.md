@@ -824,6 +824,141 @@ QBE也有一些不足，主要有:
 - 不支持内嵌的或者分醉的属性约束，比如`firstname = ?0 or (firstname = ?1 and lastname = ?2)`;
 - 字符串只支持starts/contains/ends/regex匹配，其他类型的属性只支持精确匹配
 
+在开始学些QBE的例子之前，你需要一个领域对象，也需要创建repo接口，如下所示:
+```java
+public class Person {
 
+  @Id
+  private String id;
+  private String firstname;
+  private String lastname;
+  private Address address;
+
+  // … getters and setters omitted
+}
+```
+上面的例子是一个简单的领域对象，你可以使用它创建一个Example，缺省情况下，null的field会被忽略，字符串匹配会使用存储组件对应的操作翻译，属性是否包含在QBE的查询中基于nullability的，使用基本类型的属性比如int，float等会始终包含除非声明忽略属性。
+
+Example可以通过使用of静态工厂方法或者使用ExampleMatcher来生成，Example是可变更的
+```java
+Person person = new Person();                         
+person.setFirstname("Dave");                          
+
+Example<Person> example = Example.of(person);         
+```
+你可以通过repo接口执行QBE查询，这样做，需要repo继承QueryByExampleExecutor<T>，下面是QueryByExampleExecutor<T>的摘录
+```java
+public interface QueryByExampleExecutor<T> {
+
+  <S extends T> S findOne(Example<S> example);
+
+  <S extends T> Iterable<S> findAll(Example<S> example);
+
+  // … more functionality omitted.
+}
+```
+### Exmple Matchers
+Example不止默认的设置，你可以指定字符串匹配、null处理，这些可以通过ExampleMatcher来处理，如下所示:
+```java
+Person person = new Person();                          
+person.setFirstname("Dave");                           
+
+ExampleMatcher matcher = ExampleMatcher.matching()  //创建一个期望匹配所有值的Matcher，   
+  .withIgnorePaths("lastname")    // 忽略lastname属性                    
+  .withIncludeNullValues()       // 包含null值                      
+  .withStringMatcher(StringMatcher.ENDING);  //字符串执行后缀匹配          
+
+Example<Person> example = Example.of(person, matcher); 
+```
+默认情况下，ExampleMatcher期望所有设置的值的一个匹配，这是一个and的关系，如果你想哟匹配任意一个谓词就可以，那么使用`ExampleMatcher.matchingAny()`，你可以指定每个单独属性的匹配行为，你可以调整匹配选项、大小写敏感性如下所示:
+```java
+ExampleMatcher matcher = ExampleMatcher.matching()
+  .withMatcher("firstname", endsWith())
+  .withMatcher("lastname", startsWith().ignoreCase());
+}
+```
+另外一种配置匹配选项的方式是使用lambda表达式，这种方式会创建回调，回调可以修改匹配器的行为，你不需要返回匹配器，因为配置选项已经在匹配器对象内部，下面的例子展示了一个使用lambda表达式的匹配器的例子:
+```java
+ExampleMatcher matcher = ExampleMatcher.matching()
+  .withMatcher("firstname", match -> match.endsWith())
+  .withMatcher("firstname", match -> match.startsWith());
+}
+```
+Example创建的查询会merge配置，默认的匹配设置是在ExampleMatcher级别设置的，单独的设置可以设置在特定的属性上，设置在ExampleMatcher上的配置可以由属性设置继承，属性的设置的优先级更高，下表描述了不同的ExampleMatcher设置的作用域
+|Setting|Scope|
+|:---|:---|
+|Null-handling|ExampleMatcher|
+|String matching|ExampleMatcher and property path|
+|Ignoring properties|Property path|
+|Case sensitivity|ExampleMatcher and property path|
+|Value transformation|Property path|
+### Running an Example
+```java
+interface PersonRepository extends QueryByExampleExecutor<Person> {
+}
+
+class PersonService {
+
+  @Autowired PersonRepository personRepository;
+
+  List<Person> findPeople(Person probe) {
+    return personRepository.findAll(Example.of(probe));
+  }
+}
+```
+RedisRepo支持，带有第二索引，使用SpringData QBE特性的一部分，特别的，只有exact、case-sensitive、non-null值用来构建查询，第二索引使用基于集合的操作（交集，并集），来决定匹配的key，向查询添加一个不是索引的属性返回空，因为不存在对应的索引，QBE支持会检查查询中属性都在索引中。
+不区分大小写的查询和不受支持的 StringMatcher 实例在运行时被拒绝。
+以下列表显示了受支持的QBE查询选项：
+- 区分大小写，简单和嵌套属性的精确匹配
+- any/all匹配模式
+- 标准值的值转换
+- 从条件中排除空值
+
+以下列表显示了QBE不支持的属性：
+- 不区分大小写的匹配
+- 正则表达式，前缀/包含/后缀字符串匹配
+- 查询关联、集合和类似地图的属性
+- 从criteria中包含空值
+- 带有排序的findAll 
+
+## Time To Live
+Redis 中存储的对象可能仅在一定时间内有效。 这对于在 Redis 中持久化短期对象特别有用，而无需在它们达到生命周期结束时手动删除它们。 可以使用 @RedisHash(timeToLive=...​) 以及使用 KeyspaceSettings（请参阅 Keyspaces）设置以秒为单位的过期时间。
+可以通过在数字属性或方法上使用 @TimeToLive 注释来设置更灵活的过期时间。 但是，不要对同一类中的方法和属性应用 @TimeToLive。 以下示例显示了属性和方法上的 @TimeToLive 注释：
+```java
+public class TimeToLiveOnProperty {
+
+  @Id
+  private String id;
+
+  @TimeToLive
+  private Long expiration;
+}
+
+public class TimeToLiveOnMethod {
+
+  @Id
+  private String id;
+
+  @TimeToLive
+  public long getTimeToLive() {
+  	return new Random().nextLong();
+  }
+}
+```
+存储库实现确保通过 RedisMessageListenerContainer 订阅 Redis 键空间通知。
+当过期时间被设置为正值，执行Redis中的EXPIRE命令，此时除了持久化原来的数据外，一会持久化一个副本，设置的过期时间比原来的数据延后5分钟，这是为了确保让Spring Data Redis可以发布RedisKeyExpiredEvent，当一个key过期后，即使被删了，也会在SpringEventPublisher中保留过期的值，所有连接Redis，使用Spring Data Redis Repo的应用都可以收到这个事件，默认情况下，key过期监听器是关闭的，这个可以在`@EnableRedisRepositories`中调整，也可以使用RedisKeyValueAdapter来开启监听器，可以参考[EnableKeyspaceEvents](https://docs.spring.io/spring-data/redis/docs/2.7.1/api/org/springframework/data/redis/core/RedisKeyValueAdapter.EnableKeyspaceEvents.html)获取可能的值。
+RedisKeyExpiredEvent保留了已过期对象的副本与其key，延迟或者关闭过期事件监听器会影响RedisKeyExpiredEvent事件的发布，一个关闭的事件监听器不会发布过期事件，延迟启动的事件监听器会造成事件丢失。keyspace同志消息监听器会修改redis中的notify-keyspace-events设置，键空间通知消息侦听器会更改 Redis 中的 notify-keyspace-events 设置（如果尚未设置）。 现有设置不会被覆盖，因此您必须正确设置这些设置（或将其留空）。 请注意，在 AWS ElastiCache 上禁用了 CONFIG，启用侦听器会导致错误。 要解决此问题，请将 keyspaceNotificationsConfigParameter 参数设置为空字符串。 这可以防止使用 CONFIG 命令。Redis的Pub/Sub消息不回被持久化，如果一个key在应用down机的时候过期，过期事件不会被处理，这可能导致第二索引包含已过期的对象的key引用。`@EnableKeyspaceEvent(shadowCopy=OFF)`会关闭额外拷贝来减少redis的数据存储量，RedisKeyExpiredEvent将只会包含过期key的id。
+## Persisting References
+标注属性为@Reference，可以只是保存一个key引用而不是全部的数据，对于内嵌类型的属性来说比较方便，当从redis中加载时，key引用会被自动解析并映射为对象，如下面的例子所示:
+>_class = org.example.Person
+id = e2c7dcee-b8cd-4424-883e-736ce564363e
+firstname = rand
+lastname = al’thor
+mother = people:a9d4b3a0-50d3-4538-a2fc-f7fc2581ee56 
+
+引用存储了引用对象的完整的key(keyspace:id)
+当引用对象已经保存后，不回被再次持久化，你必须单独的保存引用对象的持久化变更。
+## Persisting Partial Updates
+在一些场景中，你不需要完整的加载或者更新整个实体，只是为了变更一个值，完全没必要。记录属性的上一次更新时间戳是这种情况的一种可能的方案，`PartialUpdate`让你可以在对象上定义set与delete行为，
 # Appendixes
 
