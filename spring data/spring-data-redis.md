@@ -959,6 +959,167 @@ mother = people:a9d4b3a0-50d3-4538-a2fc-f7fc2581ee56
 引用存储了引用对象的完整的key(keyspace:id)
 当引用对象已经保存后，不回被再次持久化，你必须单独的保存引用对象的持久化变更。
 ## Persisting Partial Updates
-在一些场景中，你不需要完整的加载或者更新整个实体，只是为了变更一个值，完全没必要。记录属性的上一次更新时间戳是这种情况的一种可能的方案，`PartialUpdate`让你可以在对象上定义set与delete行为，
+在一些场景中，你不需要完整的加载或者更新整个实体，只是为了变更一个值，完全没必要。记录属性的上一次更新时间戳是这种情况的一种可能的方案，`PartialUpdate`让你可以在对象上定义set与delete行为，同时更新实体与索引结构的过期时间。下面的例子是一个局部更新的例子:
+```java
+PartialUpdate<Person> update = new PartialUpdate<Person>("e2c7dcee", Person.class)
+  .set("firstname", "mat")            //简单的设置firstname属性为mat                                               
+  .set("address.city", "emond's field")   // 设置address.city属性，不需要传递完整的对象，当注册了自定义的转换器时，不work                                           
+  .del("age"); // 移除age属性                                                                      
+
+template.update(update);
+
+update = new PartialUpdate<Person>("e2c7dcee", Person.class)
+  .set("address", new Address("caemlyn", "andor"))     // 设置复杂的address属性                              
+  .set("attributes", singletonMap("eye-color", "grey")); // 设置map，移除之前的map，替换为给定的map                            
+
+template.update(update);
+
+update = new PartialUpdate<Person>("e2c7dcee", Person.class)
+  .refreshTtl(true); // 自动更新服务器的过期时间                                                          
+  .set("expiration", 1000);
+
+template.update(update);
+```
+更新复杂的对象或者map(其他集合)结构需要与redis做更多的交互，通常来说，重写整个实体对象可能更快.
+## Queries与Query Methods
+查询方法可以自动的find方法名衍生，如下面的例子:
+```java
+public interface PersonRepository extends CrudRepository<Person, String> {
+
+  List<Person> findByFirstname(String firstname);
+}
+```
+请确保在finder方法中使用的属性建立了索引。Redis的repo的查询方法只支持查询实体或者实体的集合，也支持分页，使用派生的查询方法查询可能生成要执行的查询，RedisCallback提供了实际索引结构甚至自定义索引的匹配的更多的控制，为了实现这个效果，可以提供一个RedisCallback，它返回一个或者一个集合的id值，如下所示:
+```java
+String user = //...
+
+List<RedisSession> sessionsByUser = template.find(new RedisCallback<Set<byte[]>>() {
+
+  public Set<byte[]> doInRedis(RedisConnection connection) throws DataAccessException {
+    return connection
+      .sMembers("sessions:securityContext.authentication.principal.username:" + user);
+  }}, RedisSession.class);
+```
+下表概述了 Redis 支持的关键字以及包含该关键字的方法本质上转换为什么 :
+
+|Keyword|Sample|Redis snippet|
+|:---|:---|:---|
+|And|findByLastnameAndFirstname|SINTER …:firstname:rand …:lastname:al’thor|
+|Or|findByLastnameOrFirstname|SUNION …:firstname:rand …:lastname:al’thor|
+|Is, Equals|findByFirstname, findByFirstnameIs, findByFirstnameEquals|SINTER …:firstname:rand|
+|IsTrue|FindByAliveIsTrue|SINTER …:alive:1|
+|IsFalse|findByAliveIsFalse|SINTER …:alive:0|
+|Top,First|findFirst10ByFirstname,findTop5ByFirstname||
+
+Redis Repo支持多种方式定义排序，Redis本身在检索hash与set时没有内置排序支持，因此，Redis Repo查询方法会构造一个Comparator应用到返回的结果后，然后将排序后的结果返回为List，看一下下面的例子:
+```java
+interface PersonRepository extends RedisRepository<Person, String> {
+
+  List<Person> findByFirstnameOrderByAgeDesc(String firstname); //使用方法名静态排序
+
+  List<Person> findByFirstname(String firstname, Sort sort);   // 使用sort参数动态排序
+}
+```
+## Redis Repositories Running on a Cluster
+您可以在集群 Redis 环境中使用 Redis 存储库支持。 有关 ConnectionFactory 配置的详细信息，请参阅[Redis 集群](https://docs.spring.io/spring-data/redis/docs/current/reference/html/#cluster)部分。 尽管如此，还必须进行一些额外的配置，因为默认的key分布算法会将实体和二级索引分散到整个集群及其slot中。
+下表显示了集群上数据的详细信息（基于前面的示例）:
+|Key|Type|Slot|Node|
+|:---|:---|:---|:---|
+|people:e2c7dcee-b8cd-4424-883e-736ce564363e|id for hash|15171|127.0.0.1:7381|
+|people:a9d4b3a0-50d3-4538-a2fc-f7fc2581ee56|id for hash|7373|127.0.0.1:7380|
+|people:firstname:rand|index|1700|127.0.0.1:7379|
+
+一些命令，比如SINTER或者SUNION处理的key都在一个slot中会集中在一个服务器上执行，其他情况下，计算必须在客户端做，因此，有必要将keyspace固定在一个slot内，这样可以让计算集中在服务端。
+## CDI Integeration
+Repo接口实例通常由容器创建，也就是Spring容器，SDR带有自定义的CDI拓展，可以让你在CDI环境中使用repository抽象，拓展是JAR的一部分，只要SDR的jar在classpath下，就包含了CDI拓展。然后，您可以通过为RedisConnectionFactory和RedisOperations实现CDI生产者来设置基础架构，如以下示例所示:
+```java
+class RedisOperationsProducer {
+
+
+  @Produces
+  RedisConnectionFactory redisConnectionFactory() {
+
+    JedisConnectionFactory jedisConnectionFactory = new JedisConnectionFactory(new RedisStandaloneConfiguration());
+    jedisConnectionFactory.afterPropertiesSet();
+
+    return jedisConnectionFactory;
+  }
+
+  void disposeRedisConnectionFactory(@Disposes RedisConnectionFactory redisConnectionFactory) throws Exception {
+
+    if (redisConnectionFactory instanceof DisposableBean) {
+      ((DisposableBean) redisConnectionFactory).destroy();
+    }
+  }
+
+  @Produces
+  @ApplicationScoped
+  RedisOperations<byte[], byte[]> redisOperationsProducer(RedisConnectionFactory redisConnectionFactory) {
+
+    RedisTemplate<byte[], byte[]> template = new RedisTemplate<byte[], byte[]>();
+    template.setConnectionFactory(redisConnectionFactory);
+    template.afterPropertiesSet();
+
+    return template;
+  }
+
+}
+```
+SDR CDI扩展会将所有的repo作为CDI Bean，并创建repo的代理对象，因此获取一个Repo实例大约可以使用@Inject，如下所示:
+```java
+class RepositoryClient {
+
+  @Inject
+  PersonRepository repository;
+
+  public void businessMethod() {
+    List<Person> people = repository.findAll();
+  }
+}
+```
+一个Redis Repository需要RedisKeyValueAdapter与RedisKeyValueTemplate对象实例，这些bean是由Spring Data CDI扩展创建并管理的，当然，你也可以提供你自己的bean。
+## 深度剖析Redis Repositories
+Redis作为一个存储本身提供了非常单一的low-levelAPI而更高级的功能实现，比如第二索引与查询操作留给了用户实现。
+本节提供了存储库抽象发出的命令的更详细视图，以便更好地理解潜在的性能影响。考虑以下实体类作为所有操作的起点:
+```java
+@RedisHash("people")
+public class Person {
+
+  @Id String id;
+  @Indexed String firstname;
+  String lastname;
+  Address hometown;
+}
+
+public class Address {
+
+  @GeoIndexed Point location;
+}
+```
+1. Insert new
+```java
+repository.save(new Person("rand", "al'thor"));
+```
+```java
+HMSET "people:19315449-cda2-4f5c-b696-9cb8018fa1f9" "_class" "Person" "id" "19315449-cda2-4f5c-b696-9cb8018fa1f9" "firstname" "rand" "lastname" "al'thor" // 保存打平的实体为hash
+SADD  "people" "19315449-cda2-4f5c-b696-9cb8018fa1f9" //将key添加到索引集合中                     
+SADD  "people:firstname:rand" "19315449-cda2-4f5c-b696-9cb8018fa1f9"   //  //将key添加到第二索引集合中               
+SADD  "people:19315449-cda2-4f5c-b696-9cb8018fa1f9:idx" "people:firstname:rand" //将第二索引添加到实体的额外结构集合中，以便跟踪索引，在delete/update的时候清除索引
+```
+2. Replace existing
+```java
+repository.save(new Person("e82908cf-e7d3-47c2-9eec-b4e0967ad0c9", "Dragon Reborn", "al'thor"));
+```
+```java
+DEL       "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9" //移除                          
+HMSET     "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9" "_class" "Person" "id" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9" "firstname" "Dragon Reborn" "lastname" "al'thor" //保存
+SADD      "people" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9"                         
+SMEMBERS  "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9:idx"                       
+TYPE      "people:firstname:rand"                                                 
+SREM      "people:firstname:rand" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9"          
+DEL       "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9:idx"                       
+SADD      "people:firstname:Dragon Reborn" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9" 
+SADD      "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9:idx" "people:firstname:Dragon Reborn" 
+```
 # Appendixes
 
