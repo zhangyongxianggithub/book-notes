@@ -494,21 +494,22 @@ class PersonPropertyAccessor implements PersistentPropertyAccessor {
 ```java
 class Person {
 
-  private final @Id Long id;//标识符属性是final的，但是在构造函数中被设置为null，类暴漏了一个withId(...)的方法用来设置标识属性，原来的Person实例保持不变，因为创建了一个新的，                                             
-  private final String firstname, lastname;                                 
+  private final @Id Long id;//标识符属性是final的，但是在构造函数中被设置为null，类暴漏了一个withId(...)的方法用来设置标识属性，原来的Person实例保持不变，因为创建了一个新的， wither 方法是可选的，因为持久性构造函数（参见 6）实际上是一个复制构造函数，设置属性将被转换为创建一个新实例并应用新的标识符值.    
+  private final String firstname, lastname; // 这2个属性是不可变更属性，通过getter房方法获取                             
   private final LocalDate birthday;
-  private final int age;                                                    
+  private final int age;    //age是一个不可变更属性，但是衍生自birthday属性，根据上面的设计，                                        
 
   private String comment;                                                   
-  private @AccessType(Type.PROPERTY) String remarks;                        
+  private @AccessType(Type.PROPERTY) String remarks;  
+  //remarks属性是可变更的，                      
 
   static Person of(String firstname, String lastname, LocalDate birthday) { 
-
+//类暴漏了一个工厂方法，与一个构造函数用于创建对象，这里的想法是使用工厂方法而不是构造函数是为避免通过`@PersistenceCreator`造成的构造函数混乱，如果你想要使用工厂方法里创建对象，加上注解@PersistenceCreator
     return new Person(null, firstname, lastname, birthday,
       Period.between(birthday, LocalDate.now()).getYears());
   }
 
-  Person(Long id, String firstname, String lastname, LocalDate birthday, int age) { 
+  Person(Long id, String firstname, String lastname, LocalDate birthday, int age) {//
 
     this.id = id;
     this.firstname = firstname;
@@ -527,8 +528,242 @@ class Person {
 }
 ```
 ### General Recommendations
+- 尽量使用不可变对象，不可变对象很容易创建，因为实例化对象只要调用其构造函数即可，还可以避免对象被外部的代码调用setter方法等设置垃圾数据，如果您需要这样的功能，最好将package设置成protected，以便它们只能被有限数量的类型调用。 仅构造函数实现比属性填充快30%;
+- 提供一个全参数的构造函数，即使您不能或不想将实体建模为不可变值，提供一个将实体的所有属性（包括可变属性）作为参数的构造函数仍然有价值，因为这允许对象映射跳过属性填充 以获得最佳性能;
+- 使用工厂方法而不是过度复杂重载的构造函数，避免使用@persistenceCreator去消除调用构造函数的模糊性，相对于最佳性能所需的全参数构造函数，我们通常希望能够使用更多特定于应用程序用例的构造函数，这些构造函数省略了自动生成的标识符等内容。这是一种既定的模式，就是使用静态工厂方法来而不是全参数构造函数的重载形式;
+- 确保遵守生成实例化器与属性访问器的类的约束;
+- 对于生成的标识符，仍然使用final field与全参数构造函数的组合形式，或者是一个with...的静态方法;
+- 使用Lombok来避免样板代码，因为持久化操作需要全参数的构造函数，写这些构造函数通常都是无聊的代码重复，可以使用Lombok的@AllArgsConstructor来避免这种情况.
 
+Java可以灵活的设计领域对象类，子类可以定义个与父类同名的属性，看一下限免的例子:
+```java
+public class SuperType {
 
+   private CharSequence field;
+
+   public SuperType(CharSequence field) {
+      this.field = field;
+   }
+
+   public CharSequence getField() {
+      return this.field;
+   }
+
+   public void setField(CharSequence field) {
+      this.field = field;
+   }
+}
+public class SubType extends SuperType {
+
+   private String field;
+
+   public SubType(String field) {
+      super(field);
+      this.field = field;
+   }
+
+   @Override
+   public String getField() {
+      return this.field;
+   }
+
+   public void setField(String field) {
+      this.field = field;
+
+      // optional
+      super.setField(field);
+   }
+}
+```
+2个类都定义了field属性，子类会屏蔽父类的同名属性，依赖于类设计，使用构造函数是可以设置父类的field属性的方式，也可以调用super.setField(...)的方式设置父类的field属性，所有这些都造成了一定程度的混乱，因为同名的属性有不同的值，如果同名的属性的类型不是互相兼容的，Spring Data会忽略父类的属性，也就是说，被屏蔽的父类属性的类型必须是它子类同名属性的父类型或者相同了日行，否则，父类型中的属性会被认为是transient的，我们通常建议使用不同的属性名.Spring Data支持覆盖属性持有不同的值，从编程模型的角度来看有几个注意的点如下:
+- 哪个同名属性应该被持久化存储（默认是所有已声明的属性），你可以通过注解@Transient排除不需要持久存储的属性;
+- 如果在数据存储种表示属性，使用相同的field/column映射可能会造成不同的值，需要使用注解明确的指定一个额外的field/column映射名字;
+- @AccessType(PROPERTY)注解不能用在父类的属性上
+### Kotlin support
+## Object-to-Hash Mapping
+Redis Repository支持将对象持久化为Hash，这需要有对象到Hash的转换，这是通过RedisConverter完成的，默认实现的Converter是将属性值转换为Redis的native 字节数组.给定前面章节中的Person类型，默认映射如下所示:
+>_class = org.example.Person                 
+id = e2c7dcee-b8cd-4424-883e-736ce564363e
+firstname = rand                            
+lastname = al’thor
+address.city = emond's field                
+address.country = andor
+
+- _class属性包含在所有对象内，包括内嵌的，或者抽象的;
+- 简单属性值通过名字的path映射
+- 复杂类型的属性呢通过点号分隔的path路径映射
+
+下面的表格描述了默认的映射规则
+|Type|Sample|Mapped Value|
+|:---|:---|:---|
+|Simple Type|String firstname="rand"|firstname="rand"|
+|byte array|byte[] image = "rand".getBytes();|image = "rand"|
+|Complex Type(for example, Address)|Address address = new Address("emond’s field");|address.city = "emond’s field"|
+|List of Simple Type|List<String> nicknames = asList("dragon reborn", "lews therin");|nicknames.[0] = "dragon reborn",nicknames.[1] = "lews therin"|
+|Map of Simple Type|Map<String, String> atts = asMap({"eye-color", "grey"}, {"…​|atts.[eye-color] = "grey",atts.[hair-color] = "…​|
+|List of Complex Type|List<Address> addresses = asList(new Address("em…​|addresses.[0].city = "emond’s field",addresses.[1].city = "…​|
+|Map of Complex Type|Map<String, Address> addresses = asMap({"home", new Address("em…​|addresses.[home].city = "emond’s field",addresses.[work].city = "…​|
+
+由于这种扁平的表示结构，Hash的key需要时简单的类型，比如Stirng或者nummber.映射行为可以通过在RedisCustomConversions中注册自定义的Converter改变，这些转换器可以转换对象到字节[]或者Map<String,byte[]>, 第一个适用于（例如）将复杂类型转换为（例如）二进制JSON表示，这种JSON表示仍然使用默认映射哈希结构， 第二个选项提供对结果哈希的完全控制。写对象到Hash会把当前的hash删掉，重新创建一个完整的hash。下面是2个byte数组转换器的例子
+```java
+@WritingConverter
+public class AddressToBytesConverter implements Converter<Address, byte[]> {
+
+  private final Jackson2JsonRedisSerializer<Address> serializer;
+
+  public AddressToBytesConverter() {
+
+    serializer = new Jackson2JsonRedisSerializer<Address>(Address.class);
+    serializer.setObjectMapper(new ObjectMapper());
+  }
+
+  @Override
+  public byte[] convert(Address value) {
+    return serializer.serialize(value);
+  }
+}
+
+@ReadingConverter
+public class BytesToAddressConverter implements Converter<byte[], Address> {
+
+  private final Jackson2JsonRedisSerializer<Address> serializer;
+
+  public BytesToAddressConverter() {
+
+    serializer = new Jackson2JsonRedisSerializer<Address>(Address.class);
+    serializer.setObjectMapper(new ObjectMapper());
+  }
+
+  @Override
+  public Address convert(byte[] value) {
+    return serializer.deserialize(value);
+  }
+}
+```使用上面的字节数组转换器，将会产生下面的输出
+>_class = org.example.Person
+id = e2c7dcee-b8cd-4424-883e-736ce564363e
+firstname = rand
+lastname = al’thor
+address = { city : "emond's field", country : "andor" }
+
+下面2个例子展示了使用Map转换器的结果
+```java
+@WritingConverter
+public class AddressToMapConverter implements Converter<Address, Map<String,byte[]>> {
+
+  @Override
+  public Map<String,byte[]> convert(Address source) {
+    return singletonMap("ciudad", source.getCity().getBytes());
+  }
+}
+
+@ReadingConverter
+public class MapToAddressConverter implements Converter<Map<String, byte[]>, Address> {
+
+  @Override
+  public Address convert(Map<String,byte[]> source) {
+    return new Address(new String(source.get("ciudad")));
+  }
+}
+```
+产生的结果如下:
+>_class = org.example.Person
+id = e2c7dcee-b8cd-4424-883e-736ce564363e
+firstname = rand
+lastname = al’thor
+ciudad = "emond's field"
+
+如果您想避免将整个 Java 类名写为类型信息，并且希望使用一个键，您可以在被持久化的实体类上使用 @TypeAlias 注释。 如果您需要更多地自定义映射，请查看 TypeInformationMapper 接口。 该接口的一个实例可以在 DefaultRedisTypeMapper 上进行配置，它可以在 MappingRedisConverter 上进行配置。以下示例显示如何为实体定义类型别名:
+```java
+@TypeAlias("pers")
+class Person {
+
+}
+```
+造成的结果是hash中的_class=pers。下面的例子展示了如何在MappingRedisConverter中配置一个自定义的RedisTypeMapper。定义一个自定义的Mapper
+```java
+class CustomRedisTypeMapper extends DefaultRedisTypeMapper {
+  //implement custom type mapping here
+}
+```
+注册自定义的Mapper
+```java
+@Configuration
+class SampleRedisConfiguration {
+
+  @Bean
+  public MappingRedisConverter redisConverter(RedisMappingContext mappingContext,
+        RedisCustomConversions customConversions, ReferenceResolver referenceResolver) {
+
+    MappingRedisConverter mappingRedisConverter = new MappingRedisConverter(mappingContext, null, referenceResolver,
+            customTypeMapper());
+
+    mappingRedisConverter.setCustomConversions(customConversions);
+
+    return mappingRedisConverter;
+  }
+
+  @Bean
+  public RedisTypeMapper customTypeMapper() {
+    return new CustomRedisTypeMapper();
+  }
+}
+```
+## Keyspaces
+键空间定义了用于为Redis Hash创建实际键的前缀，不明确指定情况下前缀为getClass().getName()，你可以改变这种默认的行为，可以通过在聚合根类上设置@RedisHash或通过编程的方式更改。但是，注解的键空间设置会取代任何其他配置。
+以下示例显示了如何使用@EnableRedisRepositories注解设置键空间配置:
+```java
+@Configuration
+@EnableRedisRepositories(keyspaceConfiguration = MyKeyspaceConfiguration.class)
+public class ApplicationConfig {
+
+  //... RedisConnectionFactory and RedisTemplate Bean definitions omitted
+
+  public static class MyKeyspaceConfiguration extends KeyspaceConfiguration {
+
+    @Override
+    protected Iterable<KeyspaceSettings> initialConfiguration() {
+      return Collections.singleton(new KeyspaceSettings(Person.class, "people"));
+    }
+  }
+}
+```
+下面的例子展示了如何通过编程的方式设置键空间
+```java
+@Configuration
+@EnableRedisRepositories
+public class ApplicationConfig {
+
+  //... RedisConnectionFactory and RedisTemplate Bean definitions omitted
+
+  @Bean
+  public RedisMappingContext keyValueMappingContext() {
+    return new RedisMappingContext(
+      new MappingConfiguration(new IndexConfiguration(), new MyKeyspaceConfiguration()));
+  }
+
+  public static class MyKeyspaceConfiguration extends KeyspaceConfiguration {
+
+    @Override
+    protected Iterable<KeyspaceSettings> initialConfiguration() {
+      return Collections.singleton(new KeyspaceSettings(Person.class, "people"));
+    }
+  }
+}
+```
+## 第二索引
+第二索引用来开启基于native redis结构的查找操作，每次保存时的值都会存在索引中，当对象被删除或者过期时从索引中移除。以前面的Person类型为例，我们可以为firstname创建一个索引，通过在firstname上放置@Indexed注解，如下所示:
+```java
+@RedisHash("people")
+public class Person {
+
+  @Id String id;
+  @Indexed String firstname;
+  String lastname;
+  Address address;
+}
+```
+实际属性值的的内容创建索引，保存2个person后的索引可能如下:
 ### Geospatial Index
 	假设Address类型含有一个Point类型的location属性，Point类型含有特定地址的地理位置坐标，通过在属性上标注@GeoIndexed注解，Spring Data Redis会使用Redis的GEO命令添加这些值，如下面的例子所示:
 ```java
@@ -588,6 +823,7 @@ QBE适合的几种场景
 QBE也有一些不足，主要有:
 - 不支持内嵌的或者分醉的属性约束，比如`firstname = ?0 or (firstname = ?1 and lastname = ?2)`;
 - 字符串只支持starts/contains/ends/regex匹配，其他类型的属性只支持精确匹配
+
 
 # Appendixes
 
