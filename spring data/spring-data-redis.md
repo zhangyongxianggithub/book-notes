@@ -340,6 +340,17 @@ public class Address {
 ![](redis/flat.png)
 展平要求所有属性名称不干扰 JSON 路径。 使用扁平化时，不支持在映射键中使用点或括号或作为属性名称。 生成的哈希无法映射回对象。java.util.Date and java.util.Calendar are represented with milliseconds. JSR-310 Date/Time types are serialized to their toString form if jackson-datatype-jsr310 is on the class path.
 # Reactive Redis support
+本章节覆盖了Redis的reactive支持，Reactive Redis支持天生与命令式Redis支持有重叠的部分。
+## Redis Requirements
+Spring Data Redis当前只集成了Lettuce作为唯一的Redis的reactiveJava连接器，Project Reactor被用作reactive工具库.
+## Connecting to Redis by Using a Reactive Driver
+首要任务是通过IOC容器连接redis，需要Java连接器，不论你选择了哪个连接器库，你都要使用`org.springframework.data.redis.connection`包，还有这个包下的`ReactiveRedisConnection`与`ReactiveRedisConnectionFactory`2个接口来执行连接的工作，或者检索到Redis的连接。
+### Redis Operation Modes
+Redis有3种运行模式，单机、哨兵与集群模式，Lettuce都支持.
+### ReactiveRedisConnection and ReactiveRedisConnectionFactory
+ReactiveRedisConnection是Redis通信的核心，因为它具体处理与Redis后端的通信，同时，它也会把底层通信的异常转换成Spring的统一的DAO异常体系，所以当底层连接库变化时，你的代码不需要变更。ReactiveRedisConnectionFactory创建ReactiveRedisConnection实例对象，另外，工厂也会作为一个PersistenceExceptionTranslator存在，这意味着，一旦声明，就会执行透明的异常转换，
+### Configuring a Lettuce Connector
+
 # Redis Cluster
 # Redis Repositories
 使用Redis Repository可以让你自由的在领域对象与Redis Hash之间相互转化，应用自定义的映射策略，使用第二索引。Redis Repositories不支持事务，确保使用的RedisTemplate关闭了事务。
@@ -1120,6 +1131,30 @@ SREM      "people:firstname:rand" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9"
 DEL       "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9:idx"                       
 SADD      "people:firstname:Dragon Reborn" "e82908cf-e7d3-47c2-9eec-b4e0967ad0c9" 
 SADD      "people:e82908cf-e7d3-47c2-9eec-b4e0967ad0c9:idx" "people:firstname:Dragon Reborn" 
+```
+### Save Geo Data
+地理空间索引与基于文本的索引一样，只是使用geo结构存储值，保存一个由geo索引的属性会执行下面的命令
+```java
+GEOADD "people:hometown:location" "13.361389" "38.115556" "76900e94-b057-44bc-abcf-8126d51a621b" // 将要保存的实体的id保存到geo索引中 
+SADD   "people:76900e94-b057-44bc-abcf-8126d51a621b:idx" "people:hometown:location"   //跟踪索引结构            
+```
+### Find using simple index
+```java
+repository.findByFirstname("egwene");
+```
+```java
+SINTER  "people:firstname:egwene" // 查找第二索引中的key                   
+HGETALL "people:d70091b5-0b9a-4c0a-9551-519e61bc9ef3" //获取每一个key的值
+HGETALL ...
+```
+### Find using Geo Index
+```java
+repository.findByHometownLocationNear(new Point(15, 37), new Distance(200, KILOMETERS));
+```
+```java
+GEORADIUS "people:hometown:location" "15.0" "37.0" "200.0" "km" // 在第二索引中查找key
+HGETALL   "people:76900e94-b057-44bc-abcf-8126d51a621b" //通过key的结果查找出每个key的值   
+HGETALL   ...
 ```
 # Appendixes
 
