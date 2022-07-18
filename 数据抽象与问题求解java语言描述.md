@@ -1826,6 +1826,82 @@ $$ O(1)<O({log}_{2}n)<O(n)<O(n*{log}_{2}n)<O({n}^{2})<O({n}^{3})<O({2}^{n}) $$
 - 内部排序，数据集合全部在内存中
 - 外部排序，不全在内存中
 
+### 选择排序
+类似于扑克牌排序过程，查找剩余元素的最大项与最后一个元素交换，然后递归处理剩余的未排序的元素。直到最后剩余一个元素就不需要处理了。
+java代码如下:
+```java
+/**
+     * sorts the items in an array into ascending order.
+     * Precondition: theArray is an array of n items
+     * Postcondition: theArray is sorted into ascending order.
+     * 
+     * @param theArray
+     * @param n
+     * @param <T>
+     */
+    public static <T> void selectionSort(final Comparable<T>[] theArray,
+            final int n) {
+        for (int last = n - 1; last >= 1; last--) {
+            final int largest = indexOfLargest(theArray, last);
+            final Comparable<T> tmp = theArray[largest];
+            theArray[largest] = theArray[largest];
+            theArray[largest] = tmp;
+        }
+    }
+    
+    /**
+     * Finds the largest item in an array
+     * Precondition: theArray is an array of size items
+     * size>=1
+     * 
+     * @param theArray
+     * @param maxIndex
+     * @return
+     * @param <T>
+     */
+    private static <T> int indexOfLargest(final Comparable<T>[] theArray,
+            final int maxIndex) {
+        int largest = 0;
+        for (int index = largest; index <= maxIndex; index++) {
+            if (theArray[index].compareTo((T) theArray[largest]) > 0) {
+                largest = index;
+            }
+        }
+        return largest;
+    }
+```
+选择排序的增率函数是$O(n^2)$，排序算法中的基本操作室比较、交换与移动元素，考虑这3种操作的次数，因为Java是引用的方式，所以只有比较操作的成本最好，移动与交换成本不高，不依赖数据肚饿初始的顺序，只适用较小的n值。
+### 冒泡排序
+冒泡排序比较相邻项，若为逆序就交换它们。代码如下:
+```java
+    /**
+     * sorts the items in an array into ascending order.
+     * Precondition: theArray is an array of n items
+     * Postcondition: theArray is sorted into ascending order.
+     * 
+     * @param theArray
+     * @param n
+     * @param <T>
+     */
+    public static <T> void bubbleSort(final Comparable<T>[] theArray,
+            final int n) {
+        
+        boolean sorted = false;
+        
+        for (int pass = 1; pass < n && !sorted; pass++) {
+            sorted = true;
+            for (int index = 0; index < n - pass; index++) {
+                final int nextIndex = index + 1;
+                if (theArray[index].compareTo((T) theArray[nextIndex]) > 0) {
+                    swap(theArray, index, nextIndex);
+                    sorted = false;
+                }
+            }
+        }
+    }
+```
+冒泡排序最坏情况下是$O(n^2)$时间复杂度，最好情况下就是已经有序，此时执行$n-1$次比较，时间复杂度是$O(n)$.
+### 插入排序
 
 
 
