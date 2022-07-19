@@ -1929,7 +1929,21 @@ java代码如下:
 ```
 插入排序的阶是$O(n^2)$。对于小于25个项的数组，插入排序简单易行，超过这个数，增率比较大。
 ### 归并排序
-归并排序与快速排序是2种重要的分而治之排序算法。归并排序也适用于外部文件。归并排序是一种递归排序算法。无论原始顺序如何，归并排序性能不变，将数据一分为2，2个子数组排序，排好后，通过临时数组的方式将2个子数组合并。
+归并排序与快速排序是2种重要的分而治之排序算法。归并排序也适用于外部文件。归并排序是一种递归排序算法。无论原始顺序如何，归并排序性能不变，将数据一分为2，2个子数组排序，排好后，通过临时数组的方式将2个子数组合并。归并排序的伪代码如下:
+```java
++mergeSort(inout theArray: itemArray, in first:integer, in last:integer)
+// sorts theArray[first...last] by 
+// 1. sorting the first half of the array
+// 2. sorting the second half of the array
+// 3. merging the two sorted halves
+if(first<last){
+    mid=(first+last)/2
+    mergesort(theArray, first, mid)
+    mergesort(theArray, mid+1, last)
+    merge(theArray, first, mid last)
+}
+```
+
 
 
 
