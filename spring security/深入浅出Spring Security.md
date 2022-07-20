@@ -1,12 +1,12 @@
 # 第一章 Spring Security架构概览
-Spring Security方便集成在Spring Boot与Spring Cloud项目中。
+Spring Security方便集成在Spring Boot与Spring Cloud项目中，因为它们就是同归属于一个家族。比shiro啥的有优势。
 ## Spring Security简介
 java安全管理的实现方案
-- Shiro
-- Spring Security
-- 开发者自己实现
+- Shiro，轻量、简单、易于集成，但是不擅长微服务;
+- Spring Security，支持oauth2，Spring Cloud也推出了相关的支持，更适合微服务;
+- 开发者自己实现，网络攻击可能存在.
 
-Spring Security最早叫做Acegi Security，是基于Spring的一种框架，后来改名了叫Spring Security，一直是配置繁琐；但是Spring Boot的出现解决了这个问题，因为可以提供自动化的配置。
+Spring Security最早叫做Acegi Security，是基于Spring的一种框架，主要是为Spring框架提供安全相关的功能，后来改名了叫Spring Security，一直是配置繁琐；但是Spring Boot的出现解决了这个问题，因为可以提供自动化的配置。
 ## Spring Security核型功能
 - 认证（你是谁）
 - 授权（你可以做什么）
@@ -24,27 +24,10 @@ Spring Security最早叫做Acegi Security，是基于Spring的一种框架，后
 - HTTP Basic认证
 - HTTP Digest认证
 
-也可以引入第三方的支持或者自定义认证逻辑。
-Spring Security支持URL请求授权、方法访问授权、SpEL访问控制、域对象安全、动态权限配置、RBAC模型等。
+也可以引入第三方的支持或者自定义认证逻辑支持更多的认证方式，认证于授权是解耦的，互不影响，Spring Security支持URL请求授权、方法访问授权、SpEL访问控制、域对象安全(ACL)、动态权限配置、RBAC模型等。Spring Security还帮助我们做了网络攻击的防护
 ## Spring Security整体架构
 在Spring Security的设计中，认证（Authentication）与授权（Authorization）是分开的，无论使用什么样的授权方式都不会影响认证；用户的认证信息主要是由Authentication的实现类来保存，Authentication接口如下：
 ```java
-/*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.springframework.security.core;
 
 import java.io.Serializable;
@@ -179,24 +162,8 @@ public interface Authentication extends Principal, Serializable {
 - getPrincipal() 用来获取当前用户，例如是一个用户名或者是一个用户对象；
 - isAuthenticated() 当前用户是否认证成功;
 
-Spring Security中的认证的工作主要由AuthenticationManager负责；该接口的定义如下：
+不同的认证方式对应不同的Authentication接口的实现，Spring Security中的认证的工作主要由AuthenticationManager负责；该接口的定义如下: 
 ```java
-/*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.springframework.security.authentication;
 
 import org.springframework.security.core.Authentication;
@@ -249,22 +216,6 @@ public interface AuthenticationManager {
 
 主要的实现类是ProviderManager，ProviderManager管理了众多的AuthenticationProvider实例，AuthenticationProvider有点类似于AuthenticationManager，但是它多了一个supports()方法用来判断是否支持给定的Authentication类型。AuthenticationProvider接口定义如下：
 ```java
-/*
- * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.springframework.security.authentication;
 
 import org.springframework.security.core.Authentication;
@@ -322,24 +273,64 @@ public interface AuthenticationProvider {
 	boolean supports(Class<?> authentication);
 }
 ```
-由于Authentication拥有众多的实现类，不同的实现类由不同的AuthenticationProvider来处理，所以有个supports方法，用来判断Provider是否支持对应的Authentication；在一个完整的认证流程中，可能支持多个Provider，这些Provider统一由Manager来管理，ProviderManager由一个可选的parent，当所有的AuthenticationProvider都处理失败时，就会调用parent认证。相当于一个备用的认证方式。
+由于Authentication拥有众多的实现类，不同的实现类由不同的AuthenticationProvider来处理，所以有个supports方法，用来判断Provider是否支持对应的Authentication；在一个完整的认证流程中，可能存在多个Provider（比如项目同时支持表单登录与验证码登录），这些Provider统一由Manager来管理，ProviderManager由一个可选的parent，当所有的AuthenticationProvider都处理失败时，就会调用parent认证。相当于一个备用的认证方式。
 授权有2个关键的接口
 - AccessDecisionManager
 - AccessDecisionVoter
 
 AccessDecisionVoter是一个投票器，用于检查用户是否应该具备应有的角色；AccessDecisionManager是一个决策器，用来决定此次访问是否被允许；它们都有众多的实现类，AccessDecisionManager会挨个遍历AccessDecisionVoter，决定是否允许用户访问；有点类似于AuthenticationProvider与ProviderManager的关系。
 在Spring Security中，用户请求资源需要的角色会被封装成ConfigAttributes，投票器做的事情就是判断ConfigAttributes与当前用户的角色是否匹配。
-在Spring Security中，认证与授权都是通过过滤器来完成的，Spring Security的过滤器如下：
+在Spring Security中，认证与授权都是通过过滤器来完成的，下面列表的默认加载是指引入Spring Security依赖后，开发者不做任何配置自动加载的过滤器，Spring Security的过滤器如下：
 
 |过滤器|过滤器的作用|是否默认加载|
 |:---:|:---:|:---:|
 |ChannelProcessingFilter|过滤请求协议如HTTTP与HTTPS|NO|
 |WebAsyncManagerIntegrationFilter|将WebAsyncManager与Spring Security上下文进行集成|YES|
-其他的以后再说吧。
+|SecurityContextpersistenceFilter|在处理请求之前，将安全信息加载到SecurityContextHolder种以方便后续使用，请求结束后再擦除SecurityContextHolder中的信息|YES|
+|HeaderWriterFilter|头信息加入到响应中|YES|
+|CorsFilter|处理跨域问题|NO|
+|CsrfFilter|处理CSRF攻击|YES|
+|LogoutFilter|处理注销登录|YES|
+|OAuth2AuthorizationRequestRedirectFilter|处理OAuth2认证重定向|NO|
+|Saml2WebSsoAuthenticationRequestFilter|处理SAML认证|NO|
+|X509AuthenticationFilter|处理X509认证|NO|
+|AbstractPreAuthenticatedProcessingFilter|处理预认证问题|NO|
+|CasAuthenticationFilter|处理CAS单点登录|NO|
+|OAuth2LoginAuthenticationFilter|处理OAuth2认证|NO|
+|Saml2WebssoAuthenticationFilter|处理SAML认证|NO|
+|UsernammePasswordAuthenticationFilter|处理表单登录|YES|
+|OpenIDAuthenticationFilter|处理OpenID认证|NO|
+|DefaultLoginPageGeneratingFilter|配置默认登录页面|YES|
+|DefaultLogoutPageGeneratingFilter|配置默认注销页面|YES|
+|ConcurrentSessionFilter|处理Session有效期|NO|
+|DigestAuthenticationFilter|处理HTTP摘要认证|NO|
+|BearerTokenAuthenticationFilter|处理OAuth2认证时的Access Token|NO|
+|BasicAuthenticationFilter|处理HttBasic登录|YES|
+|RequestCacheAwareFilter|处理请求缓存|YES|
+|SecurityContextHolderAwareRequestFilter|包装原始请求|YES|
+|JaasApiIntegrationFilter|处理JAAS认证|NO|
+|RememberMeAuthenticationFilter|处理RememberMe登录|NO|
+|AnonymousAuthenticationFilter|配置匿名认证|YES|
+|OAuth2AuthenticationCodeGrantFilter|处理OAuth2认证中的授权码|NO|
+|SessionManagementFilter|处理Session并发问题|YES|
+|ExceptionTranslationFilter|处理异常认证/授权中的情况|YES|
+|FilterSecurityInterceptor|处理授权|YES|
+|SwitchUserFilter|处理账户切换|NO|
+
 Spring Security的所有的功能都是通过这些过滤器来实现的，这些过滤器按照既定的优先级排列形成过滤器链；也可以自定义过滤器，并通过@Order来调整自定义过滤器在过滤器链中的位置。默认的过滤器并不是直接在Web项目的原生过滤器链中，而是通过一个FilterChainProxy来统一管理，Spring Security中的过滤器链通过FilterChainProxy嵌入到Web项目的原生过滤器链中，如下图
-![过滤器链](./filterchainproxy.png)
+![过滤器链通过FilterChainProxy出现在Web容器中](./filterchainproxy.png)
 过滤器链可能存在多个
 ![多个过滤器](./multi-filterchainproxy.png)
 FilterChainProxy会通过DelegatingFilterProxy整合到原生过滤器链中。
-Spring Security还对登录数据做了线程绑定。使用的是ThreadLocal的机制，SecurityContextHolder中会存储这个变量，当处理完成，SecurityContextHolder会把数据清空，并放到Session中，以后每当有请求到来，先到session中取出登录数据放到SecurityContextHolder中，然后处理完，再次保存到Session中。
+Spring Security还对登录成功后的用户信息数据做了线程绑定（Session中也会存储一份）。使用的是ThreadLocal的机制，SecurityContextHolder中会存储这个变量，当处理完成，SecurityContextHolder会把数据清空，并放到Session中，以后每当有请求到来，先到session中取出登录数据放到SecurityContextHolder中，然后处理完，再次保存到Session中。但是如果是异步执行的话，线程中获取不到登录用户信息，特别是使用`@Async`时候，Spring Security为此提供了解决方案
+```java
+@Configuration
+public class Config extends AsyncConfigurerSupport {
+    @Override
+    public Executor getAsyncExecutor() {
+        return new DelegatingSecurityContextExecutorService(
+                Executors.newFixedThreadPool(5));
+    }
+}
+```
 # 第2章 认证
