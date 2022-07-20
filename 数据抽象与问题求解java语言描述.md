@@ -1945,7 +1945,72 @@ if(first<last){
 ```
 java代码如下:
 ```java
+    /**
+     * merges two sorted array segments theArray[first...mid] and
+     * theArray[mid+1...last] into one sorted array.
+     * Precondition: first<=mid<=last. the subarrays theArray[first...mid] and
+     * theArray[mid+1...last]
+     * are each sorted in increasing order.
+     * Postcondition: theArray[first...last] is sorted.
+     * Implementation note: This method merges the two subarrays
+     * into a temporary array and copies the result into the original arrat
+     * anArray.
+     * 
+     * @param theArray
+     * @param first
+     * @param mid
+     * @param last
+     * @param <T>
+     */
+    private static <T> void merge(final Comparable<T>[] theArray,
+            final int first, final int mid, final int last) {
+        final Comparable<T>[] tempArray = new Comparable[theArray.length];
+        int first1 = first;
+        final int last1 = mid;
+        int first2 = mid + 1;
+        final int last2 = last;
+        int index = first1;
+        while (first1 <= last1 && first2 <= last2) {
+            if (theArray[first1].compareTo((T) theArray[first2]) <= 0) {
+                tempArray[index++] = theArray[first1++];
+            } else {
+                tempArray[index++] = theArray[first2++];
+            }
+        }
+        while (first1 <= last1) {
+            tempArray[index++] = theArray[first1++];
+        }
+        while (first2 <= last2) {
+            tempArray[index++] = theArray[first2++];
+        }
+        for (index = first; index <= last; index++) {
+            theArray[index] = tempArray[index];
+        }
+    }
+    
+    /**
+     * sorts the items in an array into ascending order
+     * Precondition: theArray[first...last] is an array
+     * Postcondition: theArray[first...last] is sorted in ascending order
+     * 
+     * @param theArray
+     * @param first
+     * @param last
+     * @param <T>
+     */
+    private static <T> void mergeSort(final Comparable<T>[] theArray,
+            final int first, final int last) {
+        if (first < last) {
+            final int mid = (first + last) / 2;
+            mergeSort(theArray, first, mid);
+            mergeSort(theArray, mid + 1, last);
+            merge(theArray, first, mid, last);
+        }
+    }
 ```
+归并排序的时间复杂度是$O(n{log}_{2}n)$。
+### 快速排序
+
 
 
 
