@@ -334,3 +334,19 @@ public class Config extends AsyncConfigurerSupport {
 }
 ```
 # 第2章 认证
+引进依赖
+```xml
+              <dependency>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-security</artifactId>
+                    <version>2.7.1</version>
+                </dependency>
+```
+来看一下请求的流程
+![请求流程图](./%E8%AF%B7%E6%B1%82%E6%B5%81%E7%A8%8B%E5%9B%BE.drawio.png)
+- 客户端发起请求访问/hello接口，这个接口被鉴权
+- 请求达到服务端走了一遍security的过滤器链，然后到达FilterSecurityInterceptor被拦截下来，因为发现用户未认证抛出AccessDeniedException异常
+- 异常在ExceptionTranslationFilter中被捕获，ExceptionTranslationFilter通过调用LoginUrlAuthenticationEntryPoint#commence方法给客户端返回302，要求客户端重定向到/login页面
+- 客户端发起/login请求
+- /login请求被DefaultLoginPageGeneratingFilter过滤器拦截下来，并在该过滤器中返回登录页面
+
