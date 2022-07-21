@@ -2010,6 +2010,33 @@ java代码如下:
 ```
 归并排序的时间复杂度是$O(n{log}_{2}n)$。
 ### 快速排序
+快速排序的重点就是枢轴项，左侧都小于枢轴项，右侧的都大于枢轴项，快速排序的算法伪代码如下:
+```java
++quicksort(inout theArray: ItemArray, in first: integer, in last: integer){
+    // sorts theArray[first...last]
+    if(first<last>){
+        choose a pivot item p from theArray[first...last]
+        Partition the items of theArray[first...last]
+        quicksort(theArray,first,pivot-1);
+        quicksort(theArray,pivot+1,last);
+    }
+}
+```
+与第三章介绍的查找第$k$个最小整数问题的伪代码比较如下:
+```java
++kSmall(in k:integer,in theArray: ItemArray, in first: integer, in last: integer){
+    // returns the kth smallest value in theArray[first...last]
+    choose a pivot item p from theArray[first...last]
+    Partition the items of theArray[first...last]
+    if(k<pivotIndex - first + 1){
+        return kSmall(k,theArray,first, pivotIndex-1)
+    }else if(k == pivotIndex - first + 1){
+        return p;
+    }else {
+        return kkSmall(k-(pivotIndex-first+1), theArray, pivotIndex+1,last);
+    }
+}
+```
 
 
 
