@@ -370,4 +370,4 @@ spring security定义了UserDetails接口定义用户对象，提供这个接口
 - UserDetailsServiceDelegator, 提供UserDetailsService懒加载的功能；
 - ReactiveUserDetailsServiceAdapter。 为WebFlux模块定义的UserDetailsService实现
 
-
+如果没有提供，使用的就是InMemoryUserDetailsManager实现
