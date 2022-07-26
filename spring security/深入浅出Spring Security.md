@@ -350,3 +350,24 @@ public class Config extends AsyncConfigurerSupport {
 - 客户端发起/login请求
 - /login请求被DefaultLoginPageGeneratingFilter过滤器拦截下来，并在该过滤器中返回登录页面
 
+引入Starter依赖后，Spring Boot做了很多事情:
+- 开启Spring Security的自动化配置，自动创建一个名叫springDSecurityFilterChain的过滤器，注入到Spring容器中，负责所有安全的事情，包括认证，授权等，实际是里面的过滤器链处理的;
+- 创建一个UserDetailsService的实例，负责提供用户数据，默认的用户是基于内存的用户，用户名是user，密码随机生成;
+- 给用户生成默认的登录页面
+- 开启CSRF攻击防御
+- 开启会话固定攻击防御
+- 集成X-XSS-Protection
+- 集成X-Frame-Options以防止单击劫持
+
+spring security定义了UserDetails接口定义用户对象，提供这个接口的是UserDetailsService，参数是一个username，开发者要自己实现，Spring Security也提供了一些实现，如下图:
+![](./UserDetailsService.png)
+
+- UserDetailsManager, 在UserDetailsService基础上额外添加了一些操作用户的方法;
+- JdbcDaoImpl通过spring-jdbc实现通过数据库查询用户;
+- InMemoryUserDetailsManager,实现基于内存的用户增删改查的方法;
+- JdbcUserDetailsManager, 通过jdbc实现用户的增删改查;
+- CachingUserDetailsService, 缓存的方式;
+- UserDetailsServiceDelegator, 提供UserDetailsService懒加载的功能；
+- ReactiveUserDetailsServiceAdapter。 为WebFlux模块定义的UserDetailsService实现
+
+
