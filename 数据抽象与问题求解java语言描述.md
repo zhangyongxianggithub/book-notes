@@ -2085,6 +2085,89 @@ S2在S1与未知区域之间，可以体通过移动元素的方式实现，讲S
 - 循环必须终止，即要说明循环经经过有限次的迭代后终止，划分算法中，每次迭代位置区域-1，因此循环会终止.
 
 下面的Java方法实现了快速排序
+```java
+ 
+    /**
+     * choose a pivot for quicksort's partition algorithm and swaps it with the
+     * first item in an array
+     * Precondition: theArray is an array
+     * Postcontion: theArray[first] is the pivot
+     * 
+     * @param theArray
+     * @param first
+     * @param last
+     * @param <T>
+     */
+    private static <T> void choosePivot(final Comparable<T>[] theArray,
+            final int first, final int last) {}
+    
+    /**
+     * partitions an array for quicksort
+     * Precondition: theArray[first...last] is an array, first<=last
+     * Postcondition: returns the index of the pivot element of
+     * theArray[first...last]
+     * Upon completion of the method, this will be the index value lastS1 such
+     * that
+     * S1=theArray[first...lastS1-1]<pivot
+     * theArray[lastS1]==pivot
+     * S2=theArray[lastS1+1...last]>=pivot
+     * 
+     * @param theArray
+     * @param first
+     * @param last
+     * @return
+     * @param <T>
+     */
+    private static <T> int partition(final Comparable<T>[] theArray,
+            final int first, final int last) {
+        Comparable<T> tempItem;
+        // place pivot in theArray[first]
+        choosePivot(theArray, first, last);
+        final Comparable<T> pivot = theArray[first];
+        // initially everything but pivot is in unknown
+        int lastS1 = first;// index of last item of S1
+        // move one item at a time until unknown region is empty, firstUnknown
+        // is the index of first item in unknown region
+        for (int firstUnknown = first
+                + 1; firstUnknown <= last; firstUnknown++) {
+            // invariant: theArray[first...lastS1-1]<pivot
+            // theArray[lastS1+1...last]>=pivot
+            // move item from unknown to proper region
+            if (theArray[firstUnknown].compareTo((T) pivot) < 0) {
+                lastS1++;
+                swap(theArray, firstUnknown, lastS1);
+            }
+        }
+        swap(theArray, first, lastS1);
+        
+        return lastS1;
+    }
+    
+    /**
+     * Sorts the items in an array into ascending order
+     * Precondition: theArray[first...last] is an array
+     * Postcondition: theArray[first...last] is sorted
+     * 
+     * @param theArray
+     * @param first
+     * @param last
+     * @param <T>
+     */
+    private static <T> void quicksort(final Comparable<T>[] theArray,
+            final int first, final int last) {
+        final int pivotIndex;
+        if (first < last) {
+            pivotIndex = partition(theArray, first, last);
+            quicksort(theArray, first, pivotIndex - 1);
+            quicksort(theArray, pivotIndex + 1, last);
+        }
+    }
+```
+在最坏情况下，也就是有序的情况下，快排是$O(n^2)$阶的，除非数组已经有序，否则快排总是最优的。
+### 基数排序
+radix sort，一个简单的例子就是：给一个扑克牌排序，首先将相同的排面值分到一组，一共13组，A，2，3...
+然后按面值将每组排好序，然后每次取出一张分到4种纸牌花色中，这样，最终排序是按照花色与大小排序的。
+这个书没有做过多的介绍。
 
 
 
