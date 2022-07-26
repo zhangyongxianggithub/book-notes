@@ -2046,6 +2046,45 @@ java代码如下:
 > lastS1=first
 > firstUnknown=first+1
 
+划分算法的每个步骤都分析未知区域的一项，确定它是属于$S_1$还是$S_2$，下面是划分算法的伪代码:
+```java
++partition(inout theArray: ItemArray, in first:integer, in last: integer){
+    // returns the index of the pivot element after partitioning theArray[first...last]
+    // initialize
+    Choose the pivot and swap it with theArrayp[first]
+    p=theArray[first];// p is the pivot
+    lastS1=first;// set S1 and S2 empty
+    firstUnknown=first+1; // set unkown region to theArray[first+1...last]
+    // determine the region S1 and S2
+    while(firstUnknown<=last){
+        // consider the placement of the leftmost item in the unkown region
+        if(theArray[firstUnknown]<p){
+            move theArray[firstUnkown] into S1
+        }else{
+            move theArray[firstUnkown] into S2
+        }
+    }
+    place pivot in proper position between S1 and S2, and mark its new location
+    swap theArray[first] with theArray[lastS1]
+    return lastS1;// the index of the pivot element
+}
+```
+考虑算法的2种操作
+1. 将theArray[firstUnkown]移入S1
+S2在S1与未知区域之间，可以体通过移动元素的方式实现，讲S2的第一项theArray[lastS1+1]与theArray[firstUnkown]交换，使lastS1加1，theArray[firstUnkown]的项位于S1的最右端，使firstUnkown加1，那么之前S2最左端的成员就会变成S2最右端的成员。
+![](adtjava/快速排序-第%202%20页.drawio.png)
+2. 将theArray[firstUnkown]移入S2
+因为S2与未知区域相邻，所以firstUnknown+1即可。
+
+最后，lastS1是S1最右端，交换theArray[first]与theArray[lastS1]并返回lastS1，此时枢轴项放入正确的位置。
+
+用上面的不变式证明划分算法的正确性，需要4个步骤:
+- 循环开始执行前，不变式必为true，因为S1与S2都是空的，所以不变式为true;
+- 循环的执行，不变式必为true，即要说明若不变式在执行循环的任一迭代前为true，则迭代后必为true。划分算法中循环的每次迭代都根据某一项是否小于枢轴项从而将该项从未知区域移到S1与S2，移动前为true，则移动后也是true;
+- 不变式必须证明算法的正确性，即要说明，若循环终止时不变式为true，则算法正确，划分算法中终止条件是未知区域为空，如果位置区域为空，则数组项要么在S1中要么在S2中，划分算法完成任务;
+- 循环必须终止，即要说明循环经经过有限次的迭代后终止，划分算法中，每次迭代位置区域-1，因此循环会终止.
+
+下面的Java方法实现了快速排序
 
 
 
