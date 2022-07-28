@@ -2208,8 +2208,35 @@ ADT列表、栈、队列都是面向位置的，栈与队列对位置坐了特�
 - 若$n$是$T$的根，则$n$在第1级
 - 若$n$不是$T$的根，则$n$的级别比其父节点的级别高1;
 
+树的高度是一个递归定义$$height(T)=1+max{height(T_L), height(T_R)}$$
+满二叉树，就是完整的所有节点的二叉树，它的递归定义如下:
+- 若$T$为空，则$T$是高度为0的满二叉树;
+- 若$T$非空，且高度$h$>0，若根的2个子树都存在且都是高度$h-1$的满二叉树，则$T$是满二叉树;
 
+完全二叉树，就是按层次不会遍历，不会出现中间节点缺失的二叉树，满二叉树也是完全二叉树。二叉树的任意一个节点的2个子树的高度差<=1，则是平衡二叉树也叫做高度平衡二叉树。
+## ADT二叉树
+所有二叉树都要实现的公共操作:
+- 构建一颗空二叉树;
+- 根据给定元素构建一颗单节点二叉树;
+- 从二叉树中删除所有节点，使其为空;
+- 确定二叉树是否为空;
+- 确定哪个数据是二叉树的根;
+- 为二叉树的根设置数据
 
+除了以上的基本操作外，还需要一些额外的操作，总的操作如下:
 
-
+- +createBinaryTree()// creates an empty binary tree
+- +createBinaryTree(in rootItem: TreeItemType)// create a one-node binary tree whose root contains rootItem
+- +makeEmpty()// removes all of the nodes from a binary tree, leaving an empty tree
+- +isEmpty(): boolean {query} //determines whether a binary tree is empty
+- +getRootItem(): TreeItemType throws TreeException {query}// retrieves the data item in the root of a nonempty binary tree, throws TreeException if the tree is empty
+- +setRootItem(in rootItem: TreeItemType) throws UnsupportedOperationTreeException// sets the data item in the root of a binary tree, throws UnsupportedOperationTreeException if the method is not implemented.
+- +createBinaryTree(in rootItem: TreeItemType, in leftTree: BinaryTree, in rightTree: BinaryTree)//creates a binary tree whose root contains rootItem and has leftTree and rightTree, respectively, as its left and right subtrees.
+- +setRootData(in newItem: TreeItemType) //replace the data item in the root of a binary tree with newItem, if the tree is not empty, however, if the tree is empty, creates  a root node whose data item is newItem and inserts the new node into the tree.
+- +attachLeft(in newItem: TreeItemType) throws TreeException // attaches a left child containing newItem to the root of a binary tree, Throws TreeException if the binary tree is empty (no root to attach to) or a left subtree already exists (should explicitly detach it first)
+- +attachRight(in newItem: TreeItemType) throws TreeException // attaches a right child containing newItem to the root of a binary tree, Throws TreeException if the binary tree is empty (no root to attach to) or a right subtree already exists (should explicitly detach it first)
+- +attachLeftSubtree(in leftTree: BinaryTree) throws TreeException // attaches leftTree as the left subtree of the root of a binary tree and makes leftTree empty so that it cannot be used as a reference into this tree, Throws TreeException if the binary tree is empty (no root to attach to) or a left subtree already exists (should explicitly detach it first)
+- +attachRightSubtree(in rightTree: BinaryTree) throws TreeException // attaches rightTree as the right subtree of the root of a binary tree and makes leftTree empty so that it cannot be used as a reference into this tree, Throws TreeException if the binary tree is empty (no root to attach to) or a left subtree already exists (should explicitly detach it first)
+- +detachLeftSubtree(): BinaryTree throws TreeException// detaches and returns the left subtree of a bianry tree's root throws TreeException if the binary tree is empty(no root node to detach from)
+- +detachRightSubtree(): BinaryTree throws TreeException// detaches and returns the right subtree of a bianry tree's root throws TreeException if the binary tree is empty(no root node to detach from)
 
