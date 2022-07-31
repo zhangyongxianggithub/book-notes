@@ -1,3 +1,5 @@
+[TOC]
+
 # 第一章 Spring Security架构概览
 Spring Security方便集成在Spring Boot与Spring Cloud项目中，因为它们就是同归属于一个家族。比shiro啥的有优势。
 ## Spring Security简介
@@ -334,6 +336,7 @@ public class Config extends AsyncConfigurerSupport {
 }
 ```
 # 第2章 认证
+## Spring Security的基本认证
 引进依赖
 ```xml
               <dependency>
@@ -370,4 +373,295 @@ spring security定义了UserDetails接口定义用户对象，提供这个接口
 - UserDetailsServiceDelegator, 提供UserDetailsService懒加载的功能；
 - ReactiveUserDetailsServiceAdapter。 为WebFlux模块定义的UserDetailsService实现
 
-如果没有提供，使用的就是InMemoryUserDetailsManager实现。Spring Security自动化配置的类是UserDetailsServiceAutoConfiguration，Spring Security提供了UserDetails的一个实现叫User，可以构造UserDetails的实例，在UserDetailsServiceAutoConfiguration中使用SecurityProperties类获取了默认的用户名与密码，所以如果想要改变这个直接在application.properties文件里面改就行.
+如果没有提供，使用的就是InMemoryUserDetailsManager实现。Spring Security自动化配置的类是UserDetailsServiceAutoConfiguration，Spring Security提供了UserDetails的一个实现叫User，可以构造UserDetails的实例，在UserDetailsServiceAutoConfiguration中使用SecurityProperties类获取了默认的用户名与密码，所以如果想要改变这个直接在application.properties文件里面改就行. 可以看下这个类
+```java
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(AuthenticationManager.class)
+@ConditionalOnBean(ObjectPostProcessor.class)
+@ConditionalOnMissingBean(
+		value = { AuthenticationManager.class, AuthenticationProvider.class, UserDetailsService.class },
+		type = { "org.springframework.security.oauth2.jwt.JwtDecoder",
+				"org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector" })
+public class UserDetailsServiceAutoConfiguration {
+
+	private static final String NOOP_PASSWORD_PREFIX = "{noop}";
+
+	private static final Pattern PASSWORD_ALGORITHM_PATTERN = Pattern.compile("^\\{.+}.*$");
+
+	private static final Log logger = LogFactory.getLog(UserDetailsServiceAutoConfiguration.class);
+
+	@Bean
+	@ConditionalOnMissingBean(
+			type = "org.springframework.security.oauth2.client.registration.ClientRegistrationRepository")
+	@Lazy
+	public InMemoryUserDetailsManager inMemoryUserDetailsManager(SecurityProperties properties,
+			ObjectProvider<PasswordEncoder> passwordEncoder) {
+		SecurityProperties.User user = properties.getUser();
+		List<String> roles = user.getRoles();
+		return new InMemoryUserDetailsManager(
+				User.withUsername(user.getName()).password(getOrDeducePassword(user, passwordEncoder.getIfAvailable()))
+						.roles(StringUtils.toStringArray(roles)).build());
+	}
+
+	private String getOrDeducePassword(SecurityProperties.User user, PasswordEncoder encoder) {
+		String password = user.getPassword();
+		if (user.isPasswordGenerated()) {
+			logger.info(String.format("%n%nUsing generated security password: %s%n", user.getPassword()));
+		}
+		if (encoder != null || PASSWORD_ALGORITHM_PATTERN.matcher(password).matches()) {
+			return password;
+		}
+		return NOOP_PASSWORD_PREFIX + password;
+	}
+
+}
+```
+存在2个默认页面，登陆与注销页面，是由DefaultLoginPageGeneratingFilter与DefaultLogoutPageGeneratingFilter2个过滤器处理的，DefaultLoginPageGeneratingFilter专门处理重定向过来的/login接口，核心代码如下：
+```java
+public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		boolean loginError = isErrorPage(request);
+		boolean logoutSuccess = isLogoutSuccess(request);
+		if (isLoginUrlRequest(request) || loginError || logoutSuccess) {
+			String loginPageHtml = generateLoginPageHtml(request, loginError,
+					logoutSuccess);
+			response.setContentType("text/html;charset=UTF-8");
+			response.setContentLength(loginPageHtml.getBytes(StandardCharsets.UTF_8).length);
+			response.getWriter().write(loginPageHtml);
+
+			return;
+		}
+
+		chain.doFilter(request, response);
+	}
+```
+- doFilter中只处理/login登陆请求，这个在代码中有判断;
+- 通过generateLoginPageHtml方法生成登陆的html页面，根据是否登陆错误，会把这些信息拼接上;
+- 然后通过HttpServletResponse写到响应流中，然后return;
+DefaultLogoutPageGeneratingFilter的源代码更好懂，核心源码如下:
+```java
+	protected void doFilterInternal(HttpServletRequest request,
+			HttpServletResponse response, FilterChain filterChain)
+			throws ServletException, IOException {
+		if (this.matcher.matches(request)) {
+			renderLogout(request, response);
+		} else {
+			filterChain.doFilter(request, response);
+		}
+	}
+```
+## 登录表单配置
+定义一个login.html，登录的页面，核心代码如下:
+```html
+                    <form id="login-form" class="form" action="/doLogin" method="post">
+                        <h3 class="text-center text-info">登录</h3>
+                        <div class="form-group">
+                            <label for="username" class="text-info">用户名:</label><br>
+                            <input type="text" name="uname" id="username" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="password" class="text-info">密码:</label><br>
+                            <input type="text" name="passwd" id="password" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <input type="submit" name="submit" class="btn btn-info btn-md" value="登录">
+                        </div>
+                    </form>
+```
+提供一个Spring Security的配置类，核心代码如下:
+```java
+@Configuration
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(final HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated().and().formLogin()
+                .loginPage("/login.html").loginProcessingUrl("doLogin")
+                .defaultSuccessUrl("/hello").failureUrl("/login.html")
+                .usernameParameter("uname").passwordParameter("passwd")
+                .permitAll().and().csrf().disable();
+    }
+}
+```
+- 这是一个链式配置;
+- authorizeRequests()表示开启权限配置，anyRequest().authenticated()表示所有的请求都要认证之后才能访问;
+- and()方法会返回HttpSecurityBuilder的一个子类，实际就是HttpSecurity，表示开启新一轮的配置；
+- formLogin()表示开启表单登录配置，loginPage用来配置登录页面地址，loginProcessingUrl用来配置登录接口地址，defaultSuccessUrl表示登录成功后的跳转接口，failureUrl表示登录失败后的跳转地址，usernameParameter表示登录用户参数名称，passwordParameter表示登录密码参数名称，permitAll()表示与登录相关的页面与接口不做拦截;
+- csrf().disable()表示禁用CSRF防御功能.
+
+配置细节:
+1. 登录成功
+
+除了defaultSuccessUrl可以配置登录成功后的跳转地址外，successForwardUrl也可以配置登录成功后的跳转; 区别如下:
+- defaultSuccessUrl表示用户登录成功后，会自动重定向到之前的地址上，如果用户直接访问登录页面，那么成功后会转到defaultSuccessUrl指定的路径；
+- successForwardUrl不会考虑用户之前的的访问地址，只要用户登录成功就在服务器端跳转到successForwardUrl指定的页面;
+- defaultSuccessUrl有一个重载方法，第二个参数如果为true，那么实现的效果与successForwardUrl一致，区别是defaultSuccessUrl是通过重定向实现跳转，successForwardUrl是直接在服务器端跳转;
+
+实现successForwardUrl与defaultSuccessUrl的机制是`AuthenticationSuccessHandler`实例，它是专门用来处理登录成功的事情，接口的代码如下:
+```java
+public interface AuthenticationSuccessHandler {
+
+	/**
+	 * Called when a user has been successfully authenticated.
+	 *
+	 * @param request the request which caused the successful authentication
+	 * @param response the response
+	 * @param chain the {@link FilterChain} which can be used to proceed other filters in the chain
+	 * @param authentication the <tt>Authentication</tt> object which was created during
+	 * the authentication process.
+	 * @since 5.2.0
+	 */
+	default void onAuthenticationSuccess(HttpServletRequest request,
+			HttpServletResponse response, FilterChain chain, Authentication authentication)
+			throws IOException, ServletException{
+		onAuthenticationSuccess(request, response, authentication);
+		chain.doFilter(request, response);
+	}
+
+	/**
+	 * Called when a user has been successfully authenticated.
+	 *
+	 * @param request the request which caused the successful authentication
+	 * @param response the response
+	 * @param authentication the <tt>Authentication</tt> object which was created during
+	 * the authentication process.
+	 */
+	void onAuthenticationSuccess(HttpServletRequest request,
+			HttpServletResponse response, Authentication authentication)
+			throws IOException, ServletException;
+
+}
+
+```
+`Authentication`保存了登录成功后的用户信息，它有3个实现类:
+![](./AuthenticationSuccessHandler.png)
+- `SimpleUrlAuthenticationSuccessHandler`继承自`AbstractAuthenticationTargetUrlRequestHandler`通过handle方法实现请求的重定向;
+- `SavedRequestAwareAuthenticationSuccessHandler`在`SimpleUrlAuthenticationSuccessHandler`的基础上增加了请求缓存的功能，可以记录之前请求的地址，在成功后重定向到之前访问的地址;
+- `ForwardAuthenticationSuccessHandler`就是一个服务端跳转;
+  
+实现defaultSuccessUrl的实现类是`SavedRequestAwareAuthenticationSuccessHandler`，核心源码如下:
+```java
+public class SavedRequestAwareAuthenticationSuccessHandler extends
+		SimpleUrlAuthenticationSuccessHandler {
+	protected final Log logger = LogFactory.getLog(this.getClass());
+
+	private RequestCache requestCache = new HttpSessionRequestCache();
+
+	@Override
+	public void onAuthenticationSuccess(HttpServletRequest request,
+			HttpServletResponse response, Authentication authentication)
+			throws ServletException, IOException {
+		SavedRequest savedRequest = requestCache.getRequest(request, response);
+
+		if (savedRequest == null) {
+			super.onAuthenticationSuccess(request, response, authentication);
+
+			return;
+		}
+		String targetUrlParameter = getTargetUrlParameter();
+		if (isAlwaysUseDefaultTargetUrl()
+				|| (targetUrlParameter != null && StringUtils.hasText(request
+						.getParameter(targetUrlParameter)))) {
+			requestCache.removeRequest(request, response);
+			super.onAuthenticationSuccess(request, response, authentication);
+
+			return;
+		}
+
+		clearAuthenticationAttributes(request);
+
+		// Use the DefaultSavedRequest URL
+		String targetUrl = savedRequest.getRedirectUrl();
+		logger.debug("Redirecting to DefaultSavedRequest Url: " + targetUrl);
+		getRedirectStrategy().sendRedirect(request, response, targetUrl);
+	}
+
+	public void setRequestCache(RequestCache requestCache) {
+		this.requestCache = requestCache;
+	}
+}
+```
+- 首先向缓存中获取请求，如果没有，说明访问的直接就是登录地址，则调用父类处理，直接重定向到defaultSuccessUrl;
+- 接下来获取getTargetUrlParameter是判断使用是否在路径上指定了要跳转的地址，这个有个专门的参数，比如target=xxxx，这个方法是获取参数的key;
+- 接下来判断isAlwaysUseDefaultTargetUrl()，如果为true，则始终重定向到defaultSuccessUrl指定的地址，如果为false，但是targetUrlParameter存在，则重定向到参数指定的地址;
+- 从缓存中的请求中获取重定向的地址;
+k可以定义自己的`SavedRequestAwareAuthenticationSuccessHandler`，比如:
+```java
+    @Override
+    protected void configure(final HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated().and().formLogin()
+                .loginPage("/login.html").loginProcessingUrl("/doLogin")
+                .successHandler(authenticationSuccessHandler())
+                .failureUrl("/login.html").usernameParameter("uname")
+                .passwordParameter("passwd").permitAll().and().csrf().disable();
+    }
+    
+    @Bean
+    public AuthenticationSuccessHandler authenticationSuccessHandler() {
+        final SavedRequestAwareAuthenticationSuccessHandler successHandler = new SavedRequestAwareAuthenticationSuccessHandler();
+        successHandler.setDefaultTargetUrl("/index");
+        successHandler.setTargetUrlParameter("target");
+        return successHandler;
+    }
+```
+successForwardUrl对应的实现类是`ForwardAuthenticationSuccessHandler`，核心源码如下:
+```java
+public class ForwardAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
+
+	private final String forwardUrl;
+
+	/**
+	 * @param forwardUrl
+	 */
+	public ForwardAuthenticationSuccessHandler(String forwardUrl) {
+		Assert.isTrue(UrlUtils.isValidRedirectUrl(forwardUrl),
+				() -> "'" + forwardUrl + "' is not a valid forward URL");
+		this.forwardUrl = forwardUrl;
+	}
+
+	public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+		request.getRequestDispatcher(forwardUrl).forward(request, response);
+	}
+}
+```
+对于前后端分离的项目，页面跳转都是前端操作的，不需要后端作，此时可以自定义`AuthenticationSuccessHandler`实现来决定返回给前端的内容.
+2. 登录失败的处理逻辑
+
+添加模板处理引擎
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+```
+添加能显示登录失败的html模板
+```html
+                    <form id="login-form" class="form" action="/doLogin" method="post">
+                        <h3 class="text-center text-info">登录</h3>
+                        <div th:text="${SPRING_SECURITY_LAST_EXCEPTION}"></div>
+                        <div class="form-group">
+                            <label for="username" class="text-info">用户名:</label><br>
+                            <input type="text" name="uname" id="username" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="password" class="text-info">密码:</label><br>
+                            <input type="text" name="passwd" id="password" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <input type="submit" name="submit" class="btn btn-info btn-md" value="登录">
+                        </div>
+                    </form>
+```
+里面多个个动态展示登录失败信息的内容，以为是动态的，所以需要设置一个接口地址:
+```java
+@Controller
+public class LoginPageController {
+    
+    @RequestMapping("/mylogin.html")
+    public String login() {
+        return "mylogin";
+    }
+}
+```
