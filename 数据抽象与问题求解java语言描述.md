@@ -2240,3 +2240,13 @@ ADT列表、栈、队列都是面向位置的，栈与队列对位置坐了特�
 - +detachLeftSubtree(): BinaryTree throws TreeException// detaches and returns the left subtree of a bianry tree's root throws TreeException if the binary tree is empty(no root node to detach from)
 - +detachRightSubtree(): BinaryTree throws TreeException// detaches and returns the right subtree of a bianry tree's root throws TreeException if the binary tree is empty(no root node to detach from)
 
+二叉树的遍历访问树中每一个节点，根据二叉树的递归特性可以设计递归遍历算法，形式为：
+```java
++traverse(in binTree: BinaryTree)
+// traverses the binary tree binTree
+if(binTree is not empty){
+    traverse(Left subtree of binTree's root);
+    traverse(Right subtree of binTree's root);
+}
+```
+根据访问根节点的顺序，定义了preorder、inorder、postorder3种遍历方式，如果二叉树对应代数表达式，则3种遍历方式分别对应前缀、中缀与后缀表达式。
