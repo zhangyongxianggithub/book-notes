@@ -665,3 +665,190 @@ public class LoginPageController {
     }
 }
 ```
+最后修改安全配置为:
+```java
+    @Override
+    protected void configure(final HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated().and().formLogin()
+                .loginPage("/mylogin.html").loginProcessingUrl("/doLogin")
+                .successHandler(authenticationSuccessHandler())
+                .failureForwardUrl("/mylogin.html").usernameParameter("uname")
+                .passwordParameter("passwd").permitAll().and().csrf().disable();
+    }
+```
+使用了failureForwardUrl而不是failureUrl是因为failureUrl是客户端重定向，没有携带登录失败的信息，因为是一次新的请求，而failureForwardUrl是服务端重定向，登录失败的请求会被html渲染处理，登录失败对应的实现类是`AuthenticationFailureHandler`，接口代码如下:
+```java
+public interface AuthenticationFailureHandler {
+
+	/**
+	 * Called when an authentication attempt fails.
+	 * @param request the request during which the authentication attempt occurred.
+	 * @param response the response.
+	 * @param exception the exception which was thrown to reject the authentication
+	 * request.
+	 */
+	void onAuthenticationFailure(HttpServletRequest request,
+			HttpServletResponse response, AuthenticationException exception)
+			throws IOException, ServletException;
+}
+```
+它有5个实现类，类图如下:
+![AuthenticationFailureHandler的类图](./AuthenticationFailureHandler.png)
+- `SimpleUrlAuthenticationFailureHandler`的默认的处理逻辑就是重定向到登录页，可有配置forwardToDestination设置为服务端重定向，failureUrl对应的实现就是这个;
+- `ExceptionMappingAuthenticationFailureHandler`可以根据不同的异常类型映射到不同的路径;
+- `ForwardAuthenticationFailureHandler`是服务端跳转到登录页，对应的配置是fialureForwardUrl;
+- `AuthenticationEntryPointFailureHandler`新的类，可以通过`AuthenticationEntrypoint`处理登录异常;
+- `DelegatingAuthenticationFailureHandler`可以实现为不同的登录异常配置不同的登录失败处理回调;
+
+使用`SimpleUrlAuthenticationFailureHandler`实现`ForwardAuthenticationFailureHandler`的逻辑代码如下:
+```java
+    @Bean
+    public AuthenticationFailureHandler authenticationFailureHandler() {
+        final SimpleUrlAuthenticationFailureHandler failureHandler = new SimpleUrlAuthenticationFailureHandler();
+        failureHandler.setUseForward(true);
+        failureHandler.setDefaultFailureUrl("/mylogin.html");
+        return failureHandler;
+    }
+```
+核心源码如下:
+```java
+public class SimpleUrlAuthenticationFailureHandler implements
+		AuthenticationFailureHandler {
+	protected final Log logger = LogFactory.getLog(getClass());
+
+	private String defaultFailureUrl;
+	private boolean forwardToDestination = false;
+	private boolean allowSessionCreation = true;
+	private RedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+
+	public SimpleUrlAuthenticationFailureHandler() {
+	}
+
+	public SimpleUrlAuthenticationFailureHandler(String defaultFailureUrl) {
+		setDefaultFailureUrl(defaultFailureUrl);
+	}
+
+	/**
+	 * Performs the redirect or forward to the {@code defaultFailureUrl} if set, otherwise
+	 * returns a 401 error code.
+	 * <p>
+	 * If redirecting or forwarding, {@code saveException} will be called to cache the
+	 * exception for use in the target view.
+	 */
+	public void onAuthenticationFailure(HttpServletRequest request,
+			HttpServletResponse response, AuthenticationException exception)
+			throws IOException, ServletException {
+
+		if (defaultFailureUrl == null) {
+			logger.debug("No failure URL set, sending 401 Unauthorized error");
+
+			response.sendError(HttpStatus.UNAUTHORIZED.value(),
+				HttpStatus.UNAUTHORIZED.getReasonPhrase());
+		}
+		else {
+			saveException(request, exception);
+
+			if (forwardToDestination) {
+				logger.debug("Forwarding to " + defaultFailureUrl);
+
+				request.getRequestDispatcher(defaultFailureUrl)
+						.forward(request, response);
+			}
+			else {
+				logger.debug("Redirecting to " + defaultFailureUrl);
+				redirectStrategy.sendRedirect(request, response, defaultFailureUrl);
+			}
+		}
+	}
+
+	/**
+	 * Caches the {@code AuthenticationException} for use in view rendering.
+	 * <p>
+	 * If {@code forwardToDestination} is set to true, request scope will be used,
+	 * otherwise it will attempt to store the exception in the session. If there is no
+	 * session and {@code allowSessionCreation} is {@code true} a session will be created.
+	 * Otherwise the exception will not be stored.
+	 */
+	protected final void saveException(HttpServletRequest request,
+			AuthenticationException exception) {
+		if (forwardToDestination) {
+			request.setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION, exception);
+		}
+		else {
+			HttpSession session = request.getSession(false);
+
+			if (session != null || allowSessionCreation) {
+				request.getSession().setAttribute(WebAttributes.AUTHENTICATION_EXCEPTION,
+						exception);
+			}
+		}
+	}
+
+	/**
+	 * The URL which will be used as the failure destination.
+	 *
+	 * @param defaultFailureUrl the failure URL, for example "/loginFailed.jsp".
+	 */
+	public void setDefaultFailureUrl(String defaultFailureUrl) {
+		Assert.isTrue(UrlUtils.isValidRedirectUrl(defaultFailureUrl),
+				() -> "'" + defaultFailureUrl + "' is not a valid redirect URL");
+		this.defaultFailureUrl = defaultFailureUrl;
+	}
+
+	protected boolean isUseForward() {
+		return forwardToDestination;
+	}
+
+	/**
+	 * If set to <tt>true</tt>, performs a forward to the failure destination URL instead
+	 * of a redirect. Defaults to <tt>false</tt>.
+	 */
+	public void setUseForward(boolean forwardToDestination) {
+		this.forwardToDestination = forwardToDestination;
+	}
+
+	/**
+	 * Allows overriding of the behaviour when redirecting to a target URL.
+	 */
+	public void setRedirectStrategy(RedirectStrategy redirectStrategy) {
+		this.redirectStrategy = redirectStrategy;
+	}
+
+	protected RedirectStrategy getRedirectStrategy() {
+		return redirectStrategy;
+	}
+
+	protected boolean isAllowSessionCreation() {
+		return allowSessionCreation;
+	}
+
+	public void setAllowSessionCreation(boolean allowSessionCreation) {
+		this.allowSessionCreation = allowSessionCreation;
+	}
+}
+```
+可以仔细看保存登录异常的代码，在forawrdToDestination的不同值保存的地方也是不同的.
+3. 注销登录的处理逻辑
+```java
+    @Override
+    protected void configure(final HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated().and().formLogin()
+                .loginPage("/mylogin.html").loginProcessingUrl("/doLogin")
+                .successHandler(authenticationSuccessHandler())
+                .failureHandler(authenticationFailureHandler())
+                .usernameParameter("uname").passwordParameter("passwd")
+                .permitAll().and().logout().logoutUrl("/logout")
+                .invalidateHttpSession(true).clearAuthentication(true)
+                .logoutSuccessUrl("/mylogin.html").and().csrf().disable();
+    }
+```
+- 通过.logout()方法开启注销登录配置;
+- logoutUrl()指定注销登录请求地址，默认是GET请求，路径为/logout
+- invalidateHttpSession指定是否使session失效;
+- clearAuthentication表示是否清除认证信息;
+- logoutSuccessUrl表示注销登录后的跳转地址;
+  
+当然也可以自定义注销成功后的处理，比如在前后端处理中返回JSON，logoutSuccessUrl对应的实现类是`LogoutSuccessHandler`，与前面的登录成功的关系类似。
+
+## 登录用户数据获取
+
