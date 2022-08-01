@@ -851,4 +851,15 @@ public class SimpleUrlAuthenticationFailureHandler implements
 当然也可以自定义注销成功后的处理，比如在前后端处理中返回JSON，logoutSuccessUrl对应的实现类是`LogoutSuccessHandler`，与前面的登录成功的关系类似。
 
 ## 登录用户数据获取
+登录成功后获取用户对象的2种方式:
+- 从SecurityContextHolder中获取;
+- 从当前请求对象中获取;
+
+无论哪种获取方式都是获取`Authentication`对象
+- 作为`AuthenticationManager`的输入参数，提供用户身份认证的凭据，此时isAuthenticated=false，表示用户还未认证;
+- 代表经过身份认证的用户，此时`Authentication`可以从`SecurityContextHolder`中获取;
+`Authentication`对象包含3方面的信息:
+- principal: 定义认证的用户，如果用户使用用户名/密码的方式登录，principal就是一个UserDetails对象;
+- credentials: 登录凭证，一般就是密码，登录成功后，这个信息会被自动擦除，以免泄漏;
+- authorities: 用户被授予的权限信息.
 
