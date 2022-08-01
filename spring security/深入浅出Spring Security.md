@@ -863,3 +863,489 @@ public class SimpleUrlAuthenticationFailureHandler implements
 - credentials: 登录凭证，一般就是密码，登录成功后，这个信息会被自动擦除，以免泄漏;
 - authorities: 用户被授予的权限信息.
 
+Java本身提供了`Principal`接口来描述认证主体，可以代表登录ID，Spring Security提供了`Authentication`代表登录用户信息，继承自`Principal`，核心代码如下:
+```java
+public interface Authentication extends Principal, Serializable {
+	// ~ Methods
+	// ========================================================================================================
+
+	/**
+	 * Set by an <code>AuthenticationManager</code> to indicate the authorities that the
+	 * principal has been granted. Note that classes should not rely on this value as
+	 * being valid unless it has been set by a trusted <code>AuthenticationManager</code>.
+	 * <p>
+	 * Implementations should ensure that modifications to the returned collection array
+	 * do not affect the state of the Authentication object, or use an unmodifiable
+	 * instance.
+	 * </p>
+	 *
+	 * @return the authorities granted to the principal, or an empty collection if the
+	 * token has not been authenticated. Never null.
+	 */
+	Collection<? extends GrantedAuthority> getAuthorities();
+
+	/**
+	 * The credentials that prove the principal is correct. This is usually a password,
+	 * but could be anything relevant to the <code>AuthenticationManager</code>. Callers
+	 * are expected to populate the credentials.
+	 *
+	 * @return the credentials that prove the identity of the <code>Principal</code>
+	 */
+	Object getCredentials();
+
+	/**
+	 * Stores additional details about the authentication request. These might be an IP
+	 * address, certificate serial number etc.
+	 *
+	 * @return additional details about the authentication request, or <code>null</code>
+	 * if not used
+	 */
+	Object getDetails();
+
+	/**
+	 * The identity of the principal being authenticated. In the case of an authentication
+	 * request with username and password, this would be the username. Callers are
+	 * expected to populate the principal for an authentication request.
+	 * <p>
+	 * The <tt>AuthenticationManager</tt> implementation will often return an
+	 * <tt>Authentication</tt> containing richer information as the principal for use by
+	 * the application. Many of the authentication providers will create a
+	 * {@code UserDetails} object as the principal.
+	 *
+	 * @return the <code>Principal</code> being authenticated or the authenticated
+	 * principal after authentication.
+	 */
+	Object getPrincipal();
+
+	/**
+	 * Used to indicate to {@code AbstractSecurityInterceptor} whether it should present
+	 * the authentication token to the <code>AuthenticationManager</code>. Typically an
+	 * <code>AuthenticationManager</code> (or, more often, one of its
+	 * <code>AuthenticationProvider</code>s) will return an immutable authentication token
+	 * after successful authentication, in which case that token can safely return
+	 * <code>true</code> to this method. Returning <code>true</code> will improve
+	 * performance, as calling the <code>AuthenticationManager</code> for every request
+	 * will no longer be necessary.
+	 * <p>
+	 * For security reasons, implementations of this interface should be very careful
+	 * about returning <code>true</code> from this method unless they are either
+	 * immutable, or have some way of ensuring the properties have not been changed since
+	 * original creation.
+	 *
+	 * @return true if the token has been authenticated and the
+	 * <code>AbstractSecurityInterceptor</code> does not need to present the token to the
+	 * <code>AuthenticationManager</code> again for re-authentication.
+	 */
+	boolean isAuthenticated();
+
+	/**
+	 * See {@link #isAuthenticated()} for a full description.
+	 * <p>
+	 * Implementations should <b>always</b> allow this method to be called with a
+	 * <code>false</code> parameter, as this is used by various classes to specify the
+	 * authentication token should not be trusted. If an implementation wishes to reject
+	 * an invocation with a <code>true</code> parameter (which would indicate the
+	 * authentication token is trusted - a potential security risk) the implementation
+	 * should throw an {@link IllegalArgumentException}.
+	 *
+	 * @param isAuthenticated <code>true</code> if the token should be trusted (which may
+	 * result in an exception) or <code>false</code> if the token should not be trusted
+	 *
+	 * @throws IllegalArgumentException if an attempt to make the authentication token
+	 * trusted (by passing <code>true</code> as the argument) is rejected due to the
+	 * implementation being immutable or implementing its own alternative approach to
+	 * {@link #isAuthenticated()}
+	 */
+	void setAuthenticated(boolean isAuthenticated) throws IllegalArgumentException;
+}
+```
+- getAuthorities()用来获取用户权限;
+- getCredentials()用来获取用户凭证，就是密码;
+- getDetails()用来获取用户的详细信息;
+- getPrincipal()获取当前用户信息，可能是用户名或者用户对象;
+- isAuthenticated()当前用户是否认证成功
+
+不同的认证方式对应不同的Authentication实例，它的实现类主要有:
+![authentication的实现类](./Authentication.png)
+- `AbstractAuthenticationToken`:对`Authentication`进行了实现;
+- `RememberMeAuthenticationToken`: 如果用户使用RememberMe的方式登录，则登录信息封装在这里面;
+- `TestingAuthenticationToken`: 单元测试时封装的用户对象;
+- `AnonymousAuthenticationToken`: 匿名登录时封装的用户对象;
+- `RunAsUserToken`: 替换验证身份时封装的用户对象;
+- `UsernamePasswordAuthenticationToken`: 表单登录时封装的用户对象;
+- `JaasAuthenticationToken`: JAAS认证时封装的用户对象;
+- `PreAuthenticatedAuthenticationToken`: Pre-Authentication场景下封装的用户对象
+
+1. 从SecurityContextHolder中获取
+```java
+    @GetMapping("/user")
+    public void printUser() {
+        final Authentication authentication = SecurityContextHolder.getContext()
+                .getAuthentication();
+        log.info("username: {}", authentication.getName());
+        log.info("role: {}", authentication.getAuthorities());
+    }
+```
+SecurityContextHolder包含SecurityContext，SecurityContext包含Authentication。SecurityContextHolder包含3种存储策略
+- MODE_THREADLOCAL: 将SecurityContext放在ThreadLocal中, 这是默认的存储策略, 但是子线程就获取不到;
+- MODE_INHERITTABLETHREADLOCAL: 子线程可以从父线程中继承登录用户数据;
+- MODE_GLOBAL: 登录数据保存在一个静态变量中
+
+`SecurityContextHolderStrategy`接口定义了SecurityContext的增删改查方法，核心源码如下:
+```java
+public interface SecurityContextHolderStrategy {
+	// ~ Methods
+	// ========================================================================================================
+
+	/**
+	 * Clears the current context.
+	 */
+	void clearContext();
+
+	/**
+	 * Obtains the current context.
+	 *
+	 * @return a context (never <code>null</code> - create a default implementation if
+	 * necessary)
+	 */
+	SecurityContext getContext();
+
+	/**
+	 * Sets the current context.
+	 *
+	 * @param context to the new argument (should never be <code>null</code>, although
+	 * implementations must check if <code>null</code> has been passed and throw an
+	 * <code>IllegalArgumentException</code> in such cases)
+	 */
+	void setContext(SecurityContext context);
+
+	/**
+	 * Creates a new, empty context implementation, for use by
+	 * <tt>SecurityContextRepository</tt> implementations, when creating a new context for
+	 * the first time.
+	 *
+	 * @return the empty context.
+	 */
+	SecurityContext createEmptyContext();
+}
+```
+- clearContext(): 清除存储的SecurityContext;
+- getContext(): 获取存储的SecurityContext;
+- setContext(): 设置存储的SecurityContext;
+- createEmptyContext(): 创建一个空的SecurityContext对象;
+这个接口有3个实现，分别对应上面说的3种:
+![SecurityContextHolderStrategy的实现类](./SecurityContextHolderStrategy.png)
+ThreadLocalSecurityContextHolderStrategy核心源码如下: 
+```java
+final class ThreadLocalSecurityContextHolderStrategy implements
+		SecurityContextHolderStrategy {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	private static final ThreadLocal<SecurityContext> contextHolder = new ThreadLocal<>();
+
+	// ~ Methods
+	// ========================================================================================================
+
+	public void clearContext() {
+		contextHolder.remove();
+	}
+
+	public SecurityContext getContext() {
+		SecurityContext ctx = contextHolder.get();
+
+		if (ctx == null) {
+			ctx = createEmptyContext();
+			contextHolder.set(ctx);
+		}
+
+		return ctx;
+	}
+
+	public void setContext(SecurityContext context) {
+		Assert.notNull(context, "Only non-null SecurityContext instances are permitted");
+		contextHolder.set(context);
+	}
+
+	public SecurityContext createEmptyContext() {
+		return new SecurityContextImpl();
+	}
+}
+```
+InheritableThreadLocalSecurityContextHolderStrategy核心源码如下:
+```java
+final class InheritableThreadLocalSecurityContextHolderStrategy implements
+		SecurityContextHolderStrategy {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	private static final ThreadLocal<SecurityContext> contextHolder = new InheritableThreadLocal<>();
+
+	// ~ Methods
+	// ========================================================================================================
+
+	public void clearContext() {
+		contextHolder.remove();
+	}
+
+	public SecurityContext getContext() {
+		SecurityContext ctx = contextHolder.get();
+
+		if (ctx == null) {
+			ctx = createEmptyContext();
+			contextHolder.set(ctx);
+		}
+
+		return ctx;
+	}
+
+	public void setContext(SecurityContext context) {
+		Assert.notNull(context, "Only non-null SecurityContext instances are permitted");
+		contextHolder.set(context);
+	}
+
+	public SecurityContext createEmptyContext() {
+		return new SecurityContextImpl();
+	}
+}
+```
+```java
+final class GlobalSecurityContextHolderStrategy implements SecurityContextHolderStrategy {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	private static SecurityContext contextHolder;
+
+	// ~ Methods
+	// ========================================================================================================
+
+	public void clearContext() {
+		contextHolder = null;
+	}
+
+	public SecurityContext getContext() {
+		if (contextHolder == null) {
+			contextHolder = new SecurityContextImpl();
+		}
+
+		return contextHolder;
+	}
+
+	public void setContext(SecurityContext context) {
+		Assert.notNull(context, "Only non-null SecurityContext instances are permitted");
+		contextHolder = context;
+	}
+
+	public SecurityContext createEmptyContext() {
+		return new SecurityContextImpl();
+	}
+}
+```
+Holder的源码如下:
+```java
+/**
+ * Associates a given {@link SecurityContext} with the current execution thread.
+ * <p>
+ * This class provides a series of static methods that delegate to an instance of
+ * {@link org.springframework.security.core.context.SecurityContextHolderStrategy}. The
+ * purpose of the class is to provide a convenient way to specify the strategy that should
+ * be used for a given JVM. This is a JVM-wide setting, since everything in this class is
+ * <code>static</code> to facilitate ease of use in calling code.
+ * <p>
+ * To specify which strategy should be used, you must provide a mode setting. A mode
+ * setting is one of the three valid <code>MODE_</code> settings defined as
+ * <code>static final</code> fields, or a fully qualified classname to a concrete
+ * implementation of
+ * {@link org.springframework.security.core.context.SecurityContextHolderStrategy} that
+ * provides a public no-argument constructor.
+ * <p>
+ * There are two ways to specify the desired strategy mode <code>String</code>. The first
+ * is to specify it via the system property keyed on {@link #SYSTEM_PROPERTY}. The second
+ * is to call {@link #setStrategyName(String)} before using the class. If neither approach
+ * is used, the class will default to using {@link #MODE_THREADLOCAL}, which is backwards
+ * compatible, has fewer JVM incompatibilities and is appropriate on servers (whereas
+ * {@link #MODE_GLOBAL} is definitely inappropriate for server use).
+ *
+ * @author Ben Alex
+ *
+ */
+public class SecurityContextHolder {
+	// ~ Static fields/initializers
+	// =====================================================================================
+
+	public static final String MODE_THREADLOCAL = "MODE_THREADLOCAL";
+	public static final String MODE_INHERITABLETHREADLOCAL = "MODE_INHERITABLETHREADLOCAL";
+	public static final String MODE_GLOBAL = "MODE_GLOBAL";
+	public static final String SYSTEM_PROPERTY = "spring.security.strategy";
+	private static String strategyName = System.getProperty(SYSTEM_PROPERTY);
+	private static SecurityContextHolderStrategy strategy;
+	private static int initializeCount = 0;
+
+	static {
+		initialize();
+	}
+
+	// ~ Methods
+	// ========================================================================================================
+
+	/**
+	 * Explicitly clears the context value from the current thread.
+	 */
+	public static void clearContext() {
+		strategy.clearContext();
+	}
+
+	/**
+	 * Obtain the current <code>SecurityContext</code>.
+	 *
+	 * @return the security context (never <code>null</code>)
+	 */
+	public static SecurityContext getContext() {
+		return strategy.getContext();
+	}
+
+	/**
+	 * Primarily for troubleshooting purposes, this method shows how many times the class
+	 * has re-initialized its <code>SecurityContextHolderStrategy</code>.
+	 *
+	 * @return the count (should be one unless you've called
+	 * {@link #setStrategyName(String)} to switch to an alternate strategy.
+	 */
+	public static int getInitializeCount() {
+		return initializeCount;
+	}
+
+	private static void initialize() {
+		if (!StringUtils.hasText(strategyName)) {
+			// Set default
+			strategyName = MODE_THREADLOCAL;
+		}
+
+		if (strategyName.equals(MODE_THREADLOCAL)) {
+			strategy = new ThreadLocalSecurityContextHolderStrategy();
+		}
+		else if (strategyName.equals(MODE_INHERITABLETHREADLOCAL)) {
+			strategy = new InheritableThreadLocalSecurityContextHolderStrategy();
+		}
+		else if (strategyName.equals(MODE_GLOBAL)) {
+			strategy = new GlobalSecurityContextHolderStrategy();
+		}
+		else {
+			// Try to load a custom strategy
+			try {
+				Class<?> clazz = Class.forName(strategyName);
+				Constructor<?> customStrategy = clazz.getConstructor();
+				strategy = (SecurityContextHolderStrategy) customStrategy.newInstance();
+			}
+			catch (Exception ex) {
+				ReflectionUtils.handleReflectionException(ex);
+			}
+		}
+
+		initializeCount++;
+	}
+
+	/**
+	 * Associates a new <code>SecurityContext</code> with the current thread of execution.
+	 *
+	 * @param context the new <code>SecurityContext</code> (may not be <code>null</code>)
+	 */
+	public static void setContext(SecurityContext context) {
+		strategy.setContext(context);
+	}
+
+	/**
+	 * Changes the preferred strategy. Do <em>NOT</em> call this method more than once for
+	 * a given JVM, as it will re-initialize the strategy and adversely affect any
+	 * existing threads using the old strategy.
+	 *
+	 * @param strategyName the fully qualified class name of the strategy that should be
+	 * used.
+	 */
+	public static void setStrategyName(String strategyName) {
+		SecurityContextHolder.strategyName = strategyName;
+		initialize();
+	}
+
+	/**
+	 * Allows retrieval of the context strategy. See SEC-1188.
+	 *
+	 * @return the configured strategy for storing the security context.
+	 */
+	public static SecurityContextHolderStrategy getContextHolderStrategy() {
+		return strategy;
+	}
+
+	/**
+	 * Delegates the creation of a new, empty context to the configured strategy.
+	 */
+	public static SecurityContext createEmptyContext() {
+		return strategy.createEmptyContext();
+	}
+
+	@Override
+	public String toString() {
+		return "SecurityContextHolder[strategy='" + strategyName + "'; initializeCount="
+				+ initializeCount + "]";
+	}
+}
+```
+子线程获取不到用户信息，但是可以使用继承的方式，通过源码可以知道可以通过`spring.security.strategy`环境变量改变存储的实现。`SecurityContextHolder`实现是通过`SecurityContextPersistenceFilter`实现的.
+`SecurityContextPersistenceFilter`过滤器位于`WebAsyncManagerIntegrationFilter`之后，主要做2件事情:
+- 当请求过来时，从HttpSession中获取`SecurityContext`并放入`SecurityContextHolder`中;
+- 请求结束时，从`SecurityContextHolder`获取`SecurityContext`存入`httpSession`同时擦除`SecurityContextHolder`中的登录用户信息;
+
+存入`httpSession`主要针对异步Servlet，同步的Servlet不是在这里存入的，而是响应提交时，就存到HttpSession中去了。Filter中使用了`SecurityContextRepository`接口实现.
+```java
+public interface SecurityContextRepository {
+
+	/**
+	 * Obtains the security context for the supplied request. For an unauthenticated user,
+	 * an empty context implementation should be returned. This method should not return
+	 * null.
+	 * <p>
+	 * The use of the <tt>HttpRequestResponseHolder</tt> parameter allows implementations
+	 * to return wrapped versions of the request or response (or both), allowing them to
+	 * access implementation-specific state for the request. The values obtained from the
+	 * holder will be passed on to the filter chain and also to the <tt>saveContext</tt>
+	 * method when it is finally called. Implementations may wish to return a subclass of
+	 * {@link SaveContextOnUpdateOrErrorResponseWrapper} as the response object, which
+	 * guarantees that the context is persisted when an error or redirect occurs.
+	 *
+	 * @param requestResponseHolder holder for the current request and response for which
+	 * the context should be loaded.
+	 *
+	 * @return The security context which should be used for the current request, never
+	 * null.
+	 */
+	SecurityContext loadContext(HttpRequestResponseHolder requestResponseHolder);
+
+	/**
+	 * Stores the security context on completion of a request.
+	 *
+	 * @param context the non-null context which was obtained from the holder.
+	 * @param request
+	 * @param response
+	 */
+	void saveContext(SecurityContext context, HttpServletRequest request,
+			HttpServletResponse response);
+
+	/**
+	 * Allows the repository to be queried as to whether it contains a security context
+	 * for the current request.
+	 *
+	 * @param request the current request
+	 * @return true if a context is found for the request, false otherwise
+	 */
+	boolean containsContext(HttpServletRequest request);
+}
+```
+- loadContext() 加载`SecurityContext`对象;
+- saveContext() 保存`SecurityContext`对象;
+- containsContext() 判断`SecurityContext`对象是否存在;
+
+![SecurityContextRepository的实现](./SecurityContextRepository.png)
+- `NullSecurityContextRepository`是一个简单的null实现;
+- `HttpSessionSecurityContextRepository`是默认的实现，完成了到HttpSession到SecuirtyContext的存储与加载，`HttpSessionSecurityContextRepository`内部封装了请求与响应，使用了2个内部类.
+1. 
+
