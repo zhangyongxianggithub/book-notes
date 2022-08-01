@@ -2250,3 +2250,30 @@ if(binTree is not empty){
 }
 ```
 根据访问根节点的顺序，定义了preorder、inorder、postorder3种遍历方式，如果二叉树对应代数表达式，则3种遍历方式分别对应前缀、中缀与后缀表达式。
+
+二叉树有3种表示方式：
+1. 使用数组表示二叉树
+若使用Java类来定义树的节点，可以通过树节点的数组表示二叉树，节点包含数据部分与2个索引，比如下面的Java代码:
+```java
+@Data
+public class TreeNode<T> {
+    private T item;
+    // 若没有左子节点，则=-1
+    private int leftChild;
+    // 若没有右子节点，则=-1
+    private int rightChild;
+}
+public abstract class BinaryTreeArrayBased<T> {
+    protected final int MAX_NODES = 100;
+    
+    protected ArrayList<TreeNode<T>> tree;
+    // 树根在数组tree内的索引，若树为空=-1，
+    protected int root;
+    
+    protected int free;
+}
+```
+插入与删除操作会使树发生变化，故节点可能不是数组的连续元素，该实现要求建立一个可用节点列表，即空闲表(free list)，要将新节点插入树中，首先从空闲列表中获得一个可用的节点，要从树中删除一个节点，则将其放入空闲列表，以便后面重用该节点，free变量是空闲列表中第一个节点的索引，空闲表中各个节点的rightChild字段是空闲表中下一节点的索引。
+2. 使用数组表示完全二叉树
+完全二叉树使用标准分级方案对节点编号，根节点的编号是1，
+3. 基于引用的表示
