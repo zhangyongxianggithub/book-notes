@@ -1737,3 +1737,102 @@ public class HttpSessionSecurityContextRepository implements SecurityContextRepo
 	}
 }
 ```
+- SPRING_SECURITY_CONTEXT_KEY变量定义了HttpSession中存储的key的名称;
+- trustResolver是一个用户身份评估器，用来判断当前用户是匿名用户还是RememberMe用户;
+- loadContext()方法，从HttpSession中读取Context或者返回的一个表示空的Context;
+- saveContext()方法将Context保存到HttpSession;
+- containsContext()判断请求中是否已经存在Context对象;
+
+`HttpSessionSecurityContextRepository`提供的所有的功能都在`SecurityContextPersistenceFilter`过滤器中调用，下面看下核心源代码:
+```java
+public class SecurityContextPersistenceFilter extends GenericFilterBean {
+
+	static final String FILTER_APPLIED = "__spring_security_scpf_applied";
+
+	private SecurityContextRepository repo;
+
+	private boolean forceEagerSessionCreation = false;
+
+	public SecurityContextPersistenceFilter() {
+		this(new HttpSessionSecurityContextRepository());
+	}
+
+	public SecurityContextPersistenceFilter(SecurityContextRepository repo) {
+		this.repo = repo;
+	}
+
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest request = (HttpServletRequest) req;
+		HttpServletResponse response = (HttpServletResponse) res;
+
+		if (request.getAttribute(FILTER_APPLIED) != null) {
+			// ensure that filter is only applied once per request
+			chain.doFilter(request, response);
+			return;
+		}
+
+		final boolean debug = logger.isDebugEnabled();
+
+		request.setAttribute(FILTER_APPLIED, Boolean.TRUE);
+
+		if (forceEagerSessionCreation) {
+			HttpSession session = request.getSession();
+
+			if (debug && session.isNew()) {
+				logger.debug("Eagerly created session: " + session.getId());
+			}
+		}
+
+		HttpRequestResponseHolder holder = new HttpRequestResponseHolder(request,
+				response);
+		SecurityContext contextBeforeChainExecution = repo.loadContext(holder);
+
+		try {
+			SecurityContextHolder.setContext(contextBeforeChainExecution);
+
+			chain.doFilter(holder.getRequest(), holder.getResponse());
+
+		}
+		finally {
+			SecurityContext contextAfterChainExecution = SecurityContextHolder
+					.getContext();
+			// Crucial removal of SecurityContextHolder contents - do this before anything
+			// else.
+			SecurityContextHolder.clearContext();
+			repo.saveContext(contextAfterChainExecution, holder.getRequest(),
+					holder.getResponse());
+			request.removeAttribute(FILTER_APPLIED);
+
+			if (debug) {
+				logger.debug("SecurityContextHolder now cleared, as request processing completed");
+			}
+		}
+	}
+
+	public void setForceEagerSessionCreation(boolean forceEagerSessionCreation) {
+		this.forceEagerSessionCreation = forceEagerSessionCreation;
+	}
+}
+```
+- 从request中获取FILTER_APPLIED属性，主要是确保请求只会被当前的filter处理一次，没有的化写入一个;
+- forceEagerSessionCreation表示是否要在过滤器链执行前创建会话;
+- 构造HttpRequestResponseHolder对象;
+- repo.loadContext(holder)调用repo加载Context对象;
+- 将获取的Context放入到`SecurityContextHolder`中SecurityContextHolder.setContext(contextBeforeChainExecution);
+- 执行后面的过滤器链，但是此时request与reponse已经是被holder封装的了;
+- 在finally中，清空`SecurityContextHolder`里面的context，然后把context保存回Session，因为Context可能发生了变更;
+
+2. 从当前请求对象中获取
+```java
+    @RequestMapping("/authentication")
+    public String sayAuth(final Authentication authentication) {
+        return authentication.toString();
+    }
+    
+    @RequestMapping("/principal")
+    public String sayPrincipal(final Principal principal) {
+        return principal.toString();
+    }
+```
+
