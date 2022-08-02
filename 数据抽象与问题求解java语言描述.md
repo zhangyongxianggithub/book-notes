@@ -2286,4 +2286,237 @@ class TreeNode<T> {
     private TreeNode<T> rightChild;
 }
 ```
-
+二叉树基于引用表示的实现:
+首先定义二叉树基类如下:
+```java
+@Data
+class TreeNode<T> {
+    private T item;
+    
+    private TreeNode<T> leftChild;
+    
+    private TreeNode<T> rightChild;
+    
+    public TreeNode(final T item) {
+        this(item, null, null);
+    }
+    
+    private TreeNode(final T item, final TreeNode<T> leftChild,
+                     final TreeNode<T> rightChild) {
+        this.item = item;
+        this.leftChild = leftChild;
+        this.rightChild = rightChild;
+    }
+}
+```
+接下来定义二叉树抽象类的共同操作:
+```java
+public abstract class BinaryTreeBasis<T> {
+    
+    private TreeNode<T> root;
+    
+    public BinaryTreeBasis() {}
+    
+    private BinaryTreeBasis(final T rootItem) {
+        this.root = new TreeNode<>(rootItem);
+    }
+    
+    public boolean isEmpty() {
+        return root == null;
+    }
+    
+    public void makeEmpty() {
+        root = null;
+    }
+    
+    public T getRootItem() throws TreeException {
+        if (root == null) {
+            throw new TreeException("TreeException: Empty tree");
+        } else {
+            return root.getItem();
+        }
+    }
+    
+    public abstract void setRootItem(T newItem);
+}
+```
+定义一个一般的二叉树实现:
+```java
+public class BinaryTree<T> extends BinaryTreeBasis<T> {
+    
+    public BinaryTree() {}
+    
+    public BinaryTree(final T rootItem) {
+        super(rootItem);
+    }
+    
+    private BinaryTree(final TreeNode<T> rootNode) {
+        root = rootNode;
+    }
+    
+    public BinaryTree(final T rootItem, final BinaryTree<T> leftTree,
+            final BinaryTree<T> rightTree) {
+        super(rootItem);
+        attachLeftSubtree(leftTree);
+        attachRightSubtree(rightTree);
+    }
+    
+    public void attachLeft(final T newItem) {
+        if (!isEmpty() && root.getLeftChild() == null) {
+            root.setLeftChild(new TreeNode<>(newItem));
+        }
+    }
+    
+    public void attachRight(final T newItem) {
+        if (!isEmpty() && root.getRightChild() == null) {
+            root.setRightChild(new TreeNode<>(newItem));
+        }
+    }
+    
+    private void attachLeftSubtree(final BinaryTree<T> leftTree)
+            throws TreeException {
+        if (isEmpty()) {
+            throw new TreeException("empty tree");
+        } else if (root.getLeftChild() != null) {
+            throw new TreeException("left tree already exists");
+        } else {
+            root.setLeftChild(leftTree.root);
+            leftTree.makeEmpty();
+        }
+    }
+    
+    private void attachRightSubtree(final BinaryTree<T> rightTree)
+            throws TreeException {
+        if (isEmpty()) {
+            throw new TreeException("empty tree");
+        } else if (root.getRightChild() != null) {
+            throw new TreeException("left tree already exists");
+        } else {
+            root.setRightChild(rightTree.root);
+            rightTree.makeEmpty();
+        }
+    }
+    
+    public BinaryTree<T> detachLeftSubtree() throws TreeException {
+        if (isEmpty()) {
+            throw new TreeException("empty tree");
+        } else {
+            final BinaryTree<T> left = new BinaryTree<>(root.getLeftChild());
+            root.setLeftChild(null);
+            return left;
+        }
+    }
+    
+    public BinaryTree<T> detachRightSubtree(final BinaryTree<T> rightTree)
+            throws TreeException {
+        if (isEmpty()) {
+            throw new TreeException("empty tree");
+        } else {
+            final BinaryTree<T> right = new BinaryTree<>(root.getRightChild());
+            root.setRightChild(null);
+            return right;
+        }
+    }
+    
+    @Override
+    public void setRootItem(final T newItem) {
+        if (root == null) {
+            root = new TreeNode<>(newItem);
+        } else {
+            root.setItem(newItem);
+        }
+    }
+}
+```
+迭代器访问树节点的顺序依赖于树的遍历操作，前中后；实现树迭代器需要实现Iterator接口，里面有3个方法，在`BinaryTreeBasis`中实现就可以，下面是TreeIterator的定义:
+```java
+public class TreeIterator<T> implements Iterator<T> {
+    
+    private final BinaryTreeBasis<T> binTree;
+    
+    private TreeNode<T> currentNode;
+    
+    private final LinkedList<TreeNode<T>> queue;
+    
+    TreeIterator(final BinaryTreeBasis<T> binTree) {
+        this.binTree = binTree;
+        currentNode = null;
+        queue = new LinkedList<>();
+    }
+    
+    @Override
+    public boolean hasNext() {
+        return !queue.isEmpty();
+    }
+    
+    @Override
+    public T next() {
+        currentNode = queue.pollFirst();
+        return currentNode.getItem();
+    }
+    
+    public void setPreorder() {
+        queue.clear();
+        preorder(binTree.root);
+    }
+    
+    void setInorder() {
+        queue.clear();
+        inorder(binTree.root);
+    }
+    
+    public void setPostorder() {
+        queue.clear();
+        postorder(binTree.root);
+    }
+    
+    private void preorder(final TreeNode<T> treeNode) {
+        if (treeNode != null) {
+            queue.add(treeNode);
+            preorder(treeNode.getLeftChild());
+            preorder(treeNode.getRightChild());
+        }
+    }
+    
+    private void inorder(final TreeNode<T> treeNode) {
+        if (treeNode != null) {
+            inorder(treeNode.getLeftChild());
+            queue.add(treeNode);
+            inorder(treeNode.getRightChild());
+        }
+    }
+    
+    private void postorder(final TreeNode<T> treeNode) {
+        if (treeNode != null) {
+            postorder(treeNode.getLeftChild());
+            postorder(treeNode.getRightChild());
+            queue.add(treeNode);
+        }
+    }
+}
+```
+```java
+public class Demo {
+    public static void main(final String[] args) {
+        final BinaryTree<Integer> tree3 = new BinaryTree<>(70);
+        final BinaryTree<Integer> tree1 = new BinaryTree<>();
+        tree1.setRootItem(40);
+        tree1.attachLeft(30);
+        tree1.attachRight(50);
+        final BinaryTree<Integer> tree2 = new BinaryTree<>();
+        tree2.setRootItem(20);
+        tree2.attachLeft(10);
+        tree2.attachRightSubtree(tree1);
+        final BinaryTree<Integer> binTree = new BinaryTree<>(60, tree2, tree3);
+        final TreeIterator<Integer> btIterator = new TreeIterator<>(binTree);
+        btIterator.setInorder();
+        System.out.println(Iterators.toString(btIterator));
+        final BinaryTree<Integer> leftTree = binTree.detachLeftSubtree();
+        final TreeIterator<Integer> leftIterator = new TreeIterator<>(leftTree);
+        leftIterator.setInorder();
+        System.out.println(Iterators.toString(leftIterator));
+        btIterator.setInorder();
+        System.out.println(Iterators.toString(btIterator));
+    }
+}
+```
