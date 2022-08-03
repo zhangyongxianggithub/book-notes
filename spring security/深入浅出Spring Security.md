@@ -320,9 +320,9 @@ AccessDecisionVoter是一个投票器，用于检查用户是否应该具备应�
 |SwitchUserFilter|处理账户切换|NO|
 
 Spring Security的所有的功能都是通过这些过滤器来实现的，这些过滤器按照既定的优先级排列形成过滤器链；也可以自定义过滤器，并通过@Order来调整自定义过滤器在过滤器链中的位置。默认的过滤器并不是直接在Web项目的原生过滤器链中，而是通过一个FilterChainProxy来统一管理，Spring Security中的过滤器链通过FilterChainProxy嵌入到Web项目的原生过滤器链中，如下图
-![过滤器链通过FilterChainProxy出现在Web容器中](./filterchainproxy.png)
+![过滤器链通过FilterChainProxy出现在Web容器中](filterchainproxy.png)
 过滤器链可能存在多个
-![多个过滤器](./multi-filterchainproxy.png)
+![多个过滤器](multi-filterchainproxy.png)
 FilterChainProxy会通过DelegatingFilterProxy整合到原生过滤器链中。
 Spring Security还对登录成功后的用户信息数据做了线程绑定（Session中也会存储一份）。使用的是ThreadLocal的机制，SecurityContextHolder中会存储这个变量，当处理完成，SecurityContextHolder会把数据清空，并放到Session中，以后每当有请求到来，先到session中取出登录数据放到SecurityContextHolder中，然后处理完，再次保存到Session中。但是如果是异步执行的话，线程中获取不到登录用户信息，特别是使用`@Async`时候，Spring Security为此提供了解决方案
 ```java
@@ -346,7 +346,7 @@ public class Config extends AsyncConfigurerSupport {
                 </dependency>
 ```
 来看一下请求的流程
-![请求流程图](./%E8%AF%B7%E6%B1%82%E6%B5%81%E7%A8%8B%E5%9B%BE.drawio.png)
+![请求流程图](%E8%AF%B7%E6%B1%82%E6%B5%81%E7%A8%8B%E5%9B%BE.drawio.png)
 - 客户端发起请求访问/hello接口，这个接口被鉴权
 - 请求达到服务端走了一遍security的过滤器链，然后到达FilterSecurityInterceptor被拦截下来，因为发现用户未认证抛出AccessDeniedException异常
 - 异常在ExceptionTranslationFilter中被捕获，ExceptionTranslationFilter通过调用LoginUrlAuthenticationEntryPoint#commence方法给客户端返回302，要求客户端重定向到/login页面
@@ -363,7 +363,7 @@ public class Config extends AsyncConfigurerSupport {
 - 集成X-Frame-Options以防止单击劫持
 
 spring security定义了UserDetails接口定义用户对象，提供这个接口的是UserDetailsService，参数是一个username，开发者要自己实现，Spring Security也提供了一些实现，如下图:
-![](./UserDetailsService.png)
+![](UserDetailsService.png)
 
 - UserDetailsManager, 在UserDetailsService基础上额外添加了一些操作用户的方法;
 - JdbcDaoImpl通过spring-jdbc实现通过数据库查询用户;
@@ -536,7 +536,7 @@ public interface AuthenticationSuccessHandler {
 
 ```
 `Authentication`保存了登录成功后的用户信息，它有3个实现类:
-![](./AuthenticationSuccessHandler.png)
+![](AuthenticationSuccessHandler.png)
 - `SimpleUrlAuthenticationSuccessHandler`继承自`AbstractAuthenticationTargetUrlRequestHandler`通过handle方法实现请求的重定向;
 - `SavedRequestAwareAuthenticationSuccessHandler`在`SimpleUrlAuthenticationSuccessHandler`的基础上增加了请求缓存的功能，可以记录之前请求的地址，在成功后重定向到之前访问的地址;
 - `ForwardAuthenticationSuccessHandler`就是一个服务端跳转;
@@ -693,7 +693,7 @@ public interface AuthenticationFailureHandler {
 }
 ```
 它有5个实现类，类图如下:
-![AuthenticationFailureHandler的类图](./AuthenticationFailureHandler.png)
+![AuthenticationFailureHandler的类图](AuthenticationFailureHandler.png)
 - `SimpleUrlAuthenticationFailureHandler`的默认的处理逻辑就是重定向到登录页，可有配置forwardToDestination设置为服务端重定向，failureUrl对应的实现就是这个;
 - `ExceptionMappingAuthenticationFailureHandler`可以根据不同的异常类型映射到不同的路径;
 - `ForwardAuthenticationFailureHandler`是服务端跳转到登录页，对应的配置是fialureForwardUrl;
@@ -966,7 +966,7 @@ public interface Authentication extends Principal, Serializable {
 - isAuthenticated()当前用户是否认证成功
 
 不同的认证方式对应不同的Authentication实例，它的实现类主要有:
-![authentication的实现类](./Authentication.png)
+![authentication的实现类](Authentication.png)
 - `AbstractAuthenticationToken`:对`Authentication`进行了实现;
 - `RememberMeAuthenticationToken`: 如果用户使用RememberMe的方式登录，则登录信息封装在这里面;
 - `TestingAuthenticationToken`: 单元测试时封装的用户对象;
@@ -1034,7 +1034,7 @@ public interface SecurityContextHolderStrategy {
 - setContext(): 设置存储的SecurityContext;
 - createEmptyContext(): 创建一个空的SecurityContext对象;
 这个接口有3个实现，分别对应上面说的3种:
-![SecurityContextHolderStrategy的实现类](./SecurityContextHolderStrategy.png)
+![SecurityContextHolderStrategy的实现类](SecurityContextHolderStrategy.png)
 ThreadLocalSecurityContextHolderStrategy核心源码如下: 
 ```java
 final class ThreadLocalSecurityContextHolderStrategy implements
@@ -1344,11 +1344,11 @@ public interface SecurityContextRepository {
 - saveContext() 保存`SecurityContext`对象;
 - containsContext() 判断`SecurityContext`对象是否存在;
 
-![SecurityContextRepository的实现](./SecurityContextRepository.png)
+![SecurityContextRepository的实现](SecurityContextRepository.png)
 - `NullSecurityContextRepository`是一个简单的null实现;
 - `HttpSessionSecurityContextRepository`是默认的实现，完成了到HttpSession到SecuirtyContext的存储与加载，`HttpSessionSecurityContextRepository`内部封装了请求与响应，使用了2个内部类.
 1. SaveToSessionResponseWrapper，其继承关系图如下:
-![SaveToSessionResponseWrapper的继承关系图](./SaveToSessionResponseWrapper.png)
+![SaveToSessionResponseWrapper的继承关系图](SaveToSessionResponseWrapper.png)
 - HttpServletResponseWrapper: 实现了HttpServletResponse接口，是HttpServletResponse的装饰类，可以方便的操作参数与输出流;
 - OnCommittedResponseWrapper: OnCommittedResponseWrapper继承自HttpServletResponseWrapper，对其功能进行了增强，最重要的增强是可以获取HttpServletResponse的提交行为，当HttpServletResponse的sendError、sendRedirect、flushBuffer、flush以及close被调用时，onResponseCommitted方法会被触发，开发者可以在onResponseCommitted方法中做一些数据保存工作，比如保存SecurityContext;
 - `SaveContextOnUpdateOrErrorResponseWrapper`: 继承`OnCommittedResponseWrapper`对onResponseCommitted做了实现，里面声明了一个contextSaved变量，表示SecurityContext是否存储成功，实现的过程是调用saveContext将SecurityContext保存到HttpSession，同时将contextSaved=true，saveContext也是一个抽象方法，具体的实现在`SaveToSessionResponseWrapper`类中; 核心代码如下:
@@ -1835,4 +1835,164 @@ public class SecurityContextPersistenceFilter extends GenericFilterBean {
         return principal.toString();
     }
 ```
+这些信息都来自HttpServletRequest，在不同的部署环境下，其实现是不同的，如果是Tomcat，其实现是RequestFacade，如果使用了Spring Security，那么其实现是`Servlet3SecurityContextHolderAwareRequestWrapper`，其继承关系如下:
+![Servlet3SecurityContextHolderAwareRequestWrapper的继承关系](HttpServlet3RequestFactory.png)
+`SecurityContextHolderAwareRequestWrapper`实现了3.0版本之前的3个安全方法，`Servlet3SecurityContextHolderAwareRequestWrapper`实现了3.0版本的3个安全方法，核心源码如下:
+```java
+public class SecurityContextHolderAwareRequestWrapper extends HttpServletRequestWrapper {
+	// ~ Instance fields
+	// ================================================================================================
+
+	private final AuthenticationTrustResolver trustResolver;
+
+	/**
+	 * The prefix passed by the filter. It will be prepended to any supplied role values
+	 * before comparing it with the roles obtained from the security context.
+	 */
+	private final String rolePrefix;
+
+	// ~ Constructors
+	// ===================================================================================================
+
+	/**
+	 * Creates a new instance with {@link AuthenticationTrustResolverImpl}.
+	 *
+	 * @param request
+	 * @param rolePrefix
+	 */
+	public SecurityContextHolderAwareRequestWrapper(HttpServletRequest request,
+			String rolePrefix) {
+		this(request, new AuthenticationTrustResolverImpl(), rolePrefix);
+	}
+
+	/**
+	 * Creates a new instance
+	 *
+	 * @param request the original {@link HttpServletRequest}
+	 * @param trustResolver the {@link AuthenticationTrustResolver} to use. Cannot be
+	 * null.
+	 * @param rolePrefix The prefix to be added to {@link #isUserInRole(String)} or null
+	 * if no prefix.
+	 */
+	public SecurityContextHolderAwareRequestWrapper(HttpServletRequest request,
+			AuthenticationTrustResolver trustResolver, String rolePrefix) {
+		super(request);
+		Assert.notNull(trustResolver, "trustResolver cannot be null");
+		this.rolePrefix = rolePrefix;
+		this.trustResolver = trustResolver;
+	}
+
+	// ~ Methods
+	// ========================================================================================================
+
+	/**
+	 * Obtain the current active <code>Authentication</code>
+	 *
+	 * @return the authentication object or <code>null</code>
+	 */
+	private Authentication getAuthentication() {
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+		if (!trustResolver.isAnonymous(auth)) {
+			return auth;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns the principal's name, as obtained from the
+	 * <code>SecurityContextHolder</code>. Properly handles both <code>String</code>-based
+	 * and <code>UserDetails</code>-based principals.
+	 *
+	 * @return the username or <code>null</code> if unavailable
+	 */
+	@Override
+	public String getRemoteUser() {
+		Authentication auth = getAuthentication();
+
+		if ((auth == null) || (auth.getPrincipal() == null)) {
+			return null;
+		}
+
+		if (auth.getPrincipal() instanceof UserDetails) {
+			return ((UserDetails) auth.getPrincipal()).getUsername();
+		}
+
+		return auth.getPrincipal().toString();
+	}
+
+	/**
+	 * Returns the <code>Authentication</code> (which is a subclass of
+	 * <code>Principal</code>), or <code>null</code> if unavailable.
+	 *
+	 * @return the <code>Authentication</code>, or <code>null</code>
+	 */
+	@Override
+	public Principal getUserPrincipal() {
+		Authentication auth = getAuthentication();
+
+		if ((auth == null) || (auth.getPrincipal() == null)) {
+			return null;
+		}
+
+		return auth;
+	}
+
+	private boolean isGranted(String role) {
+		Authentication auth = getAuthentication();
+
+		if (rolePrefix != null && role != null && !role.startsWith(rolePrefix)) {
+			role = rolePrefix + role;
+		}
+
+		if ((auth == null) || (auth.getPrincipal() == null)) {
+			return false;
+		}
+
+		Collection<? extends GrantedAuthority> authorities = auth.getAuthorities();
+
+		if (authorities == null) {
+			return false;
+		}
+
+		for (GrantedAuthority grantedAuthority : authorities) {
+			if (role.equals(grantedAuthority.getAuthority())) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Simple searches for an exactly matching
+	 * {@link org.springframework.security.core.GrantedAuthority#getAuthority()}.
+	 * <p>
+	 * Will always return <code>false</code> if the <code>SecurityContextHolder</code>
+	 * contains an <code>Authentication</code> with <code>null</code>
+	 * <code>principal</code> and/or <code>GrantedAuthority[]</code> objects.
+	 *
+	 * @param role the <code>GrantedAuthority</code><code>String</code> representation to
+	 * check for
+	 *
+	 * @return <code>true</code> if an <b>exact</b> (case sensitive) matching granted
+	 * authority is located, <code>false</code> otherwise
+	 */
+	@Override
+	public boolean isUserInRole(String role) {
+		return isGranted(role);
+	}
+
+	@Override
+	public String toString() {
+		return "SecurityContextHolderAwareRequestWrapper[ " + getRequest() + "]";
+	}
+}
+```
+- getAuthentication就是从SecurityContextHolder中获取登录对象;
+- getRemoteUser获取Authentication对象，如果其中的Principal是UserDetails，则返回用户名，否则Principal就是用户名;
+- getUserPrincipal,与getAuthentication差不多;
+- isGranted, 比较Authentication的Authority与传入参数的角色比较;
+- isUserInRole，与isGranted差不多;
 
