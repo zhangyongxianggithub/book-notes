@@ -2307,4 +2307,534 @@ UNLOCK TABLES;
 - authenticate方法用来执行具体的身份认证;
 - supports用来判断当前的Provider是否支持对应的身份类型;
   
-当使用用户名/密码的登录方式时，AuthenticationProvider的实现是DaoAuthenticationProvider，
+当使用用户名/密码的登录方式时，AuthenticationProvider的实现是DaoAuthenticationProvider，它继承于`AbstractUserDetailsAuthenticationProvider`，先看一下核心源码:
+```java
+public abstract class AbstractUserDetailsAuthenticationProvider
+		implements AuthenticationProvider, InitializingBean, MessageSourceAware {
+
+	protected final Log logger = LogFactory.getLog(getClass());
+
+	protected MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
+
+	private UserCache userCache = new NullUserCache();
+
+	private boolean forcePrincipalAsString = false;
+
+	protected boolean hideUserNotFoundExceptions = true;
+
+	private UserDetailsChecker preAuthenticationChecks = new DefaultPreAuthenticationChecks();
+
+	private UserDetailsChecker postAuthenticationChecks = new DefaultPostAuthenticationChecks();
+
+	private GrantedAuthoritiesMapper authoritiesMapper = new NullAuthoritiesMapper();
+
+	/**
+	 * Allows subclasses to perform any additional checks of a returned (or cached)
+	 * <code>UserDetails</code> for a given authentication request. Generally a subclass
+	 * will at least compare the {@link Authentication#getCredentials()} with a
+	 * {@link UserDetails#getPassword()}. If custom logic is needed to compare additional
+	 * properties of <code>UserDetails</code> and/or
+	 * <code>UsernamePasswordAuthenticationToken</code>, these should also appear in this
+	 * method.
+	 * @param userDetails as retrieved from the
+	 * {@link #retrieveUser(String, UsernamePasswordAuthenticationToken)} or
+	 * <code>UserCache</code>
+	 * @param authentication the current request that needs to be authenticated
+	 * @throws AuthenticationException AuthenticationException if the credentials could
+	 * not be validated (generally a <code>BadCredentialsException</code>, an
+	 * <code>AuthenticationServiceException</code>)
+	 */
+	protected abstract void additionalAuthenticationChecks(UserDetails userDetails,
+			UsernamePasswordAuthenticationToken authentication) throws AuthenticationException;
+
+	@Override
+	public final void afterPropertiesSet() throws Exception {
+		Assert.notNull(this.userCache, "A user cache must be set");
+		Assert.notNull(this.messages, "A message source must be set");
+		doAfterPropertiesSet();
+	}
+
+	@Override
+	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+		Assert.isInstanceOf(UsernamePasswordAuthenticationToken.class, authentication,
+				() -> this.messages.getMessage("AbstractUserDetailsAuthenticationProvider.onlySupports",
+						"Only UsernamePasswordAuthenticationToken is supported"));
+		String username = determineUsername(authentication);
+		boolean cacheWasUsed = true;
+		UserDetails user = this.userCache.getUserFromCache(username);
+		if (user == null) {
+			cacheWasUsed = false;
+			try {
+				user = retrieveUser(username, (UsernamePasswordAuthenticationToken) authentication);
+			}
+			catch (UsernameNotFoundException ex) {
+				this.logger.debug("Failed to find user '" + username + "'");
+				if (!this.hideUserNotFoundExceptions) {
+					throw ex;
+				}
+				throw new BadCredentialsException(this.messages
+						.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+			}
+			Assert.notNull(user, "retrieveUser returned null - a violation of the interface contract");
+		}
+		try {
+			this.preAuthenticationChecks.check(user);
+			additionalAuthenticationChecks(user, (UsernamePasswordAuthenticationToken) authentication);
+		}
+		catch (AuthenticationException ex) {
+			if (!cacheWasUsed) {
+				throw ex;
+			}
+			// There was a problem, so try again after checking
+			// we're using latest data (i.e. not from the cache)
+			cacheWasUsed = false;
+			user = retrieveUser(username, (UsernamePasswordAuthenticationToken) authentication);
+			this.preAuthenticationChecks.check(user);
+			additionalAuthenticationChecks(user, (UsernamePasswordAuthenticationToken) authentication);
+		}
+		this.postAuthenticationChecks.check(user);
+		if (!cacheWasUsed) {
+			this.userCache.putUserInCache(user);
+		}
+		Object principalToReturn = user;
+		if (this.forcePrincipalAsString) {
+			principalToReturn = user.getUsername();
+		}
+		return createSuccessAuthentication(principalToReturn, authentication, user);
+	}
+
+	private String determineUsername(Authentication authentication) {
+		return (authentication.getPrincipal() == null) ? "NONE_PROVIDED" : authentication.getName();
+	}
+
+	/**
+	 * Creates a successful {@link Authentication} object.
+	 * <p>
+	 * Protected so subclasses can override.
+	 * </p>
+	 * <p>
+	 * Subclasses will usually store the original credentials the user supplied (not
+	 * salted or encoded passwords) in the returned <code>Authentication</code> object.
+	 * </p>
+	 * @param principal that should be the principal in the returned object (defined by
+	 * the {@link #isForcePrincipalAsString()} method)
+	 * @param authentication that was presented to the provider for validation
+	 * @param user that was loaded by the implementation
+	 * @return the successful authentication token
+	 */
+	protected Authentication createSuccessAuthentication(Object principal, Authentication authentication,
+			UserDetails user) {
+		// Ensure we return the original credentials the user supplied,
+		// so subsequent attempts are successful even with encoded passwords.
+		// Also ensure we return the original getDetails(), so that future
+		// authentication events after cache expiry contain the details
+		UsernamePasswordAuthenticationToken result = UsernamePasswordAuthenticationToken.authenticated(principal,
+				authentication.getCredentials(), this.authoritiesMapper.mapAuthorities(user.getAuthorities()));
+		result.setDetails(authentication.getDetails());
+		this.logger.debug("Authenticated user");
+		return result;
+	}
+
+	protected void doAfterPropertiesSet() throws Exception {
+	}
+
+	public UserCache getUserCache() {
+		return this.userCache;
+	}
+
+	public boolean isForcePrincipalAsString() {
+		return this.forcePrincipalAsString;
+	}
+
+	public boolean isHideUserNotFoundExceptions() {
+		return this.hideUserNotFoundExceptions;
+	}
+
+	/**
+	 * Allows subclasses to actually retrieve the <code>UserDetails</code> from an
+	 * implementation-specific location, with the option of throwing an
+	 * <code>AuthenticationException</code> immediately if the presented credentials are
+	 * incorrect (this is especially useful if it is necessary to bind to a resource as
+	 * the user in order to obtain or generate a <code>UserDetails</code>).
+	 * <p>
+	 * Subclasses are not required to perform any caching, as the
+	 * <code>AbstractUserDetailsAuthenticationProvider</code> will by default cache the
+	 * <code>UserDetails</code>. The caching of <code>UserDetails</code> does present
+	 * additional complexity as this means subsequent requests that rely on the cache will
+	 * need to still have their credentials validated, even if the correctness of
+	 * credentials was assured by subclasses adopting a binding-based strategy in this
+	 * method. Accordingly it is important that subclasses either disable caching (if they
+	 * want to ensure that this method is the only method that is capable of
+	 * authenticating a request, as no <code>UserDetails</code> will ever be cached) or
+	 * ensure subclasses implement
+	 * {@link #additionalAuthenticationChecks(UserDetails, UsernamePasswordAuthenticationToken)}
+	 * to compare the credentials of a cached <code>UserDetails</code> with subsequent
+	 * authentication requests.
+	 * </p>
+	 * <p>
+	 * Most of the time subclasses will not perform credentials inspection in this method,
+	 * instead performing it in
+	 * {@link #additionalAuthenticationChecks(UserDetails, UsernamePasswordAuthenticationToken)}
+	 * so that code related to credentials validation need not be duplicated across two
+	 * methods.
+	 * </p>
+	 * @param username The username to retrieve
+	 * @param authentication The authentication request, which subclasses <em>may</em>
+	 * need to perform a binding-based retrieval of the <code>UserDetails</code>
+	 * @return the user information (never <code>null</code> - instead an exception should
+	 * the thrown)
+	 * @throws AuthenticationException if the credentials could not be validated
+	 * (generally a <code>BadCredentialsException</code>, an
+	 * <code>AuthenticationServiceException</code> or
+	 * <code>UsernameNotFoundException</code>)
+	 */
+	protected abstract UserDetails retrieveUser(String username, UsernamePasswordAuthenticationToken authentication)
+			throws AuthenticationException;
+
+	public void setForcePrincipalAsString(boolean forcePrincipalAsString) {
+		this.forcePrincipalAsString = forcePrincipalAsString;
+	}
+
+	/**
+	 * By default the <code>AbstractUserDetailsAuthenticationProvider</code> throws a
+	 * <code>BadCredentialsException</code> if a username is not found or the password is
+	 * incorrect. Setting this property to <code>false</code> will cause
+	 * <code>UsernameNotFoundException</code>s to be thrown instead for the former. Note
+	 * this is considered less secure than throwing <code>BadCredentialsException</code>
+	 * for both exceptions.
+	 * @param hideUserNotFoundExceptions set to <code>false</code> if you wish
+	 * <code>UsernameNotFoundException</code>s to be thrown instead of the non-specific
+	 * <code>BadCredentialsException</code> (defaults to <code>true</code>)
+	 */
+	public void setHideUserNotFoundExceptions(boolean hideUserNotFoundExceptions) {
+		this.hideUserNotFoundExceptions = hideUserNotFoundExceptions;
+	}
+
+	@Override
+	public void setMessageSource(MessageSource messageSource) {
+		this.messages = new MessageSourceAccessor(messageSource);
+	}
+
+	public void setUserCache(UserCache userCache) {
+		this.userCache = userCache;
+	}
+
+	@Override
+	public boolean supports(Class<?> authentication) {
+		return (UsernamePasswordAuthenticationToken.class.isAssignableFrom(authentication));
+	}
+
+	protected UserDetailsChecker getPreAuthenticationChecks() {
+		return this.preAuthenticationChecks;
+	}
+
+	/**
+	 * Sets the policy will be used to verify the status of the loaded
+	 * <tt>UserDetails</tt> <em>before</em> validation of the credentials takes place.
+	 * @param preAuthenticationChecks strategy to be invoked prior to authentication.
+	 */
+	public void setPreAuthenticationChecks(UserDetailsChecker preAuthenticationChecks) {
+		this.preAuthenticationChecks = preAuthenticationChecks;
+	}
+
+	protected UserDetailsChecker getPostAuthenticationChecks() {
+		return this.postAuthenticationChecks;
+	}
+
+	public void setPostAuthenticationChecks(UserDetailsChecker postAuthenticationChecks) {
+		this.postAuthenticationChecks = postAuthenticationChecks;
+	}
+
+	public void setAuthoritiesMapper(GrantedAuthoritiesMapper authoritiesMapper) {
+		this.authoritiesMapper = authoritiesMapper;
+	}
+
+	private class DefaultPreAuthenticationChecks implements UserDetailsChecker {
+
+		@Override
+		public void check(UserDetails user) {
+			if (!user.isAccountNonLocked()) {
+				AbstractUserDetailsAuthenticationProvider.this.logger
+						.debug("Failed to authenticate since user account is locked");
+				throw new LockedException(AbstractUserDetailsAuthenticationProvider.this.messages
+						.getMessage("AbstractUserDetailsAuthenticationProvider.locked", "User account is locked"));
+			}
+			if (!user.isEnabled()) {
+				AbstractUserDetailsAuthenticationProvider.this.logger
+						.debug("Failed to authenticate since user account is disabled");
+				throw new DisabledException(AbstractUserDetailsAuthenticationProvider.this.messages
+						.getMessage("AbstractUserDetailsAuthenticationProvider.disabled", "User is disabled"));
+			}
+			if (!user.isAccountNonExpired()) {
+				AbstractUserDetailsAuthenticationProvider.this.logger
+						.debug("Failed to authenticate since user account has expired");
+				throw new AccountExpiredException(AbstractUserDetailsAuthenticationProvider.this.messages
+						.getMessage("AbstractUserDetailsAuthenticationProvider.expired", "User account has expired"));
+			}
+		}
+
+	}
+
+	private class DefaultPostAuthenticationChecks implements UserDetailsChecker {
+
+		@Override
+		public void check(UserDetails user) {
+			if (!user.isCredentialsNonExpired()) {
+				AbstractUserDetailsAuthenticationProvider.this.logger
+						.debug("Failed to authenticate since user account credentials have expired");
+				throw new CredentialsExpiredException(AbstractUserDetailsAuthenticationProvider.this.messages
+						.getMessage("AbstractUserDetailsAuthenticationProvider.credentialsExpired",
+								"User credentials have expired"));
+			}
+		}
+
+	}
+}
+```
+- 是一个抽象类;
+- 声明一个用户缓存对象，一开始是空的，nullcache;
+- hideUserNotFoundExceptions表示是否隐藏用户名查找失败的异常，这是为了确保安全，登录失败给出模糊提示，防止测试出系统用户名，用户名查找失败会有单独的UserNameNotFoundException，开启这个后，统一返回BadCredentailsException异常;
+- forcePrincipalAsString表示Authentication中的Principal是当成UserDetails还是用户名来处理;
+- preAuthenticationChecks做用户状态检查，验证用户状态是否正常;
+- postAuthenticationChecks密码验证成功后，校验密码是否过期;
+- additionalAuthenticationChecks是抽象方法，放在子类中实现，就是校验密码;
+- authenticate首先获取用户名，根据用户名到缓存中取用户，如果不存在，则调用retrieveUser方法从数据库中获取用户对象，如果不存在，抛出`UsernameNotFoundException`异常，然后调用`preAuthenticationChecks`检查用户对象，调用`additionalAuthenticationChecks`校验用户对象与待处理的Token对象，通常就是校验密码，如果校验失败并且用户对象是缓存得到的，则从数据库中获取用户对象重新校验，然后校验`postAuthenticationChecks`,放入缓存中，调用`createSuccessAuthentication`方法创建一个认证后的UsernamePasswordAuthenticationToken对象，其中包含了认证主体、凭证于角色等信息。
+  
+其中几个重要的方法在`DaoAuthenticationProvider`类中实现:
+```java
+public class DaoAuthenticationProvider extends AbstractUserDetailsAuthenticationProvider {
+
+	/**
+	 * The plaintext password used to perform PasswordEncoder#matches(CharSequence,
+	 * String)} on when the user is not found to avoid SEC-2056.
+	 */
+	private static final String USER_NOT_FOUND_PASSWORD = "userNotFoundPassword";
+
+	private PasswordEncoder passwordEncoder;
+
+	/**
+	 * The password used to perform {@link PasswordEncoder#matches(CharSequence, String)}
+	 * on when the user is not found to avoid SEC-2056. This is necessary, because some
+	 * {@link PasswordEncoder} implementations will short circuit if the password is not
+	 * in a valid format.
+	 */
+	private volatile String userNotFoundEncodedPassword;
+
+	private UserDetailsService userDetailsService;
+
+	private UserDetailsPasswordService userDetailsPasswordService;
+
+	public DaoAuthenticationProvider() {
+		setPasswordEncoder(PasswordEncoderFactories.createDelegatingPasswordEncoder());
+	}
+
+	@Override
+	@SuppressWarnings("deprecation")
+	protected void additionalAuthenticationChecks(UserDetails userDetails,
+			UsernamePasswordAuthenticationToken authentication) throws AuthenticationException {
+		if (authentication.getCredentials() == null) {
+			this.logger.debug("Failed to authenticate since no credentials provided");
+			throw new BadCredentialsException(this.messages
+					.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+		}
+		String presentedPassword = authentication.getCredentials().toString();
+		if (!this.passwordEncoder.matches(presentedPassword, userDetails.getPassword())) {
+			this.logger.debug("Failed to authenticate since password does not match stored value");
+			throw new BadCredentialsException(this.messages
+					.getMessage("AbstractUserDetailsAuthenticationProvider.badCredentials", "Bad credentials"));
+		}
+	}
+
+	@Override
+	protected void doAfterPropertiesSet() {
+		Assert.notNull(this.userDetailsService, "A UserDetailsService must be set");
+	}
+
+	@Override
+	protected final UserDetails retrieveUser(String username, UsernamePasswordAuthenticationToken authentication)
+			throws AuthenticationException {
+		prepareTimingAttackProtection();
+		try {
+			UserDetails loadedUser = this.getUserDetailsService().loadUserByUsername(username);
+			if (loadedUser == null) {
+				throw new InternalAuthenticationServiceException(
+						"UserDetailsService returned null, which is an interface contract violation");
+			}
+			return loadedUser;
+		}
+		catch (UsernameNotFoundException ex) {
+			mitigateAgainstTimingAttack(authentication);
+			throw ex;
+		}
+		catch (InternalAuthenticationServiceException ex) {
+			throw ex;
+		}
+		catch (Exception ex) {
+			throw new InternalAuthenticationServiceException(ex.getMessage(), ex);
+		}
+	}
+
+	@Override
+	protected Authentication createSuccessAuthentication(Object principal, Authentication authentication,
+			UserDetails user) {
+		boolean upgradeEncoding = this.userDetailsPasswordService != null
+				&& this.passwordEncoder.upgradeEncoding(user.getPassword());
+		if (upgradeEncoding) {
+			String presentedPassword = authentication.getCredentials().toString();
+			String newPassword = this.passwordEncoder.encode(presentedPassword);
+			user = this.userDetailsPasswordService.updatePassword(user, newPassword);
+		}
+		return super.createSuccessAuthentication(principal, authentication, user);
+	}
+
+	private void prepareTimingAttackProtection() {
+		if (this.userNotFoundEncodedPassword == null) {
+			this.userNotFoundEncodedPassword = this.passwordEncoder.encode(USER_NOT_FOUND_PASSWORD);
+		}
+	}
+
+	private void mitigateAgainstTimingAttack(UsernamePasswordAuthenticationToken authentication) {
+		if (authentication.getCredentials() != null) {
+			String presentedPassword = authentication.getCredentials().toString();
+			this.passwordEncoder.matches(presentedPassword, this.userNotFoundEncodedPassword);
+		}
+	}
+
+	/**
+	 * Sets the PasswordEncoder instance to be used to encode and validate passwords. If
+	 * not set, the password will be compared using
+	 * {@link PasswordEncoderFactories#createDelegatingPasswordEncoder()}
+	 * @param passwordEncoder must be an instance of one of the {@code PasswordEncoder}
+	 * types.
+	 */
+	public void setPasswordEncoder(PasswordEncoder passwordEncoder) {
+		Assert.notNull(passwordEncoder, "passwordEncoder cannot be null");
+		this.passwordEncoder = passwordEncoder;
+		this.userNotFoundEncodedPassword = null;
+	}
+
+	protected PasswordEncoder getPasswordEncoder() {
+		return this.passwordEncoder;
+	}
+
+	public void setUserDetailsService(UserDetailsService userDetailsService) {
+		this.userDetailsService = userDetailsService;
+	}
+
+	protected UserDetailsService getUserDetailsService() {
+		return this.userDetailsService;
+	}
+
+	public void setUserDetailsPasswordService(UserDetailsPasswordService userDetailsPasswordService) {
+		this.userDetailsPasswordService = userDetailsPasswordService;
+	}
+
+}
+```
+- 首先定义一个常量`USER_NOT_FOUND_PASSWORD`，当用户不存在时，这个用户的默认密码；
+- `PasswordEncoder`是一个密码加密于比对工具;
+- `userNotFoundEncodedPassword`保存默认密码加密后的值;
+- `UserDetailsService`是一个用户查找对象;
+- `UserDetailsPasswordService`用来提供密码修改服务;
+- `additionalAuthenticationChecks`进行密码校验，从数据库查询的用户对象与登录输入的参数，使用`PasswordEncoder.matches`完成密码匹配;
+- `retrieveUser`获取用户对象，首先调用`prepareTimingAttackProtection`对默认密码编码，如果用户存在，则使用	`mitigateAgainstTimingAttack`方法比对默认密码，这是为了避免旁道攻击，攻击者可以通过测算认证的时间判断用户名是否存在，这样处理后，不能通过执行时间判断用户名是否存在;
+- `createSuccessAuthentication`则是登录成功后，创建新的Token，同时判断是否需要密码升级;
+
+### ProviderManager
+是AuthenticationManager的实现类，一个完整的认证流程可能由多个AuthenticationProvider提供，ProviderManager可以配置parent的ProviderManager，自己认证失败后，可以向parent继续认证，ProviderManager可以有多个，并且可以共用同一个parent，存在多个过滤器链的时候很有用;重点看下ProviderManager的authenticate方法:
+```java
+@Override
+	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+		Class<? extends Authentication> toTest = authentication.getClass();
+		AuthenticationException lastException = null;
+		AuthenticationException parentException = null;
+		Authentication result = null;
+		Authentication parentResult = null;
+		int currentPosition = 0;
+		int size = this.providers.size();
+		for (AuthenticationProvider provider : getProviders()) {
+			if (!provider.supports(toTest)) {
+				continue;
+			}
+			if (logger.isTraceEnabled()) {
+				logger.trace(LogMessage.format("Authenticating request with %s (%d/%d)",
+						provider.getClass().getSimpleName(), ++currentPosition, size));
+			}
+			try {
+				result = provider.authenticate(authentication);
+				if (result != null) {
+					copyDetails(authentication, result);
+					break;
+				}
+			}
+			catch (AccountStatusException | InternalAuthenticationServiceException ex) {
+				prepareException(ex, authentication);
+				// SEC-546: Avoid polling additional providers if auth failure is due to
+				// invalid account status
+				throw ex;
+			}
+			catch (AuthenticationException ex) {
+				lastException = ex;
+			}
+		}
+		if (result == null && this.parent != null) {
+			// Allow the parent to try.
+			try {
+				parentResult = this.parent.authenticate(authentication);
+				result = parentResult;
+			}
+			catch (ProviderNotFoundException ex) {
+				// ignore as we will throw below if no other exception occurred prior to
+				// calling parent and the parent
+				// may throw ProviderNotFound even though a provider in the child already
+				// handled the request
+			}
+			catch (AuthenticationException ex) {
+				parentException = ex;
+				lastException = ex;
+			}
+		}
+		if (result != null) {
+			if (this.eraseCredentialsAfterAuthentication && (result instanceof CredentialsContainer)) {
+				// Authentication is complete. Remove credentials and other secret data
+				// from authentication
+				((CredentialsContainer) result).eraseCredentials();
+			}
+			// If the parent AuthenticationManager was attempted and successful then it
+			// will publish an AuthenticationSuccessEvent
+			// This check prevents a duplicate AuthenticationSuccessEvent if the parent
+			// AuthenticationManager already published it
+			if (parentResult == null) {
+				this.eventPublisher.publishAuthenticationSuccess(result);
+			}
+
+			return result;
+		}
+
+		// Parent was null, or didn't authenticate (or throw an exception).
+		if (lastException == null) {
+			lastException = new ProviderNotFoundException(this.messages.getMessage("ProviderManager.providerNotFound",
+					new Object[] { toTest.getName() }, "No AuthenticationProvider found for {0}"));
+		}
+		// If the parent AuthenticationManager was attempted and failed then it will
+		// publish an AbstractAuthenticationFailureEvent
+		// This check prevents a duplicate AbstractAuthenticationFailureEvent if the
+		// parent AuthenticationManager already published it
+		if (parentException == null) {
+			prepareException(lastException, authentication);
+		}
+		throw lastException;
+	}
+```
+- 首先获取Authencation参数的类型;
+- 分别定义当前认证的异常于结果，parent认证的异常于结果;
+- getProviders获取当前Manager管理的所有的AuthenticationProvider，遍历认证;
+- 调用`provider.authenticate`认证，认证成功，返回Authentication对象，并拷贝UserDetails，如果认证失败，则用lastException记录异常;
+- 循环结束后result还没有值，则调用parent处理,如果有值则擦除密码，发布登录成功事件,parent认证的结果不需要发送，因为parent‘自己已经发送了;
+- 接下来，如果lastException==null，书评parent==null活着provider没有，此时构造`ProviderNotFoundException`异常给lastException;
+- 如果parentException==null发布认证失败事件，如果不为null，说明parent自己发布过了;
+- 最后抛出lastException异常
+
+### AbstractAuthenticationProcessingFilter
+AbstractAuthenticationProcessingFilter所处的位置于工作流程:
+![AbstractAuthenticationProcessingFilter的处理流程](./AbstractAuthenticationProcessingFilter.drawio.png)
