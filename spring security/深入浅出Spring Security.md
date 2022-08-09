@@ -1,6 +1,6 @@
 [TOC]
 
-# 第一章 Spring Security架构概览
+# 第1章 Spring Security架构概览
 Spring Security方便集成在Spring Boot与Spring Cloud项目中，因为它们就是同归属于一个家族。比shiro啥的有优势。
 ## Spring Security简介
 java安全管理的实现方案
@@ -1995,4 +1995,316 @@ public class SecurityContextHolderAwareRequestWrapper extends HttpServletRequest
 - getUserPrincipal,与getAuthentication差不多;
 - isGranted, 比较Authentication的Authority与传入参数的角色比较;
 - isUserInRole，与isGranted差不多;
+通过HttpServletRequest就可以获取很多用户信息。
+```java
+@GetMapping("/user/http")
+    public void printUser(final HttpServletRequest request) {
+        log.info("remote user: {}", request.getRemoteUser());
+        final Authentication auth = (Authentication) request.getUserPrincipal();
+        log.info("username: {}, details: {}, authorities: {}", auth.getName(),
+                auth.getDetails(), auth.getAuthorities());
+        log.info("is admin: {}", request.isUserInRole("admin"));
+    }
+```
+Spring Security通过SecurityContextHolderAwareRequestFilter将请求包装为`Servlet3SecurityContextHolderAwareRequestWrapper`，其核心源码如下:
+```java
+public class SecurityContextHolderAwareRequestFilter extends GenericFilterBean {
+	// ~ Instance fields
+	// ================================================================================================
 
+	private String rolePrefix = "ROLE_";
+
+	private HttpServletRequestFactory requestFactory;
+
+	private AuthenticationEntryPoint authenticationEntryPoint;
+
+	private AuthenticationManager authenticationManager;
+
+	private List<LogoutHandler> logoutHandlers;
+
+	private AuthenticationTrustResolver trustResolver = new AuthenticationTrustResolverImpl();
+
+	// ~ Methods
+	// ========================================================================================================
+
+	public void setRolePrefix(String rolePrefix) {
+		Assert.notNull(rolePrefix, "Role prefix must not be null");
+		this.rolePrefix = rolePrefix;
+		updateFactory();
+	}
+
+	/**
+	 * <p>
+	 * Sets the {@link AuthenticationEntryPoint} used when integrating
+	 * {@link HttpServletRequest} with Servlet 3 APIs. Specifically, it will be used when
+	 * {@link HttpServletRequest#authenticate(HttpServletResponse)} is called and the user
+	 * is not authenticated.
+	 * </p>
+	 * <p>
+	 * If the value is null (default), then the default container behavior will be be
+	 * retained when invoking {@link HttpServletRequest#authenticate(HttpServletResponse)}
+	 * .
+	 * </p>
+	 *
+	 * @param authenticationEntryPoint the {@link AuthenticationEntryPoint} to use when
+	 * invoking {@link HttpServletRequest#authenticate(HttpServletResponse)} if the user
+	 * is not authenticated.
+	 */
+	public void setAuthenticationEntryPoint(
+			AuthenticationEntryPoint authenticationEntryPoint) {
+		this.authenticationEntryPoint = authenticationEntryPoint;
+	}
+
+	/**
+	 * <p>
+	 * Sets the {@link AuthenticationManager} used when integrating
+	 * {@link HttpServletRequest} with Servlet 3 APIs. Specifically, it will be used when
+	 * {@link HttpServletRequest#login(String, String)} is invoked to determine if the
+	 * user is authenticated.
+	 * </p>
+	 * <p>
+	 * If the value is null (default), then the default container behavior will be
+	 * retained when invoking {@link HttpServletRequest#login(String, String)}.
+	 * </p>
+	 *
+	 * @param authenticationManager the {@link AuthenticationManager} to use when invoking
+	 * {@link HttpServletRequest#login(String, String)}
+	 */
+	public void setAuthenticationManager(AuthenticationManager authenticationManager) {
+		this.authenticationManager = authenticationManager;
+	}
+
+	/**
+	 * <p>
+	 * Sets the {@link LogoutHandler}s used when integrating with
+	 * {@link HttpServletRequest} with Servlet 3 APIs. Specifically it will be used when
+	 * {@link HttpServletRequest#logout()} is invoked in order to log the user out. So
+	 * long as the {@link LogoutHandler}s do not commit the {@link HttpServletResponse}
+	 * (expected), then the user is in charge of handling the response.
+	 * </p>
+	 * <p>
+	 * If the value is null (default), the default container behavior will be retained
+	 * when invoking {@link HttpServletRequest#logout()}.
+	 * </p>
+	 *
+	 * @param logoutHandlers the {@code List&lt;LogoutHandler&gt;}s when invoking
+	 * {@link HttpServletRequest#logout()}.
+	 */
+	public void setLogoutHandlers(List<LogoutHandler> logoutHandlers) {
+		this.logoutHandlers = logoutHandlers;
+	}
+
+	public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
+			throws IOException, ServletException {
+		chain.doFilter(this.requestFactory.create((HttpServletRequest) req,
+				(HttpServletResponse) res), res);
+	}
+
+	@Override
+	public void afterPropertiesSet() throws ServletException {
+		super.afterPropertiesSet();
+		updateFactory();
+	}
+
+	private void updateFactory() {
+		String rolePrefix = this.rolePrefix;
+		this.requestFactory = createServlet3Factory(rolePrefix);
+	}
+
+	/**
+	 * Sets the {@link AuthenticationTrustResolver} to be used. The default is
+	 * {@link AuthenticationTrustResolverImpl}.
+	 *
+	 * @param trustResolver the {@link AuthenticationTrustResolver} to use. Cannot be
+	 * null.
+	 */
+	public void setTrustResolver(AuthenticationTrustResolver trustResolver) {
+		Assert.notNull(trustResolver, "trustResolver cannot be null");
+		this.trustResolver = trustResolver;
+		updateFactory();
+	}
+
+	private HttpServletRequestFactory createServlet3Factory(String rolePrefix) {
+		HttpServlet3RequestFactory factory = new HttpServlet3RequestFactory(rolePrefix);
+		factory.setTrustResolver(this.trustResolver);
+		factory.setAuthenticationEntryPoint(this.authenticationEntryPoint);
+		factory.setAuthenticationManager(this.authenticationManager);
+		factory.setLogoutHandlers(this.logoutHandlers);
+		return factory;
+	}
+}
+```
+## 用户定义
+自定义用户其实就是使用UserDetailsService的不同的实现类来提供用户数据，同时将配置好的UserDetailsService配置给AuthenticationManagerBuilder，系统再将UserDetailsService提供给AuthenticationProvider使用。
+### 基于内存
+```java
+    @Override
+    protected void configure(final AuthenticationManagerBuilder auth)
+            throws Exception {
+        final InMemoryUserDetailsManager mudm = new InMemoryUserDetailsManager();
+        mudm.createUser(User.withUsername("javabody").password("{noop}123456")
+                .roles("admin").build());
+        auth.userDetailsService(mudm);
+    }
+```
+{noop}表示密码明文存储.实现原理很简单。
+### 基于JdbcUserDetailsManager
+支持将用户数据持久化道数据库，并且将SQL都封装好了，建表语句如下:
+```sql
+create table users(username varchar_ignorecase(50) not null primary key,password varchar_ignorecase(500) not null,enabled boolean not null);
+create table authorities (username varchar_ignorecase(50) not null,authority varchar_ignorecase(50) not null,constraint fk_authorities_users foreign key(username) references users(username));
+create unique index ix_auth_username on authorities (username,authority);
+```
+重写配置类如下:
+```java
+    @Autowired
+    private DataSource dataSource;
+    
+    @Override
+    protected void configure(final AuthenticationManagerBuilder auth)
+            throws Exception {
+        final JdbcUserDetailsManager manager = new JdbcUserDetailsManager(
+                dataSource);
+        auth.userDetailsService(manager);
+        // final InMemoryUserDetailsManager mudm = new
+        // InMemoryUserDetailsManager();
+        // mudm.createUser(User.withUsername("javaboy").password("{noop}163766")
+        // .roles("admin").build());
+        // auth.userDetailsService(mudm);
+    }
+```
+JdbcUserDetailsManager继承了JdbcDaoImpl类实现了UserDetailsService，核心源码如下:
+```java
+public UserDetails loadUserByUsername(String username)
+			throws UsernameNotFoundException {
+		List<UserDetails> users = loadUsersByUsername(username);
+
+		if (users.size() == 0) {
+			this.logger.debug("Query returned no results for user '" + username + "'");
+
+			throw new UsernameNotFoundException(
+					this.messages.getMessage("JdbcDaoImpl.notFound",
+							new Object[] { username }, "Username {0} not found"));
+		}
+
+		UserDetails user = users.get(0); // contains no GrantedAuthority[]
+
+		Set<GrantedAuthority> dbAuthsSet = new HashSet<>();
+
+		if (this.enableAuthorities) {
+			dbAuthsSet.addAll(loadUserAuthorities(user.getUsername()));
+		}
+
+		if (this.enableGroups) {
+			dbAuthsSet.addAll(loadGroupAuthorities(user.getUsername()));
+		}
+
+		List<GrantedAuthority> dbAuths = new ArrayList<>(dbAuthsSet);
+
+		addCustomAuthorities(user.getUsername(), dbAuths);
+
+		if (dbAuths.size() == 0) {
+			this.logger.debug("User '" + username
+					+ "' has no authorities and will be treated as 'not found'");
+
+			throw new UsernameNotFoundException(this.messages.getMessage(
+					"JdbcDaoImpl.noAuthority", new Object[] { username },
+					"User {0} has no GrantedAuthority"));
+		}
+
+		return createUserDetails(username, user, dbAuths);
+	}
+```
+这种方式不够灵活，局限性大，不是开发中的常见的方案.
+### 基于MyBatis
+创建3个表:
+```sql
+CREATE TABLE `role` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(32) DEFAULT NULL,
+  `nameZh` varchar(32) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+LOCK TABLES `role` WRITE;
+/*!40000 ALTER TABLE `role` DISABLE KEYS */;
+
+INSERT INTO `role` (`id`, `name`, `nameZh`)
+VALUES
+	(1,'ROLE_dba','数据库管理员'),
+	(2,'ROLE_admin','系统管理员'),
+	(3,'ROLE_user','用户');
+
+/*!40000 ALTER TABLE `role` ENABLE KEYS */;
+UNLOCK TABLES;
+
+
+# Dump of table user
+# ------------------------------------------------------------
+
+CREATE TABLE `user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(32) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `enabled` tinyint(1) DEFAULT NULL,
+  `accountNonExpired` tinyint(1) DEFAULT NULL,
+  `accountNonLocked` tinyint(1) DEFAULT NULL,
+  `credentialsNonExpired` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+LOCK TABLES `user` WRITE;
+/*!40000 ALTER TABLE `user` DISABLE KEYS */;
+
+INSERT INTO `user` (`id`, `username`, `password`, `enabled`, `accountNonExpired`, `accountNonLocked`, `credentialsNonExpired`)
+VALUES
+	(1,'root','{noop}123',1,1,1,1),
+	(2,'admin','{noop}123',1,1,1,1),
+	(3,'sang','{noop}123',1,1,1,1);
+
+/*!40000 ALTER TABLE `user` ENABLE KEYS */;
+UNLOCK TABLES;
+
+
+# Dump of table user_role
+# ------------------------------------------------------------
+
+CREATE TABLE `user_role` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `uid` int(11) DEFAULT NULL,
+  `rid` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `uid` (`uid`),
+  KEY `rid` (`rid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+LOCK TABLES `user_role` WRITE;
+/*!40000 ALTER TABLE `user_role` DISABLE KEYS */;
+
+INSERT INTO `user_role` (`id`, `uid`, `rid`)
+VALUES
+	(1,1,1),
+	(2,1,2),
+	(3,2,2),
+	(4,3,3);
+
+/*!40000 ALTER TABLE `user_role` ENABLE KEYS */;
+UNLOCK TABLES;
+```
+### 基于JPA
+
+# 第3章 认证流程分析
+## 登录流程分析
+登录认证流程最重要的4个类:
+- AuthenticationManager
+- ProviderManager;
+- AuthenticationProvider;
+- AbstractAuthenticationProcessingFilter
+### AuthenticationManager
+定义了如何执行认证操作，认证成功后，会返回一个Authentication对象，然后会设置到SecurityContextHolder中；
+### AuthenticationProvider
+不同的身份类型执行具体的认证，这个接口有2个方法:
+- authenticate方法用来执行具体的身份认证;
+- supports用来判断当前的Provider是否支持对应的身份类型;
+  
+当使用用户名/密码的登录方式时，AuthenticationProvider的实现是DaoAuthenticationProvider，
