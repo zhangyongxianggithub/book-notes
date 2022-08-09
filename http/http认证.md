@@ -31,5 +31,5 @@ Proxy-Authorization: <type> <credentials>
 - AWS4-HMAC-SHA256
 
 ## 基本验证方案
-"Basic" HTTP 验证方案是在 RFC 7617中规定的，在该方案中，使用用户的 ID/密码作为凭证信息，并且使用 base64 算法进行编码。
+"Basic" HTTP 验证方案是在 RFC 7617中规定的，在该方案中，使用用户的 ID/密码作为凭证信息，并且使用 base64 算法进行编码。由于ID与密码是以明文的形式传输的，所以基本验证方案是不安全的；
 

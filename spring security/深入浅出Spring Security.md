@@ -2838,3 +2838,508 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 ### AbstractAuthenticationProcessingFilter
 AbstractAuthenticationProcessingFilter所处的位置于工作流程:
 ![AbstractAuthenticationProcessingFilter的处理流程](./AbstractAuthenticationProcessingFilter.drawio.png)
+他是一个抽象类，如果username/password登录方式对应的实现类是`UsernammePasswordAuthenticationFilter`,构造的Authentication对象是UsernamePasswordAuthenticationToken。
+- 当用户提交登录请求时，`UsernammePasswordAuthenticationFilter`会从request中解析出用户名/密码，创建出一个UsernamePasswordAuthenticationToken对象;
+- UsernamePasswordAuthenticationToken会被传入ProviderManager中进行具体的认证操作;
+- 如果认证失败，则SecurityContextHolder中的相关的信息将被清除，登录失败回调会被调用;
+- 如果认证成功，则会进行登录信息存储、Session并发处理、登录成功事件发布以及登录成功方法回调等操作;
+
+`AbstractAuthenticationProcessingFilter`的核心源码如下:
+```java
+public abstract class AbstractAuthenticationProcessingFilter extends GenericFilterBean
+		implements ApplicationEventPublisherAware, MessageSourceAware {
+
+	protected ApplicationEventPublisher eventPublisher;
+
+	protected AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = new WebAuthenticationDetailsSource();
+
+	private AuthenticationManager authenticationManager;
+
+	protected MessageSourceAccessor messages = SpringSecurityMessageSource.getAccessor();
+
+	private RememberMeServices rememberMeServices = new NullRememberMeServices();
+
+	private RequestMatcher requiresAuthenticationRequestMatcher;
+
+	private boolean continueChainBeforeSuccessfulAuthentication = false;
+
+	private SessionAuthenticationStrategy sessionStrategy = new NullAuthenticatedSessionStrategy();
+
+	private boolean allowSessionCreation = true;
+
+	private AuthenticationSuccessHandler successHandler = new SavedRequestAwareAuthenticationSuccessHandler();
+
+	private AuthenticationFailureHandler failureHandler = new SimpleUrlAuthenticationFailureHandler();
+
+	private SecurityContextRepository securityContextRepository = new NullSecurityContextRepository();
+
+	/**
+	 * @param defaultFilterProcessesUrl the default value for <tt>filterProcessesUrl</tt>.
+	 */
+	protected AbstractAuthenticationProcessingFilter(String defaultFilterProcessesUrl) {
+		setFilterProcessesUrl(defaultFilterProcessesUrl);
+	}
+
+	/**
+	 * Creates a new instance
+	 * @param requiresAuthenticationRequestMatcher the {@link RequestMatcher} used to
+	 * determine if authentication is required. Cannot be null.
+	 */
+	protected AbstractAuthenticationProcessingFilter(RequestMatcher requiresAuthenticationRequestMatcher) {
+		Assert.notNull(requiresAuthenticationRequestMatcher, "requiresAuthenticationRequestMatcher cannot be null");
+		this.requiresAuthenticationRequestMatcher = requiresAuthenticationRequestMatcher;
+	}
+
+	/**
+	 * Creates a new instance with a default filterProcessesUrl and an
+	 * {@link AuthenticationManager}
+	 * @param defaultFilterProcessesUrl the default value for <tt>filterProcessesUrl</tt>.
+	 * @param authenticationManager the {@link AuthenticationManager} used to authenticate
+	 * an {@link Authentication} object. Cannot be null.
+	 */
+	protected AbstractAuthenticationProcessingFilter(String defaultFilterProcessesUrl,
+			AuthenticationManager authenticationManager) {
+		setFilterProcessesUrl(defaultFilterProcessesUrl);
+		setAuthenticationManager(authenticationManager);
+	}
+
+	/**
+	 * Creates a new instance with a {@link RequestMatcher} and an
+	 * {@link AuthenticationManager}
+	 * @param requiresAuthenticationRequestMatcher the {@link RequestMatcher} used to
+	 * determine if authentication is required. Cannot be null.
+	 * @param authenticationManager the {@link AuthenticationManager} used to authenticate
+	 * an {@link Authentication} object. Cannot be null.
+	 */
+	protected AbstractAuthenticationProcessingFilter(RequestMatcher requiresAuthenticationRequestMatcher,
+			AuthenticationManager authenticationManager) {
+		setRequiresAuthenticationRequestMatcher(requiresAuthenticationRequestMatcher);
+		setAuthenticationManager(authenticationManager);
+	}
+
+	@Override
+	public void afterPropertiesSet() {
+		Assert.notNull(this.authenticationManager, "authenticationManager must be specified");
+	}
+
+	/**
+	 * Invokes the {@link #requiresAuthentication(HttpServletRequest, HttpServletResponse)
+	 * requiresAuthentication} method to determine whether the request is for
+	 * authentication and should be handled by this filter. If it is an authentication
+	 * request, the {@link #attemptAuthentication(HttpServletRequest, HttpServletResponse)
+	 * attemptAuthentication} will be invoked to perform the authentication. There are
+	 * then three possible outcomes:
+	 * <ol>
+	 * <li>An <tt>Authentication</tt> object is returned. The configured
+	 * {@link SessionAuthenticationStrategy} will be invoked (to handle any
+	 * session-related behaviour such as creating a new session to protect against
+	 * session-fixation attacks) followed by the invocation of
+	 * {@link #successfulAuthentication(HttpServletRequest, HttpServletResponse, FilterChain, Authentication)}
+	 * method</li>
+	 * <li>An <tt>AuthenticationException</tt> occurs during authentication. The
+	 * {@link #unsuccessfulAuthentication(HttpServletRequest, HttpServletResponse, AuthenticationException)
+	 * unsuccessfulAuthentication} method will be invoked</li>
+	 * <li>Null is returned, indicating that the authentication process is incomplete. The
+	 * method will then return immediately, assuming that the subclass has done any
+	 * necessary work (such as redirects) to continue the authentication process. The
+	 * assumption is that a later request will be received by this method where the
+	 * returned <tt>Authentication</tt> object is not null.
+	 * </ol>
+	 */
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		doFilter((HttpServletRequest) request, (HttpServletResponse) response, chain);
+	}
+
+	private void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		if (!requiresAuthentication(request, response)) {
+			chain.doFilter(request, response);
+			return;
+		}
+		try {
+			Authentication authenticationResult = attemptAuthentication(request, response);
+			if (authenticationResult == null) {
+				// return immediately as subclass has indicated that it hasn't completed
+				return;
+			}
+			this.sessionStrategy.onAuthentication(authenticationResult, request, response);
+			// Authentication success
+			if (this.continueChainBeforeSuccessfulAuthentication) {
+				chain.doFilter(request, response);
+			}
+			successfulAuthentication(request, response, chain, authenticationResult);
+		}
+		catch (InternalAuthenticationServiceException failed) {
+			this.logger.error("An internal error occurred while trying to authenticate the user.", failed);
+			unsuccessfulAuthentication(request, response, failed);
+		}
+		catch (AuthenticationException ex) {
+			// Authentication failed
+			unsuccessfulAuthentication(request, response, ex);
+		}
+	}
+
+	/**
+	 * Indicates whether this filter should attempt to process a login request for the
+	 * current invocation.
+	 * <p>
+	 * It strips any parameters from the "path" section of the request URL (such as the
+	 * jsessionid parameter in <em>https://host/myapp/index.html;jsessionid=blah</em>)
+	 * before matching against the <code>filterProcessesUrl</code> property.
+	 * <p>
+	 * Subclasses may override for special requirements, such as Tapestry integration.
+	 * @return <code>true</code> if the filter should attempt authentication,
+	 * <code>false</code> otherwise.
+	 */
+	protected boolean requiresAuthentication(HttpServletRequest request, HttpServletResponse response) {
+		if (this.requiresAuthenticationRequestMatcher.matches(request)) {
+			return true;
+		}
+		if (this.logger.isTraceEnabled()) {
+			this.logger
+					.trace(LogMessage.format("Did not match request to %s", this.requiresAuthenticationRequestMatcher));
+		}
+		return false;
+	}
+
+	/**
+	 * Performs actual authentication.
+	 * <p>
+	 * The implementation should do one of the following:
+	 * <ol>
+	 * <li>Return a populated authentication token for the authenticated user, indicating
+	 * successful authentication</li>
+	 * <li>Return null, indicating that the authentication process is still in progress.
+	 * Before returning, the implementation should perform any additional work required to
+	 * complete the process.</li>
+	 * <li>Throw an <tt>AuthenticationException</tt> if the authentication process
+	 * fails</li>
+	 * </ol>
+	 * @param request from which to extract parameters and perform the authentication
+	 * @param response the response, which may be needed if the implementation has to do a
+	 * redirect as part of a multi-stage authentication process (such as OpenID).
+	 * @return the authenticated user token, or null if authentication is incomplete.
+	 * @throws AuthenticationException if authentication fails.
+	 */
+	public abstract Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
+			throws AuthenticationException, IOException, ServletException;
+
+	/**
+	 * Default behaviour for successful authentication.
+	 * <ol>
+	 * <li>Sets the successful <tt>Authentication</tt> object on the
+	 * {@link SecurityContextHolder}</li>
+	 * <li>Informs the configured <tt>RememberMeServices</tt> of the successful login</li>
+	 * <li>Fires an {@link InteractiveAuthenticationSuccessEvent} via the configured
+	 * <tt>ApplicationEventPublisher</tt></li>
+	 * <li>Delegates additional behaviour to the
+	 * {@link AuthenticationSuccessHandler}.</li>
+	 * </ol>
+	 *
+	 * Subclasses can override this method to continue the {@link FilterChain} after
+	 * successful authentication.
+	 * @param request
+	 * @param response
+	 * @param chain
+	 * @param authResult the object returned from the <tt>attemptAuthentication</tt>
+	 * method.
+	 * @throws IOException
+	 * @throws ServletException
+	 */
+	protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain,
+			Authentication authResult) throws IOException, ServletException {
+		SecurityContext context = SecurityContextHolder.createEmptyContext();
+		context.setAuthentication(authResult);
+		SecurityContextHolder.setContext(context);
+		this.securityContextRepository.saveContext(context, request, response);
+		if (this.logger.isDebugEnabled()) {
+			this.logger.debug(LogMessage.format("Set SecurityContextHolder to %s", authResult));
+		}
+		this.rememberMeServices.loginSuccess(request, response, authResult);
+		if (this.eventPublisher != null) {
+			this.eventPublisher.publishEvent(new InteractiveAuthenticationSuccessEvent(authResult, this.getClass()));
+		}
+		this.successHandler.onAuthenticationSuccess(request, response, authResult);
+	}
+
+	/**
+	 * Default behaviour for unsuccessful authentication.
+	 * <ol>
+	 * <li>Clears the {@link SecurityContextHolder}</li>
+	 * <li>Stores the exception in the session (if it exists or
+	 * <tt>allowSesssionCreation</tt> is set to <tt>true</tt>)</li>
+	 * <li>Informs the configured <tt>RememberMeServices</tt> of the failed login</li>
+	 * <li>Delegates additional behaviour to the
+	 * {@link AuthenticationFailureHandler}.</li>
+	 * </ol>
+	 */
+	protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response,
+			AuthenticationException failed) throws IOException, ServletException {
+		SecurityContextHolder.clearContext();
+		this.logger.trace("Failed to process authentication request", failed);
+		this.logger.trace("Cleared SecurityContextHolder");
+		this.logger.trace("Handling authentication failure");
+		this.rememberMeServices.loginFail(request, response);
+		this.failureHandler.onAuthenticationFailure(request, response, failed);
+	}
+
+	protected AuthenticationManager getAuthenticationManager() {
+		return this.authenticationManager;
+	}
+
+	public void setAuthenticationManager(AuthenticationManager authenticationManager) {
+		this.authenticationManager = authenticationManager;
+	}
+
+	/**
+	 * Sets the URL that determines if authentication is required
+	 * @param filterProcessesUrl
+	 */
+	public void setFilterProcessesUrl(String filterProcessesUrl) {
+		setRequiresAuthenticationRequestMatcher(new AntPathRequestMatcher(filterProcessesUrl));
+	}
+
+	public final void setRequiresAuthenticationRequestMatcher(RequestMatcher requestMatcher) {
+		Assert.notNull(requestMatcher, "requestMatcher cannot be null");
+		this.requiresAuthenticationRequestMatcher = requestMatcher;
+	}
+
+	public RememberMeServices getRememberMeServices() {
+		return this.rememberMeServices;
+	}
+
+	public void setRememberMeServices(RememberMeServices rememberMeServices) {
+		Assert.notNull(rememberMeServices, "rememberMeServices cannot be null");
+		this.rememberMeServices = rememberMeServices;
+	}
+
+	/**
+	 * Indicates if the filter chain should be continued prior to delegation to
+	 * {@link #successfulAuthentication(HttpServletRequest, HttpServletResponse, FilterChain, Authentication)}
+	 * , which may be useful in certain environment (such as Tapestry applications).
+	 * Defaults to <code>false</code>.
+	 */
+	public void setContinueChainBeforeSuccessfulAuthentication(boolean continueChainBeforeSuccessfulAuthentication) {
+		this.continueChainBeforeSuccessfulAuthentication = continueChainBeforeSuccessfulAuthentication;
+	}
+
+	@Override
+	public void setApplicationEventPublisher(ApplicationEventPublisher eventPublisher) {
+		this.eventPublisher = eventPublisher;
+	}
+
+	public void setAuthenticationDetailsSource(
+			AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource) {
+		Assert.notNull(authenticationDetailsSource, "AuthenticationDetailsSource required");
+		this.authenticationDetailsSource = authenticationDetailsSource;
+	}
+
+	@Override
+	public void setMessageSource(MessageSource messageSource) {
+		this.messages = new MessageSourceAccessor(messageSource);
+	}
+
+	protected boolean getAllowSessionCreation() {
+		return this.allowSessionCreation;
+	}
+
+	public void setAllowSessionCreation(boolean allowSessionCreation) {
+		this.allowSessionCreation = allowSessionCreation;
+	}
+
+	/**
+	 * The session handling strategy which will be invoked immediately after an
+	 * authentication request is successfully processed by the
+	 * <tt>AuthenticationManager</tt>. Used, for example, to handle changing of the
+	 * session identifier to prevent session fixation attacks.
+	 * @param sessionStrategy the implementation to use. If not set a null implementation
+	 * is used.
+	 */
+	public void setSessionAuthenticationStrategy(SessionAuthenticationStrategy sessionStrategy) {
+		this.sessionStrategy = sessionStrategy;
+	}
+
+	/**
+	 * Sets the strategy used to handle a successful authentication. By default a
+	 * {@link SavedRequestAwareAuthenticationSuccessHandler} is used.
+	 */
+	public void setAuthenticationSuccessHandler(AuthenticationSuccessHandler successHandler) {
+		Assert.notNull(successHandler, "successHandler cannot be null");
+		this.successHandler = successHandler;
+	}
+
+	public void setAuthenticationFailureHandler(AuthenticationFailureHandler failureHandler) {
+		Assert.notNull(failureHandler, "failureHandler cannot be null");
+		this.failureHandler = failureHandler;
+	}
+
+	/**
+	 * Sets the {@link SecurityContextRepository} to save the {@link SecurityContext} on
+	 * authentication success. The default action is not to save the
+	 * {@link SecurityContext}.
+	 * @param securityContextRepository the {@link SecurityContextRepository} to use.
+	 * Cannot be null.
+	 */
+	public void setSecurityContextRepository(SecurityContextRepository securityContextRepository) {
+		Assert.notNull(securityContextRepository, "securityContextRepository cannot be null");
+		this.securityContextRepository = securityContextRepository;
+	}
+
+	protected AuthenticationSuccessHandler getSuccessHandler() {
+		return this.successHandler;
+	}
+
+	protected AuthenticationFailureHandler getFailureHandler() {
+		return this.failureHandler;
+	}
+
+}
+```
+- 首先requiresAuthentication判断是否是登录认证请求，不是的话走剩余的过滤器链;
+- 调用抽象方法`attemptAuthentication`获得认证后的对象;
+- 认证成功后，通过`this.sessionStrategy.onAuthentication(authenticationResult, request, response);`方法来处理session并发问题;
+- `continueChainBeforeSuccessfulAuthentication`变量用来判断请求是否还需要剩余的过滤器处理，通常是false;
+- `unsuccessfulAuthentication(request, response, failed)`处理认证失败的事情，做了3件事1.从SecurityContextHolder中清除数据，2. 清除cookie，3. 调用认证失败的回调方法;
+- `successfulAuthentication(request, response, chain, authenticationResult)`处理认证成功事宜，主要做了4件事1. SecurityContextHolder中存入用户信息，2. 处理Cookie，3. 发布认证成功事件，4.调用认证成功的回调方法;
+
+`UsernamePasswordAuthenticationFilter`中的实现如下:
+```java
+public class UsernamePasswordAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
+
+	public static final String SPRING_SECURITY_FORM_USERNAME_KEY = "username";
+
+	public static final String SPRING_SECURITY_FORM_PASSWORD_KEY = "password";
+
+	private static final AntPathRequestMatcher DEFAULT_ANT_PATH_REQUEST_MATCHER = new AntPathRequestMatcher("/login",
+			"POST");
+
+	private String usernameParameter = SPRING_SECURITY_FORM_USERNAME_KEY;
+
+	private String passwordParameter = SPRING_SECURITY_FORM_PASSWORD_KEY;
+
+	private boolean postOnly = true;
+
+	public UsernamePasswordAuthenticationFilter() {
+		super(DEFAULT_ANT_PATH_REQUEST_MATCHER);
+	}
+
+	public UsernamePasswordAuthenticationFilter(AuthenticationManager authenticationManager) {
+		super(DEFAULT_ANT_PATH_REQUEST_MATCHER, authenticationManager);
+	}
+
+	@Override
+	public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
+			throws AuthenticationException {
+		if (this.postOnly && !request.getMethod().equals("POST")) {
+			throw new AuthenticationServiceException("Authentication method not supported: " + request.getMethod());
+		}
+		String username = obtainUsername(request);
+		username = (username != null) ? username.trim() : "";
+		String password = obtainPassword(request);
+		password = (password != null) ? password : "";
+		UsernamePasswordAuthenticationToken authRequest = UsernamePasswordAuthenticationToken.unauthenticated(username,
+				password);
+		// Allow subclasses to set the "details" property
+		setDetails(request, authRequest);
+		return this.getAuthenticationManager().authenticate(authRequest);
+	}
+
+	/**
+	 * Enables subclasses to override the composition of the password, such as by
+	 * including additional values and a separator.
+	 * <p>
+	 * This might be used for example if a postcode/zipcode was required in addition to
+	 * the password. A delimiter such as a pipe (|) should be used to separate the
+	 * password and extended value(s). The <code>AuthenticationDao</code> will need to
+	 * generate the expected password in a corresponding manner.
+	 * </p>
+	 * @param request so that request attributes can be retrieved
+	 * @return the password that will be presented in the <code>Authentication</code>
+	 * request token to the <code>AuthenticationManager</code>
+	 */
+	@Nullable
+	protected String obtainPassword(HttpServletRequest request) {
+		return request.getParameter(this.passwordParameter);
+	}
+
+	/**
+	 * Enables subclasses to override the composition of the username, such as by
+	 * including additional values and a separator.
+	 * @param request so that request attributes can be retrieved
+	 * @return the username that will be presented in the <code>Authentication</code>
+	 * request token to the <code>AuthenticationManager</code>
+	 */
+	@Nullable
+	protected String obtainUsername(HttpServletRequest request) {
+		return request.getParameter(this.usernameParameter);
+	}
+
+	/**
+	 * Provided so that subclasses may configure what is put into the authentication
+	 * request's details property.
+	 * @param request that an authentication request is being created for
+	 * @param authRequest the authentication request object that should have its details
+	 * set
+	 */
+	protected void setDetails(HttpServletRequest request, UsernamePasswordAuthenticationToken authRequest) {
+		authRequest.setDetails(this.authenticationDetailsSource.buildDetails(request));
+	}
+
+	/**
+	 * Sets the parameter name which will be used to obtain the username from the login
+	 * request.
+	 * @param usernameParameter the parameter name. Defaults to "username".
+	 */
+	public void setUsernameParameter(String usernameParameter) {
+		Assert.hasText(usernameParameter, "Username parameter must not be empty or null");
+		this.usernameParameter = usernameParameter;
+	}
+
+	/**
+	 * Sets the parameter name which will be used to obtain the password from the login
+	 * request..
+	 * @param passwordParameter the parameter name. Defaults to "password".
+	 */
+	public void setPasswordParameter(String passwordParameter) {
+		Assert.hasText(passwordParameter, "Password parameter must not be empty or null");
+		this.passwordParameter = passwordParameter;
+	}
+
+	/**
+	 * Defines whether only HTTP POST requests will be allowed by this filter. If set to
+	 * true, and an authentication request is received which is not a POST request, an
+	 * exception will be raised immediately and authentication will not be attempted. The
+	 * <tt>unsuccessfulAuthentication()</tt> method will be called as if handling a failed
+	 * authentication.
+	 * <p>
+	 * Defaults to <tt>true</tt> but may be overridden by subclasses.
+	 */
+	public void setPostOnly(boolean postOnly) {
+		this.postOnly = postOnly;
+	}
+
+	public final String getUsernameParameter() {
+		return this.usernameParameter;
+	}
+
+	public final String getPasswordParameter() {
+		return this.passwordParameter;
+	}
+
+}
+```
+-  定义登录表单的用户名与密码字段的名字，默认是username/password
+-  默认定义指处理POST /login登录请求;
+-  提取出用户名与密码；
+-  根据用户名密码构造出一个未经过认证的UsernamePasswordAuthenticationToken对象，传入AuthenticationManager方法中认证;
+
+## 配置多个数据源
+## 添加登录验证码
+实现登录验证码的思路:
+- 自定义过滤器;
+- 自定义认证逻辑;
+
+# 第4章 过滤器链分析
+
