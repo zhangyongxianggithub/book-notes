@@ -2520,3 +2520,46 @@ public class Demo {
     }
 }
 ```
+非递归遍历的难点是访问某个节点后如何确定下一个节点，看下递归方案inorder
+```java
+private void inorder(final TreeNode<T> treeNode) {
+        if (treeNode != null) {
+            inorder(treeNode.getLeftChild());// point1
+            queue.add(treeNode);
+            inorder(treeNode.getRightChild());// point2
+        }
+    }
+```
+treeNode引用树中当前节点的位置，按照递归方法隐式使用的栈，inorder新的子节点入栈，任何时间，栈都包含从树根到当前节点$n$的路径上的节点，$n$的引用在栈顶，根的引用在栈底。从子树返回时，如果是左子树返回，说明遍历完左子树，栈出，回到point1节点，显示$p$数据后，进入point2递归调用，这有2个现象:
+- 引用的隐式递归栈用来查找遍历程序必然回溯的节点$p$;
+- 一旦返回到$p$，要么访问节点要么进一步回溯，看是从左子树返回的还是从右子树返回的.
+
+可以用迭代操作与显式栈模拟这些操作，下面的伪代码描述这个过程:
+```java
++inorderTraverse(in treeNode: TreeNode)
+// Nonrecursively traverses a binary tree in inorder
+Create an empty stack visitStack;
+curr=treeNode;
+done=false;
+while(!done){
+    if(curr!=null){
+        // place reference to node on stack before
+        // traversing node's left substree
+        visitStack.push(curr);
+        // traverse the left subtree
+        curr=curr.getLeft();
+    }else{
+        // backstack from the empty subtree and visit the node at the top of the stack, however , if the stack is empty, you are done
+        if(!visitStack.isEmpty()){
+            curr=visitStack.pop();
+            queue.enqueue(curr);
+            // traverse the right subtree of the node just visited
+            curr=curr.getRight();
+        }else{
+            done=true;
+        }
+    }
+}
+```
+## ADT 二叉查找树
+二叉查找树是按值组织树，不是按照层次，也有递归定义的特点。可以根据值查找，效率比较快.

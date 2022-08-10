@@ -2291,6 +2291,57 @@ VALUES
 /*!40000 ALTER TABLE `user_role` ENABLE KEYS */;
 UNLOCK TABLES;
 ```
+写数据库mapper
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zyx.spring.security.user.domain.UserMapper">
+    <select id="loadUserByUsername" resultType="User">
+        select *
+        from user
+        where username = #{username}
+    </select>
+    <select id="getRolesByUid" resultType="Role">
+        select r.*
+        from role r
+                 left join user_role ur on r.id = ur.rid
+        where ur.uid = #{id}
+    </select>
+</mapper>
+```
+根据mapper写UserDetailsService
+```java
+@Service
+public class MyUserDetailsService implements UserDetailsService {
+    
+    private final UserMapper userMapper;
+    
+    public MyUserDetailsService(final UserMapper userMapper) {
+        this.userMapper = userMapper;
+    }
+    
+    @Override
+    public UserDetails loadUserByUsername(final String username)
+            throws UsernameNotFoundException {
+        final User user = userMapper.loadUserByUsername(username);
+        if (user == null) {
+            throw new UsernameNotFoundException("用户不存在");
+        }
+        user.setRoles(userMapper.getRolesByUid(user.getId()));
+        return user;
+    }
+}
+```
+配置里面注入
+```java
+    @Override
+    protected void configure(final AuthenticationManagerBuilder auth)
+            throws Exception {
+        auth.userDetailsService(userDetailsService);
+    }
+```
 ### 基于JPA
 
 # 第3章 认证流程分析
