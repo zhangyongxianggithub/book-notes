@@ -3393,4 +3393,655 @@ public class UsernamePasswordAuthenticationFilter extends AbstractAuthentication
 - 自定义认证逻辑;
 
 # 第4章 过滤器链分析
+Spring Security的所有功能都是通过过滤器来实现的。
+## 初始化流程分析
+### ObjectPostProcessor
+`ObjectPostProcessor`是对象后置处理器，用于对对象创建后做补充处理，其定义如下:
+```java
+public interface ObjectPostProcessor<T> {
+
+	/**
+	 * Initialize the object possibly returning a modified instance that should be used
+	 * instead.
+	 * @param object the object to initialize
+	 * @return the initialized version of the object
+	 */
+	<O extends T> O postProcess(O object);
+
+}
+```
+其实现关系如下图:
+![](AutowireBeanFactoryObjectPostProcessor.png)
+- `AutowireBeanFactoryObjectPostProcessor`，主要用来将一个对象注入到Spring容器中，因为Spring Security很多组件是new出来的需要注入到容器中;
+- `CompositeObjectPostProcessor`，一个代理的组合过滤器对象，里面维护了`ObjectPostProcessor`的列表;
+
+开发者可以灵活的配置项目中需要哪些Spring Security过滤器，一旦选定过滤器后，每一个过滤器都会有一个对应的配置器，叫做xxxConfigurer，过滤器都是在xxxConfigurer中new出来的，然后在`ObjectPostProcessor`中处理注入到Spring容器中。
+### SecurityFilterChain
+过滤器链对象，源码如下:
+```java
+public interface SecurityFilterChain {
+	boolean matches(HttpServletRequest request);
+	List<Filter> getFilters();
+}
+```
+- matches()用来判断请求是否应该被当前过滤器链处理;
+- getFilters() 返回过滤器链拥有的所有的Spring Security过滤器;
+
+只有一个实现，源码如下:
+```java
+public final class DefaultSecurityFilterChain implements SecurityFilterChain {
+
+	private static final Log logger = LogFactory.getLog(DefaultSecurityFilterChain.class);
+
+	private final RequestMatcher requestMatcher;
+
+	private final List<Filter> filters;
+
+	public DefaultSecurityFilterChain(RequestMatcher requestMatcher, Filter... filters) {
+		this(requestMatcher, Arrays.asList(filters));
+	}
+
+	public DefaultSecurityFilterChain(RequestMatcher requestMatcher, List<Filter> filters) {
+		if (filters.isEmpty()) {
+			logger.info(LogMessage.format("Will not secure %s", requestMatcher));
+		}
+		else {
+			logger.info(LogMessage.format("Will secure %s with %s", requestMatcher, filters));
+		}
+		this.requestMatcher = requestMatcher;
+		this.filters = new ArrayList<>(filters);
+	}
+
+	public RequestMatcher getRequestMatcher() {
+		return this.requestMatcher;
+	}
+
+	@Override
+	public List<Filter> getFilters() {
+		return this.filters;
+	}
+
+	@Override
+	public boolean matches(HttpServletRequest request) {
+		return this.requestMatcher.matches(request);
+	}
+
+	@Override
+	public String toString() {
+		return this.getClass().getSimpleName() + " [RequestMatcher=" + this.requestMatcher + ", Filters=" + this.filters
+				+ "]";
+	}
+
+}
+```
+### SecurityBuilder
+Spring Security中所有需要构建的对象都可以通过SecurityBuilder来实现，过滤器链、过滤器、AuthenticationManager等，其实现体系如下:
+```java
+public interface SecurityBuilder<O> {
+
+	/**
+	 * Builds the object and returns it or null.
+	 * @return the Object to be built or null if the implementation allows it.
+	 * @throws Exception if an error occurred when building the Object
+	 */
+	O build() throws Exception;
+
+}
+```
+![SecurityBuilder的实现体系](SecurityBuilder.png)
+1. HttpSecurityBuilder，它是用来构建HttpSecurity这个对象的，其核心源码如下:
+```java
+public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
+		extends SecurityBuilder<DefaultSecurityFilterChain> {
+
+	/**
+	 * Gets the {@link SecurityConfigurer} by its class name or <code>null</code> if not
+	 * found. Note that object hierarchies are not considered.
+	 * @param clazz the Class of the {@link SecurityConfigurer} to attempt to get.
+	 */
+	<C extends SecurityConfigurer<DefaultSecurityFilterChain, H>> C getConfigurer(Class<C> clazz);
+
+	/**
+	 * Removes the {@link SecurityConfigurer} by its class name or <code>null</code> if
+	 * not found. Note that object hierarchies are not considered.
+	 * @param clazz the Class of the {@link SecurityConfigurer} to attempt to remove.
+	 * @return the {@link SecurityConfigurer} that was removed or null if not found
+	 */
+	<C extends SecurityConfigurer<DefaultSecurityFilterChain, H>> C removeConfigurer(Class<C> clazz);
+
+	/**
+	 * Sets an object that is shared by multiple {@link SecurityConfigurer}.
+	 * @param sharedType the Class to key the shared object by.
+	 * @param object the Object to store
+	 */
+	<C> void setSharedObject(Class<C> sharedType, C object);
+
+	/**
+	 * Gets a shared Object. Note that object heirarchies are not considered.
+	 * @param sharedType the type of the shared Object
+	 * @return the shared Object or null if it is not found
+	 */
+	<C> C getSharedObject(Class<C> sharedType);
+
+	/**
+	 * Allows adding an additional {@link AuthenticationProvider} to be used
+	 * @param authenticationProvider the {@link AuthenticationProvider} to be added
+	 * @return the {@link HttpSecurity} for further customizations
+	 */
+	H authenticationProvider(AuthenticationProvider authenticationProvider);
+
+	/**
+	 * Allows adding an additional {@link UserDetailsService} to be used
+	 * @param userDetailsService the {@link UserDetailsService} to be added
+	 * @return the {@link HttpSecurity} for further customizations
+	 */
+	H userDetailsService(UserDetailsService userDetailsService) throws Exception;
+
+	/**
+	 * Allows adding a {@link Filter} after one of the known {@link Filter} classes. The
+	 * known {@link Filter} instances are either a {@link Filter} listed in
+	 * {@link #addFilter(Filter)} or a {@link Filter} that has already been added using
+	 * {@link #addFilterAfter(Filter, Class)} or {@link #addFilterBefore(Filter, Class)}.
+	 * @param filter the {@link Filter} to register after the type {@code afterFilter}
+	 * @param afterFilter the Class of the known {@link Filter}.
+	 * @return the {@link HttpSecurity} for further customizations
+	 */
+	H addFilterAfter(Filter filter, Class<? extends Filter> afterFilter);
+
+	/**
+	 * Allows adding a {@link Filter} before one of the known {@link Filter} classes. The
+	 * known {@link Filter} instances are either a {@link Filter} listed in
+	 * {@link #addFilter(Filter)} or a {@link Filter} that has already been added using
+	 * {@link #addFilterAfter(Filter, Class)} or {@link #addFilterBefore(Filter, Class)}.
+	 * @param filter the {@link Filter} to register before the type {@code beforeFilter}
+	 * @param beforeFilter the Class of the known {@link Filter}.
+	 * @return the {@link HttpSecurity} for further customizations
+	 */
+	H addFilterBefore(Filter filter, Class<? extends Filter> beforeFilter);
+
+	/**
+	 * Adds a {@link Filter} that must be an instance of or extend one of the Filters
+	 * provided within the Security framework. The method ensures that the ordering of the
+	 * Filters is automatically taken care of.
+	 *
+	 * The ordering of the Filters is:
+	 *
+	 * <ul>
+	 * <li>{@link ForceEagerSessionCreationFilter}</li>
+	 * <li>{@link DisableEncodeUrlFilter}</li>
+	 * <li>{@link ChannelProcessingFilter}</li>
+	 * <li>{@link SecurityContextPersistenceFilter}</li>
+	 * <li>{@link LogoutFilter}</li>
+	 * <li>{@link X509AuthenticationFilter}</li>
+	 * <li>{@link AbstractPreAuthenticatedProcessingFilter}</li>
+	 * <li><a href="
+	 * {@docRoot}/org/springframework/security/cas/web/CasAuthenticationFilter.html">CasAuthenticationFilter</a></li>
+	 * <li>{@link UsernamePasswordAuthenticationFilter}</li>
+	 * <li>{@link OpenIDAuthenticationFilter}</li>
+	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLoginPageGeneratingFilter}</li>
+	 * <li>{@link org.springframework.security.web.authentication.ui.DefaultLogoutPageGeneratingFilter}</li>
+	 * <li>{@link ConcurrentSessionFilter}</li>
+	 * <li>{@link DigestAuthenticationFilter}</li>
+	 * <li>{@link org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter}</li>
+	 * <li>{@link BasicAuthenticationFilter}</li>
+	 * <li>{@link RequestCacheAwareFilter}</li>
+	 * <li>{@link SecurityContextHolderAwareRequestFilter}</li>
+	 * <li>{@link JaasApiIntegrationFilter}</li>
+	 * <li>{@link RememberMeAuthenticationFilter}</li>
+	 * <li>{@link AnonymousAuthenticationFilter}</li>
+	 * <li>{@link SessionManagementFilter}</li>
+	 * <li>{@link ExceptionTranslationFilter}</li>
+	 * <li>{@link FilterSecurityInterceptor}</li>
+	 * <li>{@link SwitchUserFilter}</li>
+	 * </ul>
+	 * @param filter the {@link Filter} to add
+	 * @return the {@link HttpSecurity} for further customizations
+	 */
+	H addFilter(Filter filter);
+
+}
+```
+- HttpSecurityBuilder的范型就是其自身，实际就是HttpSecurity;
+- 指定的SecurityBuilder构建的对象是`SecurityFilterChain`;
+- getConfigurer用来获取一个配置器，也就是xxxConfigurer;
+- removeConfigurer移除一个配置器;
+- sharedObject的setter/getter设置获取多个配置器之间共享的对象;
+- authenticationProvider设置一个AuthenticationProvider;
+- userDetailsService设置一个userDetailsService;
+- addFilterBefore/addFilterAfter在某个过滤器之后或者之前添加一个自定义的过滤器;
+- addFilter添加一个过滤器，自动排序;
+
+2. AbstractSecurityBuilder
+AbstractSecurityBuilder添加了只会build一次的逻辑:
+```java
+public abstract class AbstractSecurityBuilder<O> implements SecurityBuilder<O> {
+
+	private AtomicBoolean building = new AtomicBoolean();
+
+	private O object;
+
+	@Override
+	public final O build() throws Exception {
+		if (this.building.compareAndSet(false, true)) {
+			this.object = doBuild();
+			return this.object;
+		}
+		throw new AlreadyBuiltException("This object has already been built");
+	}
+
+	/**
+	 * Gets the object that was built. If it has not been built yet an Exception is
+	 * thrown.
+	 * @return the Object that was built
+	 */
+	public final O getObject() {
+		if (!this.building.get()) {
+			throw new IllegalStateException("This object has not been built");
+		}
+		return this.object;
+	}
+	/**
+	 * Subclasses should implement this to perform the build.
+	 * @return the object that should be returned by {@link #build()}.
+	 * @throws Exception if an error occurs
+	 */
+	protected abstract O doBuild() throws Exception;
+}
+```
+- building变量是一个多线程环境下的标志变量;
+- build重写，设置为final，确保只构建一次;
+- getObject方法用来返回构建的对象;
+- doBuild方法则是具体的构建方法，是抽象的子类来实现;
+
+3. AbstractConfiguredSecurityBuilder
+```java
+private enum BuildState {
+
+		/**
+		 * This is the state before the {@link Builder#build()} is invoked
+		 */
+		UNBUILT(0),
+
+		/**
+		 * The state from when {@link Builder#build()} is first invoked until all the
+		 * {@link SecurityConfigurer#init(SecurityBuilder)} methods have been invoked.
+		 */
+		INITIALIZING(1),
+
+		/**
+		 * The state from after all {@link SecurityConfigurer#init(SecurityBuilder)} have
+		 * been invoked until after all the
+		 * {@link SecurityConfigurer#configure(SecurityBuilder)} methods have been
+		 * invoked.
+		 */
+		CONFIGURING(2),
+
+		/**
+		 * From the point after all the
+		 * {@link SecurityConfigurer#configure(SecurityBuilder)} have completed to just
+		 * after {@link AbstractConfiguredSecurityBuilder#performBuild()}.
+		 */
+		BUILDING(3),
+
+		/**
+		 * After the object has been completely built.
+		 */
+		BUILT(4);
+
+		private final int order;
+
+		BuildState(int order) {
+			this.order = order;
+		}
+
+		public boolean isInitializing() {
+			return INITIALIZING.order == this.order;
+		}
+
+		/**
+		 * Determines if the state is CONFIGURING or later
+		 * @return
+		 */
+		public boolean isConfigured() {
+			return this.order >= CONFIGURING.order;
+		}
+
+	}
+```
+首先定义了构建过程的几种状态。其余的核心源码如下:
+```java
+public abstract class AbstractConfiguredSecurityBuilder<O, B extends SecurityBuilder<O>>
+		extends AbstractSecurityBuilder<O> {
+
+	private final Log logger = LogFactory.getLog(getClass());
+
+	private final LinkedHashMap<Class<? extends SecurityConfigurer<O, B>>, List<SecurityConfigurer<O, B>>> configurers = new LinkedHashMap<>();
+
+	private final List<SecurityConfigurer<O, B>> configurersAddedInInitializing = new ArrayList<>();
+
+	private final Map<Class<?>, Object> sharedObjects = new HashMap<>();
+
+	private final boolean allowConfigurersOfSameType;
+
+	private BuildState buildState = BuildState.UNBUILT;
+
+	private ObjectPostProcessor<Object> objectPostProcessor;
+
+	/***
+	 * Creates a new instance with the provided {@link ObjectPostProcessor}. This post
+	 * processor must support Object since there are many types of objects that may be
+	 * post processed.
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} to use
+	 */
+	protected AbstractConfiguredSecurityBuilder(ObjectPostProcessor<Object> objectPostProcessor) {
+		this(objectPostProcessor, false);
+	}
+
+	/***
+	 * Creates a new instance with the provided {@link ObjectPostProcessor}. This post
+	 * processor must support Object since there are many types of objects that may be
+	 * post processed.
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} to use
+	 * @param allowConfigurersOfSameType if true, will not override other
+	 * {@link SecurityConfigurer}'s when performing apply
+	 */
+	protected AbstractConfiguredSecurityBuilder(ObjectPostProcessor<Object> objectPostProcessor,
+			boolean allowConfigurersOfSameType) {
+		Assert.notNull(objectPostProcessor, "objectPostProcessor cannot be null");
+		this.objectPostProcessor = objectPostProcessor;
+		this.allowConfigurersOfSameType = allowConfigurersOfSameType;
+	}
+
+	/**
+	 * Similar to {@link #build()} and {@link #getObject()} but checks the state to
+	 * determine if {@link #build()} needs to be called first.
+	 * @return the result of {@link #build()} or {@link #getObject()}. If an error occurs
+	 * while building, returns null.
+	 */
+	public O getOrBuild() {
+		if (!isUnbuilt()) {
+			return getObject();
+		}
+		try {
+			return build();
+		}
+		catch (Exception ex) {
+			this.logger.debug("Failed to perform build. Returning null", ex);
+			return null;
+		}
+	}
+
+	/**
+	 * Applies a {@link SecurityConfigurerAdapter} to this {@link SecurityBuilder} and
+	 * invokes {@link SecurityConfigurerAdapter#setBuilder(SecurityBuilder)}.
+	 * @param configurer
+	 * @return the {@link SecurityConfigurerAdapter} for further customizations
+	 * @throws Exception
+	 */
+	@SuppressWarnings("unchecked")
+	public <C extends SecurityConfigurerAdapter<O, B>> C apply(C configurer) throws Exception {
+		configurer.addObjectPostProcessor(this.objectPostProcessor);
+		configurer.setBuilder((B) this);
+		add(configurer);
+		return configurer;
+	}
+
+	/**
+	 * Applies a {@link SecurityConfigurer} to this {@link SecurityBuilder} overriding any
+	 * {@link SecurityConfigurer} of the exact same class. Note that object hierarchies
+	 * are not considered.
+	 * @param configurer
+	 * @return the {@link SecurityConfigurerAdapter} for further customizations
+	 * @throws Exception
+	 */
+	public <C extends SecurityConfigurer<O, B>> C apply(C configurer) throws Exception {
+		add(configurer);
+		return configurer;
+	}
+
+	/**
+	 * Sets an object that is shared by multiple {@link SecurityConfigurer}.
+	 * @param sharedType the Class to key the shared object by.
+	 * @param object the Object to store
+	 */
+	@SuppressWarnings("unchecked")
+	public <C> void setSharedObject(Class<C> sharedType, C object) {
+		this.sharedObjects.put(sharedType, object);
+	}
+
+	/**
+	 * Gets a shared Object. Note that object heirarchies are not considered.
+	 * @param sharedType the type of the shared Object
+	 * @return the shared Object or null if it is not found
+	 */
+	@SuppressWarnings("unchecked")
+	public <C> C getSharedObject(Class<C> sharedType) {
+		return (C) this.sharedObjects.get(sharedType);
+	}
+
+	/**
+	 * Gets the shared objects
+	 * @return the shared Objects
+	 */
+	public Map<Class<?>, Object> getSharedObjects() {
+		return Collections.unmodifiableMap(this.sharedObjects);
+	}
+
+	/**
+	 * Adds {@link SecurityConfigurer} ensuring that it is allowed and invoking
+	 * {@link SecurityConfigurer#init(SecurityBuilder)} immediately if necessary.
+	 * @param configurer the {@link SecurityConfigurer} to add
+	 */
+	@SuppressWarnings("unchecked")
+	private <C extends SecurityConfigurer<O, B>> void add(C configurer) {
+		Assert.notNull(configurer, "configurer cannot be null");
+		Class<? extends SecurityConfigurer<O, B>> clazz = (Class<? extends SecurityConfigurer<O, B>>) configurer
+				.getClass();
+		synchronized (this.configurers) {
+			if (this.buildState.isConfigured()) {
+				throw new IllegalStateException("Cannot apply " + configurer + " to already built object");
+			}
+			List<SecurityConfigurer<O, B>> configs = null;
+			if (this.allowConfigurersOfSameType) {
+				configs = this.configurers.get(clazz);
+			}
+			configs = (configs != null) ? configs : new ArrayList<>(1);
+			configs.add(configurer);
+			this.configurers.put(clazz, configs);
+			if (this.buildState.isInitializing()) {
+				this.configurersAddedInInitializing.add(configurer);
+			}
+		}
+	}
+
+	/**
+	 * Gets all the {@link SecurityConfigurer} instances by its class name or an empty
+	 * List if not found. Note that object hierarchies are not considered.
+	 * @param clazz the {@link SecurityConfigurer} class to look for
+	 * @return a list of {@link SecurityConfigurer}s for further customization
+	 */
+	@SuppressWarnings("unchecked")
+	public <C extends SecurityConfigurer<O, B>> List<C> getConfigurers(Class<C> clazz) {
+		List<C> configs = (List<C>) this.configurers.get(clazz);
+		if (configs == null) {
+			return new ArrayList<>();
+		}
+		return new ArrayList<>(configs);
+	}
+
+	/**
+	 * Removes all the {@link SecurityConfigurer} instances by its class name or an empty
+	 * List if not found. Note that object hierarchies are not considered.
+	 * @param clazz the {@link SecurityConfigurer} class to look for
+	 * @return a list of {@link SecurityConfigurer}s for further customization
+	 */
+	@SuppressWarnings("unchecked")
+	public <C extends SecurityConfigurer<O, B>> List<C> removeConfigurers(Class<C> clazz) {
+		List<C> configs = (List<C>) this.configurers.remove(clazz);
+		if (configs == null) {
+			return new ArrayList<>();
+		}
+		return new ArrayList<>(configs);
+	}
+
+	/**
+	 * Gets the {@link SecurityConfigurer} by its class name or <code>null</code> if not
+	 * found. Note that object hierarchies are not considered.
+	 * @param clazz
+	 * @return the {@link SecurityConfigurer} for further customizations
+	 */
+	@SuppressWarnings("unchecked")
+	public <C extends SecurityConfigurer<O, B>> C getConfigurer(Class<C> clazz) {
+		List<SecurityConfigurer<O, B>> configs = this.configurers.get(clazz);
+		if (configs == null) {
+			return null;
+		}
+		Assert.state(configs.size() == 1,
+				() -> "Only one configurer expected for type " + clazz + ", but got " + configs);
+		return (C) configs.get(0);
+	}
+
+	/**
+	 * Removes and returns the {@link SecurityConfigurer} by its class name or
+	 * <code>null</code> if not found. Note that object hierarchies are not considered.
+	 * @param clazz
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public <C extends SecurityConfigurer<O, B>> C removeConfigurer(Class<C> clazz) {
+		List<SecurityConfigurer<O, B>> configs = this.configurers.remove(clazz);
+		if (configs == null) {
+			return null;
+		}
+		Assert.state(configs.size() == 1,
+				() -> "Only one configurer expected for type " + clazz + ", but got " + configs);
+		return (C) configs.get(0);
+	}
+
+	/**
+	 * Specifies the {@link ObjectPostProcessor} to use.
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} to use. Cannot be null
+	 * @return the {@link SecurityBuilder} for further customizations
+	 */
+	@SuppressWarnings("unchecked")
+	public B objectPostProcessor(ObjectPostProcessor<Object> objectPostProcessor) {
+		Assert.notNull(objectPostProcessor, "objectPostProcessor cannot be null");
+		this.objectPostProcessor = objectPostProcessor;
+		return (B) this;
+	}
+
+	/**
+	 * Performs post processing of an object. The default is to delegate to the
+	 * {@link ObjectPostProcessor}.
+	 * @param object the Object to post process
+	 * @return the possibly modified Object to use
+	 */
+	protected <P> P postProcess(P object) {
+		return this.objectPostProcessor.postProcess(object);
+	}
+
+	/**
+	 * Executes the build using the {@link SecurityConfigurer}'s that have been applied
+	 * using the following steps:
+	 *
+	 * <ul>
+	 * <li>Invokes {@link #beforeInit()} for any subclass to hook into</li>
+	 * <li>Invokes {@link SecurityConfigurer#init(SecurityBuilder)} for any
+	 * {@link SecurityConfigurer} that was applied to this builder.</li>
+	 * <li>Invokes {@link #beforeConfigure()} for any subclass to hook into</li>
+	 * <li>Invokes {@link #performBuild()} which actually builds the Object</li>
+	 * </ul>
+	 */
+	@Override
+	protected final O doBuild() throws Exception {
+		synchronized (this.configurers) {
+			this.buildState = BuildState.INITIALIZING;
+			beforeInit();
+			init();
+			this.buildState = BuildState.CONFIGURING;
+			beforeConfigure();
+			configure();
+			this.buildState = BuildState.BUILDING;
+			O result = performBuild();
+			this.buildState = BuildState.BUILT;
+			return result;
+		}
+	}
+
+	/**
+	 * Invoked prior to invoking each {@link SecurityConfigurer#init(SecurityBuilder)}
+	 * method. Subclasses may override this method to hook into the lifecycle without
+	 * using a {@link SecurityConfigurer}.
+	 */
+	protected void beforeInit() throws Exception {
+	}
+
+	/**
+	 * Invoked prior to invoking each
+	 * {@link SecurityConfigurer#configure(SecurityBuilder)} method. Subclasses may
+	 * override this method to hook into the lifecycle without using a
+	 * {@link SecurityConfigurer}.
+	 */
+	protected void beforeConfigure() throws Exception {
+	}
+
+	/**
+	 * Subclasses must implement this method to build the object that is being returned.
+	 * @return the Object to be buit or null if the implementation allows it
+	 */
+	protected abstract O performBuild() throws Exception;
+
+	@SuppressWarnings("unchecked")
+	private void init() throws Exception {
+		Collection<SecurityConfigurer<O, B>> configurers = getConfigurers();
+		for (SecurityConfigurer<O, B> configurer : configurers) {
+			configurer.init((B) this);
+		}
+		for (SecurityConfigurer<O, B> configurer : this.configurersAddedInInitializing) {
+			configurer.init((B) this);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private void configure() throws Exception {
+		Collection<SecurityConfigurer<O, B>> configurers = getConfigurers();
+		for (SecurityConfigurer<O, B> configurer : configurers) {
+			configurer.configure((B) this);
+		}
+	}
+	private Collection<SecurityConfigurer<O, B>> getConfigurers() {
+		List<SecurityConfigurer<O, B>> result = new ArrayList<>();
+		for (List<SecurityConfigurer<O, B>> configs : this.configurers.values()) {
+			result.addAll(configs);
+		}
+		return result;
+	}
+	/**
+	 * Determines if the object is unbuilt.
+	 * @return true, if unbuilt else false
+	 */
+	private boolean isUnbuilt() {
+		synchronized (this.configurers) {
+			return this.buildState == BuildState.UNBUILT;
+		}
+	}
+}
+```
+- private final LinkedHashMap<Class<? extends SecurityConfigurer<O, B>>, List<SecurityConfigurer<O, B>>> configurers = new LinkedHashMap<>() 声明配置类对象, key是class，value是list的实例对象;
+- 2个apply方法向configurers里面添加配置器;
+- add方法中判断下构建的状态，同时根据allowConfigurersOfSameType标志判断是添加还是覆盖同类型的配置器，一般情况下是false;
+- getConfigurers返回某个配置类的所有的实例;
+- removeConfigurers移除某个类型的所有配置类实例并返回;
+- getConfigurer获取某个配置类实例的第一项;
+- removeConfigurer移除某个类型的所有配置类实例并返回第一项;
+- getConfigurers私有方法把所有的配置类实例打平到集合中返回;
+  
+核心的doBuild方法如下:
+- 一边更新构建状态一边执行构建方法;首先执行空的beforeInit初始化方法空的什么也不做;
+- init()是执行所有配置实例的初始化方法;
+- beforeConfigure可以在configure之前做一些准备工作，也是一个空方法;
+- configure方法执行所有配置实例的configure方法，完成配置;
+- 最后执行performBuild空方法完构建;
+
+
 
