@@ -1,3 +1,4 @@
+[TOC]
 Apache Flink是一个框架与分布式流处理引擎，用于在无边界与有边界的数据流上进行有状态的计算，集群部署适应性强;
 ## 处理无界与有界数据
 任何类型的数据都可以形成一种事件流，分为有界与无界2种:
@@ -32,4 +33,107 @@ Flink自底向上在不同的抽象级别提供了多种API，针对常见的使
 Flink根据抽象程度分层，提供了3种不同的API，每一种API在简洁性欲表达力上有着不同的侧重，并且针对不同的应用场景
 ![api分层](pic/api分层.png)
 1. ProcessFunction
+是Flink提供的最具表达力的接口，ProcessFunction可以处理一个或者多个数据数据流中的事件，活着归入一个窗口的内的多个事件进行处理，它提供了对于时间与状态的细粒度控制，开发者可以在其中任意的修改状态，也能够注册定时器以在未来的某一个时刻触发回调函数，你可以用ProcessFunction实现许多有状态的事件驱动应用所需要的基于单个事件的复杂业务逻辑,下面是一个例子:
+```java
+/**
+
+ * 将相邻的 keyed START 和 END 事件相匹配并计算两者的时间间隔
+ * 输入数据为 Tuple2<String, String> 类型，第一个字段为 key 值， 
+ * 第二个字段标记 START 和 END 事件。
+    */
+public static class StartEndDuration
+    extends KeyedProcessFunction<String, Tuple2<String, String>, Tuple2<String, Long>> {
+
+  private ValueState<Long> startTime;
+
+  @Override
+  public void open(Configuration conf) {
+    // obtain state handle
+    startTime = getRuntimeContext()
+      .getState(new ValueStateDescriptor<Long>("startTime", Long.class));
+  }
+
+  /** Called for each processed event. */
+  @Override
+  public void processElement(
+      Tuple2<String, String> in,
+      Context ctx,
+      Collector<Tuple2<String, Long>> out) throws Exception {
+
+    switch (in.f1) {
+      case "START":
+        // set the start time if we receive a start event.
+        startTime.update(ctx.timestamp());
+        // register a timer in four hours from the start event.
+        ctx.timerService()
+          .registerEventTimeTimer(ctx.timestamp() + 4 * 60 * 60 * 1000);
+        break;
+      case "END":
+        // emit the duration between start and end event
+        Long sTime = startTime.value();
+        if (sTime != null) {
+          out.collect(Tuple2.of(in.f0, ctx.timestamp() - sTime));
+          // clear the state
+          startTime.clear();
+        }
+      default:
+        // do nothing
+    }
+  }
+
+  /** Called when a timer fires. */
+  @Override
+  public void onTimer(
+      long timestamp,
+      OnTimerContext ctx,
+      Collector<Tuple2<String, Long>> out) {
+
+    // Timeout interval exceeded. Cleaning up the state.
+    startTime.clear();
+  }
+}
+```
+2. DataStream API
+DataStream API为很多通用的流处理操作提供了处理原语，这些操作包括窗口、逐条记录的转换操作、处理事件时进行外部数据库查询等，比如map()、reduce()、aggregate()等函数，下面是一个例子:
+```java
+// 网站点击 Click 的数据流
+DataStream<Click> clicks = ...
+
+DataStream<Tuple2<String, Long>> result = clicks
+  // 将网站点击映射为 (userId, 1) 以便计数
+  .map(
+    // 实现 MapFunction 接口定义函数
+    new MapFunction<Click, Tuple2<String, Long>>() {
+      @Override
+      public Tuple2<String, Long> map(Click click) {
+        return Tuple2.of(click.userId, 1L);
+      }
+    })
+  // 以 userId (field 0) 作为 key
+  .keyBy(0)
+  // 定义 30 分钟超时的会话窗口
+  .window(EventTimeSessionWindows.withGap(Time.minutes(30L)))
+  // 对每个会话窗口的点击进行计数，使用 lambda 表达式定义 reduce 函数
+  .reduce((a, b) -> Tuple2.of(a.f0, a.f1 + b.f1));
+```
+3. SQL & Table API
+Flink支持2种关系型的API， Table API 与 SQL，批处理与流处理统一的API，关系型API在批处理与实时处理方面以统一的语义执行查询，Table与SQL借助了Apache Calcite来进行查询的解析、校验与优化，可以与DataStream/DataSet API无缝集成，支持用户自定义标量函数、聚合函数以及表值函数.Flink的关系型API旨在简化数据分析、数据流水线和ETL应用的定义。下面是一个例子:
+```java
+SELECT userId, COUNT(*)
+FROM clicks
+GROUP BY SESSION(clicktime, INTERVAL '30' MINUTE), userId
+```
+4. 库
+Flink具有数个适用于常见数据处理应用场景的扩展库，这些库嵌入在API中;
+- 复杂事件处理(CEP): 模式检测是事件流处理中的一个非常常见的用例。Flink 的 CEP 库提供了 API，使用户能够以例如正则表达式或状态机的方式指定事件模式。CEP 库与 Flink 的 DataStream API 集成，以便在 DataStream 上评估模式。CEP 库的应用包括网络入侵检测，业务流程监控和欺诈检测;
+- DataSet API: DataSet API 是 Flink 用于批处理应用程序的核心 API。DataSet API 所提供的基础算子包括map、reduce、(outer) join、co-group、iterate等。所有算子都有相应的算法和数据结构支持，对内存中的序列化数据进行操作。如果数据大小超过预留内存，则过量数据将存储到磁盘。Flink 的 DataSet API 的数据处理算法借鉴了传统数据库算法的实现，例如混合散列连接（hybrid hash-join）和外部归并排序（external merge-sort）。
+- Gelly:  Gelly 是一个可扩展的图形处理和分析库。Gelly 是在 DataSet API 之上实现的，并与 DataSet API 集成。因此，它能够受益于其可扩展且健壮的操作符。Gelly 提供了内置算法，如 label propagation、triangle enumeration 和 page rank 算法，也提供了一个简化自定义图算法实现的 Graph API。
+
+Apache Flink 是一个针对无界和有界数据流进行有状态计算的框架。由于许多流应用程序旨在以最短的停机时间连续运行，因此流处理器必须提供出色的故障恢复能力，以及在应用程序运行期间进行监控和维护的工具。
+## 7*24小时稳定运行
+
+## Flink能够更方便的升级、迁移、暂停、恢复应用服务
+## 监控和控制应用服务
+
+
 
