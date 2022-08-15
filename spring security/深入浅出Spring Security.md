@@ -4042,6 +4042,400 @@ public abstract class AbstractConfiguredSecurityBuilder<O, B extends SecurityBui
 - beforeConfigure可以在configure之前做一些准备工作，也是一个空方法;
 - configure方法执行所有配置实例的configure方法，完成配置;
 - 最后执行performBuild空方法完构建;
+4. ProviderManagerBuilder
+核心实现代码如下:
+```java
+public interface ProviderManagerBuilder<B extends ProviderManagerBuilder<B>>
+		extends SecurityBuilder<AuthenticationManager> {
 
+	/**
+	 * Add authentication based upon the custom {@link AuthenticationProvider} that is
+	 * passed in. Since the {@link AuthenticationProvider} implementation is unknown, all
+	 * customizations must be done externally and the {@link ProviderManagerBuilder} is
+	 * returned immediately.
+	 *
+	 * Note that an Exception is thrown if an error occurs when adding the
+	 * {@link AuthenticationProvider}.
+	 * @return a {@link ProviderManagerBuilder} to allow further authentication to be
+	 * provided to the {@link ProviderManagerBuilder}
+	 */
+	B authenticationProvider(AuthenticationProvider authenticationProvider);
+
+}
+```
+定义了构建的对象是AuthenticationManager，同时还有一个authenticationProvider()方法
+5. AuthenticationManagerBuilder
+用来构建AuthenticationManager对象，继承了AbstractConfiguredSecurityBuilder，实现了ProviderManagerBuilder接口，核心源码如下:
+```java
+public class AuthenticationManagerBuilder
+		extends AbstractConfiguredSecurityBuilder<AuthenticationManager, AuthenticationManagerBuilder>
+		implements ProviderManagerBuilder<AuthenticationManagerBuilder> {
+
+	private final Log logger = LogFactory.getLog(getClass());
+
+	private AuthenticationManager parentAuthenticationManager;
+
+	private List<AuthenticationProvider> authenticationProviders = new ArrayList<>();
+
+	private UserDetailsService defaultUserDetailsService;
+
+	private Boolean eraseCredentials;
+
+	private AuthenticationEventPublisher eventPublisher;
+
+	/**
+	 * Creates a new instance
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} instance to use.
+	 */
+	public AuthenticationManagerBuilder(ObjectPostProcessor<Object> objectPostProcessor) {
+		super(objectPostProcessor, true);
+	}
+
+	/**
+	 * Allows providing a parent {@link AuthenticationManager} that will be tried if this
+	 * {@link AuthenticationManager} was unable to attempt to authenticate the provided
+	 * {@link Authentication}.
+	 * @param authenticationManager the {@link AuthenticationManager} that should be used
+	 * if the current {@link AuthenticationManager} was unable to attempt to authenticate
+	 * the provided {@link Authentication}.
+	 * @return the {@link AuthenticationManagerBuilder} for further adding types of
+	 * authentication
+	 */
+	public AuthenticationManagerBuilder parentAuthenticationManager(AuthenticationManager authenticationManager) {
+		if (authenticationManager instanceof ProviderManager) {
+			eraseCredentials(((ProviderManager) authenticationManager).isEraseCredentialsAfterAuthentication());
+		}
+		this.parentAuthenticationManager = authenticationManager;
+		return this;
+	}
+	/**
+	 * Sets the {@link AuthenticationEventPublisher}
+	 * @param eventPublisher the {@link AuthenticationEventPublisher} to use
+	 * @return the {@link AuthenticationManagerBuilder} for further customizations
+	 */
+	public AuthenticationManagerBuilder authenticationEventPublisher(AuthenticationEventPublisher eventPublisher) {
+		Assert.notNull(eventPublisher, "AuthenticationEventPublisher cannot be null");
+		this.eventPublisher = eventPublisher;
+		return this;
+	}
+	/**
+	 * @param eraseCredentials true if {@link AuthenticationManager} should clear the
+	 * credentials from the {@link Authentication} object after authenticating
+	 * @return the {@link AuthenticationManagerBuilder} for further customizations
+	 */
+	public AuthenticationManagerBuilder eraseCredentials(boolean eraseCredentials) {
+		this.eraseCredentials = eraseCredentials;
+		return this;
+	}
+	/**
+	 * Add in memory authentication to the {@link AuthenticationManagerBuilder} and return
+	 * a {@link InMemoryUserDetailsManagerConfigurer} to allow customization of the in
+	 * memory authentication.
+	 *
+	 * <p>
+	 * This method also ensure that a {@link UserDetailsService} is available for the
+	 * {@link #getDefaultUserDetailsService()} method. Note that additional
+	 * {@link UserDetailsService}'s may override this {@link UserDetailsService} as the
+	 * default.
+	 * </p>
+	 * @return a {@link InMemoryUserDetailsManagerConfigurer} to allow customization of
+	 * the in memory authentication
+	 * @throws Exception if an error occurs when adding the in memory authentication
+	 */
+	public InMemoryUserDetailsManagerConfigurer<AuthenticationManagerBuilder> inMemoryAuthentication()
+			throws Exception {
+		return apply(new InMemoryUserDetailsManagerConfigurer<>());
+	}
+	/**
+	 * Add JDBC authentication to the {@link AuthenticationManagerBuilder} and return a
+	 * {@link JdbcUserDetailsManagerConfigurer} to allow customization of the JDBC
+	 * authentication.
+	 *
+	 * <p>
+	 * When using with a persistent data store, it is best to add users external of
+	 * configuration using something like <a href="https://flywaydb.org/">Flyway</a> or
+	 * <a href="https://www.liquibase.org/">Liquibase</a> to create the schema and adding
+	 * users to ensure these steps are only done once and that the optimal SQL is used.
+	 * </p>
+	 *
+	 * <p>
+	 * This method also ensure that a {@link UserDetailsService} is available for the
+	 * {@link #getDefaultUserDetailsService()} method. Note that additional
+	 * {@link UserDetailsService}'s may override this {@link UserDetailsService} as the
+	 * default. See the <a href=
+	 * "https://docs.spring.io/spring-security/site/docs/current/reference/htmlsingle/#user-schema"
+	 * >User Schema</a> section of the reference for the default schema.
+	 * </p>
+	 * @return a {@link JdbcUserDetailsManagerConfigurer} to allow customization of the
+	 * JDBC authentication
+	 * @throws Exception if an error occurs when adding the JDBC authentication
+	 */
+	public JdbcUserDetailsManagerConfigurer<AuthenticationManagerBuilder> jdbcAuthentication() throws Exception {
+		return apply(new JdbcUserDetailsManagerConfigurer<>());
+	}
+	/**
+	 * Add authentication based upon the custom {@link UserDetailsService} that is passed
+	 * in. It then returns a {@link DaoAuthenticationConfigurer} to allow customization of
+	 * the authentication.
+	 *
+	 * <p>
+	 * This method also ensure that the {@link UserDetailsService} is available for the
+	 * {@link #getDefaultUserDetailsService()} method. Note that additional
+	 * {@link UserDetailsService}'s may override this {@link UserDetailsService} as the
+	 * default.
+	 * </p>
+	 * @return a {@link DaoAuthenticationConfigurer} to allow customization of the DAO
+	 * authentication
+	 * @throws Exception if an error occurs when adding the {@link UserDetailsService}
+	 * based authentication
+	 */
+	public <T extends UserDetailsService> DaoAuthenticationConfigurer<AuthenticationManagerBuilder, T> userDetailsService(
+			T userDetailsService) throws Exception {
+		this.defaultUserDetailsService = userDetailsService;
+		return apply(new DaoAuthenticationConfigurer<>(userDetailsService));
+	}
+	/**
+	 * Add LDAP authentication to the {@link AuthenticationManagerBuilder} and return a
+	 * {@link LdapAuthenticationProviderConfigurer} to allow customization of the LDAP
+	 * authentication.
+	 *
+	 * <p>
+	 * This method <b>does NOT</b> ensure that a {@link UserDetailsService} is available
+	 * for the {@link #getDefaultUserDetailsService()} method.
+	 * @return a {@link LdapAuthenticationProviderConfigurer} to allow customization of
+	 * the LDAP authentication
+	 * @throws Exception if an error occurs when adding the LDAP authentication
+	 */
+	public LdapAuthenticationProviderConfigurer<AuthenticationManagerBuilder> ldapAuthentication() throws Exception {
+		return apply(new LdapAuthenticationProviderConfigurer<>());
+	}
+	/**
+	 * Add authentication based upon the custom {@link AuthenticationProvider} that is
+	 * passed in. Since the {@link AuthenticationProvider} implementation is unknown, all
+	 * customizations must be done externally and the {@link AuthenticationManagerBuilder}
+	 * is returned immediately.
+	 *
+	 * <p>
+	 * This method <b>does NOT</b> ensure that the {@link UserDetailsService} is available
+	 * for the {@link #getDefaultUserDetailsService()} method.
+	 *
+	 * Note that an {@link Exception} might be thrown if an error occurs when adding the
+	 * {@link AuthenticationProvider}.
+	 * @return a {@link AuthenticationManagerBuilder} to allow further authentication to
+	 * be provided to the {@link AuthenticationManagerBuilder}
+	 */
+	@Override
+	public AuthenticationManagerBuilder authenticationProvider(AuthenticationProvider authenticationProvider) {
+		this.authenticationProviders.add(authenticationProvider);
+		return this;
+	}
+	@Override
+	protected ProviderManager performBuild() throws Exception {
+		if (!isConfigured()) {
+			this.logger.debug("No authenticationProviders and no parentAuthenticationManager defined. Returning null.");
+			return null;
+		}
+		ProviderManager providerManager = new ProviderManager(this.authenticationProviders,
+				this.parentAuthenticationManager);
+		if (this.eraseCredentials != null) {
+			providerManager.setEraseCredentialsAfterAuthentication(this.eraseCredentials);
+		}
+		if (this.eventPublisher != null) {
+			providerManager.setAuthenticationEventPublisher(this.eventPublisher);
+		}
+		providerManager = postProcess(providerManager);
+		return providerManager;
+	}
+	/**
+	 * Determines if the {@link AuthenticationManagerBuilder} is configured to build a non
+	 * null {@link AuthenticationManager}. This means that either a non-null parent is
+	 * specified or at least one {@link AuthenticationProvider} has been specified.
+	 *
+	 * <p>
+	 * When using {@link SecurityConfigurer} instances, the
+	 * {@link AuthenticationManagerBuilder} will not be configured until the
+	 * {@link SecurityConfigurer#configure(SecurityBuilder)} methods. This means a
+	 * {@link SecurityConfigurer} that is last could check this method and provide a
+	 * default configuration in the {@link SecurityConfigurer#configure(SecurityBuilder)}
+	 * method.
+	 * @return true, if {@link AuthenticationManagerBuilder} is configured, otherwise
+	 * false
+	 */
+	public boolean isConfigured() {
+		return !this.authenticationProviders.isEmpty() || this.parentAuthenticationManager != null;
+	}
+	/**
+	 * Gets the default {@link UserDetailsService} for the
+	 * {@link AuthenticationManagerBuilder}. The result may be null in some circumstances.
+	 * @return the default {@link UserDetailsService} for the
+	 * {@link AuthenticationManagerBuilder}
+	 */
+	public UserDetailsService getDefaultUserDetailsService() {
+		return this.defaultUserDetailsService;
+	}
+	/**
+	 * Captures the {@link UserDetailsService} from any {@link UserDetailsAwareConfigurer}
+	 * .
+	 * @param configurer the {@link UserDetailsAwareConfigurer} to capture the
+	 * {@link UserDetailsService} from.
+	 * @return the {@link UserDetailsAwareConfigurer} for further customizations
+	 * @throws Exception if an error occurs
+	 */
+	private <C extends UserDetailsAwareConfigurer<AuthenticationManagerBuilder, ? extends UserDetailsService>> C apply(
+			C configurer) throws Exception {
+		this.defaultUserDetailsService = configurer.getUserDetailsService();
+		return super.apply(configurer);
+	}
+}
+```
+- 构造方法调用了父类的构造方法，第二个参数传了true，表示允许同类型的配置实例存在;
+- parentAuthenticationManager用来给AuthenticationManager设置parent;
+- inMemoryAuthentication()方法配置一个基于内存的用户源配置;
+- jdbcAuthentication与userDetailsService方法与inMemoryAuthentication()方法类似，也是用来配置数据源的;
+- authenticationProvider()方法用于向authenticationProviders集合中添加AuthenticationProvider对象;
+- performBuild()方法执行具体的构建，简而言之就是创建AuthenticationManager的实现ProviderManager对象，再用后置处理器对象处理一下就可以;
+
+6. HttpSecurity
+它的主要作用是用来构建一条过滤器链，实际就是构建一个DefaultSecurityFilterChain对象，一个DefaultSecurityFilterChain包含一个路径匹配器与多个过滤器，HttpSecurity通过收集所有的xxxConfigurer，保存到父类AbstractConfiguredSecurityBuilder的configurers变量中，再将这些xxxConfigurer构建为具体的过滤器，添加到HttpSecurity的filters对象中.核心源码如下:
+```java
+public final class HttpSecurity extends AbstractConfiguredSecurityBuilder<DefaultSecurityFilterChain, HttpSecurity>
+		implements SecurityBuilder<DefaultSecurityFilterChain>, HttpSecurityBuilder<HttpSecurity> {
+	/**
+	 * Specifies to support form based authentication. If
+	 * {@link FormLoginConfigurer#loginPage(String)} is not specified a default login page
+	 * will be generated.
+	 *
+	 * <h2>Example Configurations</h2>
+	 *
+	 * The most basic configuration defaults to automatically generating a login page at
+	 * the URL "/login", redirecting to "/login?error" for authentication failure. The
+	 * details of the login page can be found on
+	 * {@link FormLoginConfigurer#loginPage(String)}
+	 *
+	 * <pre>
+	 * &#064;Configuration
+	 * &#064;EnableWebSecurity
+	 * public class FormLoginSecurityConfig extends WebSecurityConfigurerAdapter {
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(HttpSecurity http) throws Exception {
+	 * 		http.authorizeRequests().antMatchers(&quot;/**&quot;).hasRole(&quot;USER&quot;).and().formLogin();
+	 * 	}
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+	 * 		auth.inMemoryAuthentication().withUser(&quot;user&quot;).password(&quot;password&quot;).roles(&quot;USER&quot;);
+	 * 	}
+	 * }
+	 * </pre>
+	 *
+	 * The configuration below demonstrates customizing the defaults.
+	 *
+	 * <pre>
+	 * &#064;Configuration
+	 * &#064;EnableWebSecurity
+	 * public class FormLoginSecurityConfig extends WebSecurityConfigurerAdapter {
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(HttpSecurity http) throws Exception {
+	 * 		http.authorizeRequests().antMatchers(&quot;/**&quot;).hasRole(&quot;USER&quot;).and().formLogin()
+	 * 				.usernameParameter(&quot;username&quot;) // default is username
+	 * 				.passwordParameter(&quot;password&quot;) // default is password
+	 * 				.loginPage(&quot;/authentication/login&quot;) // default is /login with an HTTP get
+	 * 				.failureUrl(&quot;/authentication/login?failed&quot;) // default is /login?error
+	 * 				.loginProcessingUrl(&quot;/authentication/login/process&quot;); // default is /login
+	 * 																		// with an HTTP
+	 * 																		// post
+	 * 	}
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+	 * 		auth.inMemoryAuthentication().withUser(&quot;user&quot;).password(&quot;password&quot;).roles(&quot;USER&quot;);
+	 * 	}
+	 * }
+	 * </pre>
+	 * @return the {@link FormLoginConfigurer} for further customizations
+	 * @throws Exception
+	 * @see FormLoginConfigurer#loginPage(String)
+	 */
+	public FormLoginConfigurer<HttpSecurity> formLogin() throws Exception {
+		return getOrApply(new FormLoginConfigurer<>());
+	}
+
+	/**
+	 * Specifies to support form based authentication. If
+	 * {@link FormLoginConfigurer#loginPage(String)} is not specified a default login page
+	 * will be generated.
+	 *
+	 * <h2>Example Configurations</h2>
+	 *
+	 * The most basic configuration defaults to automatically generating a login page at
+	 * the URL "/login", redirecting to "/login?error" for authentication failure. The
+	 * details of the login page can be found on
+	 * {@link FormLoginConfigurer#loginPage(String)}
+	 *
+	 * <pre>
+	 * &#064;Configuration
+	 * &#064;EnableWebSecurity
+	 * public class FormLoginSecurityConfig extends WebSecurityConfigurerAdapter {
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(HttpSecurity http) throws Exception {
+	 * 		http
+	 * 			.authorizeRequests((authorizeRequests) -&gt;
+	 * 				authorizeRequests
+	 * 					.antMatchers(&quot;/**&quot;).hasRole(&quot;USER&quot;)
+	 * 			)
+	 * 			.formLogin(withDefaults());
+	 * 	}
+	 * }
+	 * </pre>
+	 *
+	 * The configuration below demonstrates customizing the defaults.
+	 *
+	 * <pre>
+	 * &#064;Configuration
+	 * &#064;EnableWebSecurity
+	 * public class FormLoginSecurityConfig extends WebSecurityConfigurerAdapter {
+	 *
+	 * 	&#064;Override
+	 * 	protected void configure(HttpSecurity http) throws Exception {
+	 * 		http
+	 * 			.authorizeRequests((authorizeRequests) -&gt;
+	 * 				authorizeRequests
+	 * 					.antMatchers(&quot;/**&quot;).hasRole(&quot;USER&quot;)
+	 * 			)
+	 * 			.formLogin((formLogin) -&gt;
+	 * 				formLogin
+	 * 					.usernameParameter(&quot;username&quot;)
+	 * 					.passwordParameter(&quot;password&quot;)
+	 * 					.loginPage(&quot;/authentication/login&quot;)
+	 * 					.failureUrl(&quot;/authentication/login?failed&quot;)
+	 * 					.loginProcessingUrl(&quot;/authentication/login/process&quot;)
+	 * 			);
+	 * 	}
+	 * }
+	 * </pre>
+	 * @param formLoginCustomizer the {@link Customizer} to provide more options for the
+	 * {@link FormLoginConfigurer}
+	 * @return the {@link HttpSecurity} for further customizations
+	 * @throws Exception
+	 * @see FormLoginConfigurer#loginPage(String)
+	 */
+	public HttpSecurity formLogin(Customizer<FormLoginConfigurer<HttpSecurity>> formLoginCustomizer) throws Exception {
+		formLoginCustomizer.customize(getOrApply(new FormLoginConfigurer<>()));
+		return HttpSecurity.this;
+	}
+
+		}
+```
+- 以表单登录为例,HttpSecurity有2个重载的formLogin方法，无参的formLogin返回一个FormLoginConfigurer<HttpSecurity>对象，第二个有参的formLogin方法参数是一个FormLoginConfigurer对象，返回值是一个HttpSecurity对象，然后调用getOrApply方法看父类中是否存在同样的类型的配置，如果存在，则不添加到父类的configurers中，其他配置与formLogin配置类似;
+- 每一套过滤器链都会有一个AuthenticationManager对象执行认证，功过authenticationProvider方法配置执行认证的authenticationProvider对象，通过userDetailsService方法配置UserDetailsService，最后在beforeConfigure方法中触发AuthenticationManager的构建;
+- performBuild方法则是进行DefaultSecurityFilterChain的构建，传入请求匹配器与过滤器集合filters，filters会按照优先级进行排序;
+- 通过addFilterAfter、addFilterBefore可以在某个过滤器之后或者之前添加自定义的过滤器;
+- addFilter方法可以向过滤器链中添加过滤器，过滤器必须是Spring Security提供的实现或者子类;
+- addFilterAt方法可以在指定位置添加一个过滤器，在同一个位置添加多个过滤器不会覆盖现有的过滤器;
+
+7. WebSecurity
 
 
