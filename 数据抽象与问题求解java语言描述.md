@@ -2562,4 +2562,41 @@ while(!done){
 }
 ```
 ## ADT 二叉查找树
-二叉查找树是按值组织树，不是按照层次，也有递归定义的特点。可以根据值查找，效率比较快.
+二叉查找树是按值组织树，不是按照层次，也有递归定义的特点。可以根据值查找，效率比较快，树中存储的实例包含多个不同信息字段的情况下，经常使用二叉查找树，标识查找记录的信息叫做查找关键字，查找关键字的值不可以修改，修改了要重新组织树，二叉查找树根据查找关键字的值执行插入、删除与检索，遍历与普通的二叉树是一样的.
+BinarySearchTree继承于BinaryTreeBasis，多余的操作有:
+- +insert(in newItem: TreeItemType)// inserts newItem into a binary search tree whose items have distinct search keys that differ from newItem's search key
+- +delete(in searchKey: KeyType) throws TreeException// deletes from a binary search tree the item whose search key equals searchKey, if no such itemm exists, the operation fails and throws TreeException
+- +retrieve(in searchKey: KeyType): TreeItemType//returns the item in a binary search tree whose search key equals searchKey, returns null if no such item exists
+### ADT二叉查找树操作的算法
+二叉查找树的所有操作的算法基础都是下面的伪代码描述的:
+```java
++search(in bst: BinarySearchTree, in searchKey: KeyType){
+    //searches the bianry search tree bst for the item whose search key is searchKey
+    if(bst is empty){
+        the desired record is not found
+    }else if(searchKey== key of root s item){
+        the desired record is found
+    }else if(searchKey<key of root s item){
+        search(left subtree of bst, searchKey);
+    }else{
+        search(right subtree of bst, searchKey);
+    }
+}
+```
+二叉查找树的形状有很多种，但是都符合二叉查找树的定义，通常越接近完全二叉树的查找树效率越高.
+1. 插入
+插入新节点与search操作一样，但是遇到null的地点就是插入新节点的位置，因为search总是在空子树处终止，一种简单的伪代码的表示:
+```java
++insertItemm(in treeNode: TreeNode, in newItem: TreeItemType){
+    // inserts newItem into the binary search tree of which treeNode is the root
+    if(treeNode is null){
+        create a new node and let treeNode reference it 
+    }else if(newItem.getKey < treeNode.getItem.getKey){
+        treeNode.setLeft(insertItemm(treeNode.getLeft(),newItem))
+    }else{
+        treeNode.setRight(insertItemm(treeNode.getRight(),newItem))
+    }
+    return treeNode;
+}
+```
+2. 删除
