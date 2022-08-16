@@ -4437,5 +4437,615 @@ public final class HttpSecurity extends AbstractConfiguredSecurityBuilder<Defaul
 - addFilterAt方法可以在指定位置添加一个过滤器，在同一个位置添加多个过滤器不会覆盖现有的过滤器;
 
 7. WebSecurity
+一个HttpSecurity可以构建一个过滤器链，也就是一个DefaultSecurityFilterChain对象，一个项目中可以存在多个HttpSecurity，可以构建多个过滤器链，WebSecurity负责构建更大层面的过滤器，将所有的过滤器链对象重新构建为FilterChainProxy对象，核心源码如下:
+```java
+public final class WebSecurity extends AbstractConfiguredSecurityBuilder<Filter, WebSecurity>
+		implements SecurityBuilder<Filter>, ApplicationContextAware, ServletContextAware {
+
+	private final Log logger = LogFactory.getLog(getClass());
+
+	private final List<RequestMatcher> ignoredRequests = new ArrayList<>();
+
+	private final List<SecurityBuilder<? extends SecurityFilterChain>> securityFilterChainBuilders = new ArrayList<>();
+
+	private IgnoredRequestConfigurer ignoredRequestRegistry;
+
+	private FilterSecurityInterceptor filterSecurityInterceptor;
+
+	private HttpFirewall httpFirewall;
+
+	private RequestRejectedHandler requestRejectedHandler;
+
+	private boolean debugEnabled;
+
+	private WebInvocationPrivilegeEvaluator privilegeEvaluator;
+
+	private DefaultWebSecurityExpressionHandler defaultWebSecurityExpressionHandler = new DefaultWebSecurityExpressionHandler();
+
+	private SecurityExpressionHandler<FilterInvocation> expressionHandler = this.defaultWebSecurityExpressionHandler;
+
+	private Runnable postBuildAction = () -> {
+	};
+
+	private ServletContext servletContext;
+
+	/**
+	 * Creates a new instance
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} to use
+	 * @see WebSecurityConfiguration
+	 */
+	public WebSecurity(ObjectPostProcessor<Object> objectPostProcessor) {
+		super(objectPostProcessor);
+	}
+
+	/**
+	 * <p>
+	 * Allows adding {@link RequestMatcher} instances that Spring Security should ignore.
+	 * Web Security provided by Spring Security (including the {@link SecurityContext})
+	 * will not be available on {@link HttpServletRequest} that match. Typically the
+	 * requests that are registered should be that of only static resources. For requests
+	 * that are dynamic, consider mapping the request to allow all users instead.
+	 * </p>
+	 *
+	 * Example Usage:
+	 *
+	 * <pre>
+	 * webSecurityBuilder.ignoring()
+	 * // ignore all URLs that start with /resources/ or /static/
+	 * 		.antMatchers(&quot;/resources/**&quot;, &quot;/static/**&quot;);
+	 * </pre>
+	 *
+	 * Alternatively this will accomplish the same result:
+	 *
+	 * <pre>
+	 * webSecurityBuilder.ignoring()
+	 * // ignore all URLs that start with /resources/ or /static/
+	 * 		.antMatchers(&quot;/resources/**&quot;).antMatchers(&quot;/static/**&quot;);
+	 * </pre>
+	 *
+	 * Multiple invocations of ignoring() are also additive, so the following is also
+	 * equivalent to the previous two examples:
+	 *
+	 * <pre>
+	 * webSecurityBuilder.ignoring()
+	 * // ignore all URLs that start with /resources/
+	 * 		.antMatchers(&quot;/resources/**&quot;);
+	 * webSecurityBuilder.ignoring()
+	 * // ignore all URLs that start with /static/
+	 * 		.antMatchers(&quot;/static/**&quot;);
+	 * // now both URLs that start with /resources/ and /static/ will be ignored
+	 * </pre>
+	 * @return the {@link IgnoredRequestConfigurer} to use for registering request that
+	 * should be ignored
+	 */
+	public IgnoredRequestConfigurer ignoring() {
+		return this.ignoredRequestRegistry;
+	}
+
+	/**
+	 * Allows customizing the {@link HttpFirewall}. The default is
+	 * {@link StrictHttpFirewall}.
+	 * @param httpFirewall the custom {@link HttpFirewall}
+	 * @return the {@link WebSecurity} for further customizations
+	 */
+	public WebSecurity httpFirewall(HttpFirewall httpFirewall) {
+		this.httpFirewall = httpFirewall;
+		return this;
+	}
+
+	/**
+	 * Controls debugging support for Spring Security.
+	 * @param debugEnabled if true, enables debug support with Spring Security. Default is
+	 * false.
+	 * @return the {@link WebSecurity} for further customization.
+	 * @see EnableWebSecurity#debug()
+	 */
+	public WebSecurity debug(boolean debugEnabled) {
+		this.debugEnabled = debugEnabled;
+		return this;
+	}
+
+	/**
+	 * <p>
+	 * Adds builders to create {@link SecurityFilterChain} instances.
+	 * </p>
+	 *
+	 * <p>
+	 * Typically this method is invoked automatically within the framework from
+	 * {@link WebSecurityConfigurerAdapter#init(WebSecurity)}
+	 * </p>
+	 * @param securityFilterChainBuilder the builder to use to create the
+	 * {@link SecurityFilterChain} instances
+	 * @return the {@link WebSecurity} for further customizations
+	 */
+	public WebSecurity addSecurityFilterChainBuilder(
+			SecurityBuilder<? extends SecurityFilterChain> securityFilterChainBuilder) {
+		this.securityFilterChainBuilders.add(securityFilterChainBuilder);
+		return this;
+	}
+
+	/**
+	 * Set the {@link WebInvocationPrivilegeEvaluator} to be used. If this is not
+	 * specified, then a {@link DefaultWebInvocationPrivilegeEvaluator} will be created
+	 * when {@link #securityInterceptor(FilterSecurityInterceptor)} is non null.
+	 * @param privilegeEvaluator the {@link WebInvocationPrivilegeEvaluator} to use
+	 * @return the {@link WebSecurity} for further customizations
+	 */
+	public WebSecurity privilegeEvaluator(WebInvocationPrivilegeEvaluator privilegeEvaluator) {
+		this.privilegeEvaluator = privilegeEvaluator;
+		return this;
+	}
+
+	/**
+	 * Set the {@link SecurityExpressionHandler} to be used. If this is not specified,
+	 * then a {@link DefaultWebSecurityExpressionHandler} will be used.
+	 * @param expressionHandler the {@link SecurityExpressionHandler} to use
+	 * @return the {@link WebSecurity} for further customizations
+	 */
+	public WebSecurity expressionHandler(SecurityExpressionHandler<FilterInvocation> expressionHandler) {
+		Assert.notNull(expressionHandler, "expressionHandler cannot be null");
+		this.expressionHandler = expressionHandler;
+		return this;
+	}
+
+	/**
+	 * Gets the {@link SecurityExpressionHandler} to be used.
+	 * @return the {@link SecurityExpressionHandler} for further customizations
+	 */
+	public SecurityExpressionHandler<FilterInvocation> getExpressionHandler() {
+		return this.expressionHandler;
+	}
+
+	/**
+	 * Gets the {@link WebInvocationPrivilegeEvaluator} to be used.
+	 * @return the {@link WebInvocationPrivilegeEvaluator} for further customizations
+	 */
+	public WebInvocationPrivilegeEvaluator getPrivilegeEvaluator() {
+		if (this.privilegeEvaluator != null) {
+			return this.privilegeEvaluator;
+		}
+		return (this.filterSecurityInterceptor != null)
+				? new DefaultWebInvocationPrivilegeEvaluator(this.filterSecurityInterceptor) : null;
+	}
+
+	/**
+	 * Sets the {@link FilterSecurityInterceptor}. This is typically invoked by
+	 * {@link WebSecurityConfigurerAdapter}.
+	 * @param securityInterceptor the {@link FilterSecurityInterceptor} to use
+	 * @return the {@link WebSecurity} for further customizations
+	 * @deprecated Use {@link #privilegeEvaluator(WebInvocationPrivilegeEvaluator)}
+	 * instead
+	 */
+	public WebSecurity securityInterceptor(FilterSecurityInterceptor securityInterceptor) {
+		this.filterSecurityInterceptor = securityInterceptor;
+		return this;
+	}
+
+	/**
+	 * Executes the Runnable immediately after the build takes place
+	 * @param postBuildAction
+	 * @return the {@link WebSecurity} for further customizations
+	 */
+	public WebSecurity postBuildAction(Runnable postBuildAction) {
+		this.postBuildAction = postBuildAction;
+		return this;
+	}
+
+	/**
+	 * Sets the handler to handle
+	 * {@link org.springframework.security.web.firewall.RequestRejectedException}
+	 * @param requestRejectedHandler
+	 * @return the {@link WebSecurity} for further customizations
+	 * @since 5.7
+	 */
+	public WebSecurity requestRejectedHandler(RequestRejectedHandler requestRejectedHandler) {
+		Assert.notNull(requestRejectedHandler, "requestRejectedHandler cannot be null");
+		this.requestRejectedHandler = requestRejectedHandler;
+		return this;
+	}
+
+	@Override
+	protected Filter performBuild() throws Exception {
+		Assert.state(!this.securityFilterChainBuilders.isEmpty(),
+				() -> "At least one SecurityBuilder<? extends SecurityFilterChain> needs to be specified. "
+						+ "Typically this is done by exposing a SecurityFilterChain bean "
+						+ "or by adding a @Configuration that extends WebSecurityConfigurerAdapter. "
+						+ "More advanced users can invoke " + WebSecurity.class.getSimpleName()
+						+ ".addSecurityFilterChainBuilder directly");
+		int chainSize = this.ignoredRequests.size() + this.securityFilterChainBuilders.size();
+		List<SecurityFilterChain> securityFilterChains = new ArrayList<>(chainSize);
+		List<RequestMatcherEntry<List<WebInvocationPrivilegeEvaluator>>> requestMatcherPrivilegeEvaluatorsEntries = new ArrayList<>();
+		for (RequestMatcher ignoredRequest : this.ignoredRequests) {
+			WebSecurity.this.logger.warn("You are asking Spring Security to ignore " + ignoredRequest
+					+ ". This is not recommended -- please use permitAll via HttpSecurity#authorizeHttpRequests instead.");
+			SecurityFilterChain securityFilterChain = new DefaultSecurityFilterChain(ignoredRequest);
+			securityFilterChains.add(securityFilterChain);
+			requestMatcherPrivilegeEvaluatorsEntries
+					.add(getRequestMatcherPrivilegeEvaluatorsEntry(securityFilterChain));
+		}
+		for (SecurityBuilder<? extends SecurityFilterChain> securityFilterChainBuilder : this.securityFilterChainBuilders) {
+			SecurityFilterChain securityFilterChain = securityFilterChainBuilder.build();
+			securityFilterChains.add(securityFilterChain);
+			requestMatcherPrivilegeEvaluatorsEntries
+					.add(getRequestMatcherPrivilegeEvaluatorsEntry(securityFilterChain));
+		}
+		if (this.privilegeEvaluator == null) {
+			this.privilegeEvaluator = new RequestMatcherDelegatingWebInvocationPrivilegeEvaluator(
+					requestMatcherPrivilegeEvaluatorsEntries);
+		}
+		FilterChainProxy filterChainProxy = new FilterChainProxy(securityFilterChains);
+		if (this.httpFirewall != null) {
+			filterChainProxy.setFirewall(this.httpFirewall);
+		}
+		if (this.requestRejectedHandler != null) {
+			filterChainProxy.setRequestRejectedHandler(this.requestRejectedHandler);
+		}
+		filterChainProxy.afterPropertiesSet();
+
+		Filter result = filterChainProxy;
+		if (this.debugEnabled) {
+			this.logger.warn("\n\n" + "********************************************************************\n"
+					+ "**********        Security debugging is enabled.       *************\n"
+					+ "**********    This may include sensitive information.  *************\n"
+					+ "**********      Do not use in a production system!     *************\n"
+					+ "********************************************************************\n\n");
+			result = new DebugFilter(filterChainProxy);
+		}
+		this.postBuildAction.run();
+		return result;
+	}
+
+	private RequestMatcherEntry<List<WebInvocationPrivilegeEvaluator>> getRequestMatcherPrivilegeEvaluatorsEntry(
+			SecurityFilterChain securityFilterChain) {
+		List<WebInvocationPrivilegeEvaluator> privilegeEvaluators = new ArrayList<>();
+		for (Filter filter : securityFilterChain.getFilters()) {
+			if (filter instanceof FilterSecurityInterceptor) {
+				DefaultWebInvocationPrivilegeEvaluator defaultWebInvocationPrivilegeEvaluator = new DefaultWebInvocationPrivilegeEvaluator(
+						(FilterSecurityInterceptor) filter);
+				defaultWebInvocationPrivilegeEvaluator.setServletContext(this.servletContext);
+				privilegeEvaluators.add(defaultWebInvocationPrivilegeEvaluator);
+				continue;
+			}
+			if (filter instanceof AuthorizationFilter) {
+				AuthorizationManager<HttpServletRequest> authorizationManager = ((AuthorizationFilter) filter)
+						.getAuthorizationManager();
+				AuthorizationManagerWebInvocationPrivilegeEvaluator evaluator = new AuthorizationManagerWebInvocationPrivilegeEvaluator(
+						authorizationManager);
+				evaluator.setServletContext(this.servletContext);
+				privilegeEvaluators.add(evaluator);
+			}
+		}
+		return new RequestMatcherEntry<>(securityFilterChain::matches, privilegeEvaluators);
+	}
+
+	@Override
+	public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
+		this.defaultWebSecurityExpressionHandler.setApplicationContext(applicationContext);
+		try {
+			this.defaultWebSecurityExpressionHandler.setRoleHierarchy(applicationContext.getBean(RoleHierarchy.class));
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+		}
+		try {
+			this.defaultWebSecurityExpressionHandler
+					.setPermissionEvaluator(applicationContext.getBean(PermissionEvaluator.class));
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+		}
+		this.ignoredRequestRegistry = new IgnoredRequestConfigurer(applicationContext);
+		try {
+			this.httpFirewall = applicationContext.getBean(HttpFirewall.class);
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+		}
+		try {
+			this.requestRejectedHandler = applicationContext.getBean(RequestRejectedHandler.class);
+		}
+		catch (NoSuchBeanDefinitionException ex) {
+		}
+	}
+
+	@Override
+	public void setServletContext(ServletContext servletContext) {
+		this.servletContext = servletContext;
+	}
+
+	/**
+	 * An {@link IgnoredRequestConfigurer} that allows optionally configuring the
+	 * {@link MvcRequestMatcher#setMethod(HttpMethod)}
+	 *
+	 * @author Rob Winch
+	 */
+	public final class MvcMatchersIgnoredRequestConfigurer extends IgnoredRequestConfigurer {
+
+		private final List<MvcRequestMatcher> mvcMatchers;
+
+		private MvcMatchersIgnoredRequestConfigurer(ApplicationContext context, List<MvcRequestMatcher> mvcMatchers) {
+			super(context);
+			this.mvcMatchers = mvcMatchers;
+		}
+
+		public IgnoredRequestConfigurer servletPath(String servletPath) {
+			for (MvcRequestMatcher matcher : this.mvcMatchers) {
+				matcher.setServletPath(servletPath);
+			}
+			return this;
+		}
+
+	}
+
+	/**
+	 * Allows registering {@link RequestMatcher} instances that should be ignored by
+	 * Spring Security.
+	 *
+	 * @author Rob Winch
+	 * @since 3.2
+	 */
+	public class IgnoredRequestConfigurer extends AbstractRequestMatcherRegistry<IgnoredRequestConfigurer> {
+
+		IgnoredRequestConfigurer(ApplicationContext context) {
+			setApplicationContext(context);
+		}
+
+		@Override
+		public MvcMatchersIgnoredRequestConfigurer mvcMatchers(HttpMethod method, String... mvcPatterns) {
+			List<MvcRequestMatcher> mvcMatchers = createMvcMatchers(method, mvcPatterns);
+			WebSecurity.this.ignoredRequests.addAll(mvcMatchers);
+			return new MvcMatchersIgnoredRequestConfigurer(getApplicationContext(), mvcMatchers);
+		}
+
+		@Override
+		public MvcMatchersIgnoredRequestConfigurer mvcMatchers(String... mvcPatterns) {
+			return mvcMatchers(null, mvcPatterns);
+		}
+		@Override
+		protected IgnoredRequestConfigurer chainRequestMatchers(List<RequestMatcher> requestMatchers) {
+			WebSecurity.this.ignoredRequests.addAll(requestMatchers);
+			return this;
+		}
+		/**
+		 * Returns the {@link WebSecurity} to be returned for chaining.
+		 */
+		public WebSecurity and() {
+			return WebSecurity.this;
+		}
+
+	}
+}
+```
+- ignoredRequests声明不需要认证处理的请求，比如前端静态资源;
+- 生命securityFilterChainBuilders为HttpSecurity的集合，每一个HttpSecurity声明后，通过addSecurityFilterChainBuilder方法添加到集合中;
+- httpFirewall用来配置请求防火墙;
+- performBuild()执行构建，首先统计被忽略的请求+HttpSecurity创建的出来的过滤器链的个数，创建一个个数大小的DefaultSecurityFilterChain的集合securityFilterChains，对于每个被忽略的请求，创建一个DefaultSecurityFilterChain，但是没有任何过滤器，对于每个HttpSecurity，调用build构建出DefaultSecurityFilterChain添加到集合集合中，最后设置防火墙，然后返回;
+
+FilterChainProxy就是最终构建出来的代理过滤器链，通过Spring的DelegatingFilterProxy嵌入到Web Filter中.
+### FilterChainProxy
+```java
+public class FilterChainProxy extends GenericFilterBean {
+
+	private static final Log logger = LogFactory.getLog(FilterChainProxy.class);
+
+	private static final String FILTER_APPLIED = FilterChainProxy.class.getName().concat(".APPLIED");
+
+	private List<SecurityFilterChain> filterChains;
+
+	private FilterChainValidator filterChainValidator = new NullFilterChainValidator();
+
+	private HttpFirewall firewall = new StrictHttpFirewall();
+
+	private RequestRejectedHandler requestRejectedHandler = new DefaultRequestRejectedHandler();
+
+	public FilterChainProxy() {
+	}
+
+	public FilterChainProxy(SecurityFilterChain chain) {
+		this(Arrays.asList(chain));
+	}
+
+	public FilterChainProxy(List<SecurityFilterChain> filterChains) {
+		this.filterChains = filterChains;
+	}
+
+	@Override
+	public void afterPropertiesSet() {
+		this.filterChainValidator.validate(this);
+	}
+
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		boolean clearContext = request.getAttribute(FILTER_APPLIED) == null;
+		if (!clearContext) {
+			doFilterInternal(request, response, chain);
+			return;
+		}
+		try {
+			request.setAttribute(FILTER_APPLIED, Boolean.TRUE);
+			doFilterInternal(request, response, chain);
+		}
+		catch (RequestRejectedException ex) {
+			this.requestRejectedHandler.handle((HttpServletRequest) request, (HttpServletResponse) response, ex);
+		}
+		finally {
+			SecurityContextHolder.clearContext();
+			request.removeAttribute(FILTER_APPLIED);
+		}
+	}
+
+	private void doFilterInternal(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		FirewalledRequest firewallRequest = this.firewall.getFirewalledRequest((HttpServletRequest) request);
+		HttpServletResponse firewallResponse = this.firewall.getFirewalledResponse((HttpServletResponse) response);
+		List<Filter> filters = getFilters(firewallRequest);
+		if (filters == null || filters.size() == 0) {
+			if (logger.isTraceEnabled()) {
+				logger.trace(LogMessage.of(() -> "No security for " + requestLine(firewallRequest)));
+			}
+			firewallRequest.reset();
+			chain.doFilter(firewallRequest, firewallResponse);
+			return;
+		}
+		if (logger.isDebugEnabled()) {
+			logger.debug(LogMessage.of(() -> "Securing " + requestLine(firewallRequest)));
+		}
+		VirtualFilterChain virtualFilterChain = new VirtualFilterChain(firewallRequest, chain, filters);
+		virtualFilterChain.doFilter(firewallRequest, firewallResponse);
+	}
+
+	/**
+	 * Returns the first filter chain matching the supplied URL.
+	 * @param request the request to match
+	 * @return an ordered array of Filters defining the filter chain
+	 */
+	private List<Filter> getFilters(HttpServletRequest request) {
+		int count = 0;
+		for (SecurityFilterChain chain : this.filterChains) {
+			if (logger.isTraceEnabled()) {
+				logger.trace(LogMessage.format("Trying to match request against %s (%d/%d)", chain, ++count,
+						this.filterChains.size()));
+			}
+			if (chain.matches(request)) {
+				return chain.getFilters();
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Convenience method, mainly for testing.
+	 * @param url the URL
+	 * @return matching filter list
+	 */
+	public List<Filter> getFilters(String url) {
+		return getFilters(this.firewall.getFirewalledRequest((new FilterInvocation(url, "GET").getRequest())));
+	}
+
+	/**
+	 * @return the list of {@code SecurityFilterChain}s which will be matched against and
+	 * applied to incoming requests.
+	 */
+	public List<SecurityFilterChain> getFilterChains() {
+		return Collections.unmodifiableList(this.filterChains);
+	}
+
+	/**
+	 * Used (internally) to specify a validation strategy for the filters in each
+	 * configured chain.
+	 * @param filterChainValidator the validator instance which will be invoked on during
+	 * initialization to check the {@code FilterChainProxy} instance.
+	 */
+	public void setFilterChainValidator(FilterChainValidator filterChainValidator) {
+		this.filterChainValidator = filterChainValidator;
+	}
+
+	/**
+	 * Sets the "firewall" implementation which will be used to validate and wrap (or
+	 * potentially reject) the incoming requests. The default implementation should be
+	 * satisfactory for most requirements.
+	 * @param firewall
+	 */
+	public void setFirewall(HttpFirewall firewall) {
+		this.firewall = firewall;
+	}
+
+	/**
+	 * Sets the {@link RequestRejectedHandler} to be used for requests rejected by the
+	 * firewall.
+	 * @param requestRejectedHandler the {@link RequestRejectedHandler}
+	 * @since 5.2
+	 */
+	public void setRequestRejectedHandler(RequestRejectedHandler requestRejectedHandler) {
+		Assert.notNull(requestRejectedHandler, "requestRejectedHandler may not be null");
+		this.requestRejectedHandler = requestRejectedHandler;
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("FilterChainProxy[");
+		sb.append("Filter Chains: ");
+		sb.append(this.filterChains);
+		sb.append("]");
+		return sb.toString();
+	}
+
+	private static String requestLine(HttpServletRequest request) {
+		return request.getMethod() + " " + UrlUtils.buildRequestUrl(request);
+	}
+
+	/**
+	 * Internal {@code FilterChain} implementation that is used to pass a request through
+	 * the additional internal list of filters which match the request.
+	 */
+	private static final class VirtualFilterChain implements FilterChain {
+
+		private final FilterChain originalChain;
+
+		private final List<Filter> additionalFilters;
+
+		private final FirewalledRequest firewalledRequest;
+
+		private final int size;
+
+		private int currentPosition = 0;
+
+		private VirtualFilterChain(FirewalledRequest firewalledRequest, FilterChain chain,
+				List<Filter> additionalFilters) {
+			this.originalChain = chain;
+			this.additionalFilters = additionalFilters;
+			this.size = additionalFilters.size();
+			this.firewalledRequest = firewalledRequest;
+		}
+
+		@Override
+		public void doFilter(ServletRequest request, ServletResponse response) throws IOException, ServletException {
+			if (this.currentPosition == this.size) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(LogMessage.of(() -> "Secured " + requestLine(this.firewalledRequest)));
+				}
+				// Deactivate path stripping as we exit the security filter chain
+				this.firewalledRequest.reset();
+				this.originalChain.doFilter(request, response);
+				return;
+			}
+			this.currentPosition++;
+			Filter nextFilter = this.additionalFilters.get(this.currentPosition - 1);
+			if (logger.isTraceEnabled()) {
+				logger.trace(LogMessage.format("Invoking %s (%d/%d)", nextFilter.getClass().getSimpleName(),
+						this.currentPosition, this.size));
+			}
+			nextFilter.doFilter(request, response, this);
+		}
+
+	}
+
+	public interface FilterChainValidator {
+
+		void validate(FilterChainProxy filterChainProxy);
+
+	}
+
+	private static class NullFilterChainValidator implements FilterChainValidator {
+
+		@Override
+		public void validate(FilterChainProxy filterChainProxy) {
+		}
+
+	}
+
+}
+```
+- 首先声明了3个变量，filterChains就是保存过滤器链的集合;
+- filterChainValidator是过滤器链验证，默认没有验证;
+- 有一个默认的防火墙对象;
+- doFilter是整个Spring Security过滤器链的入口，主要的方法在doFilterInternal中;
+- 在doFilterInternal方法中，首先将对象转换成FiredwalledRequest对象，将response也进行同样的处理，然后通过getFilters方法找到request匹配的过滤器链（遍历过滤器链集合filterChains，返回第一个匹配的过滤器链），返回该过滤器链的所有的Filters，如果filters==null或者是空，就继续执行别的去了，如果不为空就是要经过Spring Security的过滤器处理，构建一个虚拟的过滤器链对象VirtualFilterChain，执行其doFilter方法;
+- VirtualFilterChain是一个嵌套内部类
+- originChain表示原生的过滤器链也就是Web容器的Filter过滤器链;
+- additionalFilters存储的filter就是本次请求需要经过的Filter;
+- firedwalledRequest表示当前请求对象;
+- size表示过滤器链的大小;
+- currentPosition表示过滤链执行的下标;
+
 
 
