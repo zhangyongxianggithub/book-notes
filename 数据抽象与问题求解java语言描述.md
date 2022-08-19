@@ -2600,3 +2600,77 @@ BinarySearchTree继承于BinaryTreeBasis，多余的操作有:
 }
 ```
 2. 删除
+首先我们想到的解决方案就是用搜索算法搜到某个节点，然后删掉它，但是存在的问题就是这个节点的子节点如何处理，分为3种情况:
+- $N$是叶节点: 直接删除就好，父节点的应用设置为null;
+- $N$只有一个子节点: 2种情况，存在左子节点或者右子节点，直接使用子节点代替删除的节点就可以了，这样中间的节点就没有了，或者使用值覆盖的方式，还是保持了二叉查找树的性质;
+- $N$有2个子节点: 因为有2个子节点，不知道使用哪个节点代替父节点，我们可以使用值移动的方式删除关键字而不是删除节点，直到找到一个容易删除的节点，一个简单的策略是:
+  - 在树中定位另一个节点$M$，$M$比$N$更容易删除;
+  - 将$M$中的项复制到$N$，从而有效的从树中删除$N$的原始项;
+  - 从树中删除节点$M$
+更容易删除的节点是叶节点活着只有一个子节点的节点，简单的将这2个节点的数据复制到要删除的祖先节点会破坏二叉查找树的性质，一种解决办法就是就是找到要删除节点的中序后继或者中序前驱节点，替换，这样不会破坏二叉查找树的性质。因为中序后继是右子树的最左面的节点，肯定没有左节点，中序前驱是左子树的最右面的节点，肯定没有右子节点，所以可以用最简单的方式删除.简单的伪代码表示如下:
+```java
++deleteItem(in rootNode: TreeNode, in searchKey: KeyType){
+    // deletes from the binary search tree with root
+    // rootNode the item whose search key equals searchKey
+    // returns the root node fo the resulting tree
+    // if no such item exists, the operation fails and throws TreeException
+    if(rootNode is null){
+        throw TreeException;
+    }else if(searchkey equals the key in rootNode item){
+        //delete the rootNode, a new root of the tree is returned
+        newRoot=deleteNode(rootNode);
+        return newRoot;
+    }else if(searchkey is less than the key in rootNode item){
+        newLeft=deleteItem(rootNode.getLeft(),searchKey);
+        rootNode.setLeft(newLeft);
+        return rootNode;
+    }else{
+        newRight=deleteItem(rootNode.getRight(),searchKey);
+        rootNode.setRight(newRight);
+        return rootNode;
+    }
+}
++deleteNode(in treeNode: TreeNode): TreeNode
+// deletes the item in the node referenced by treeNode
+// returns the root node of the resulting tree
+    if(treeNode is leaf){
+        return null;
+    }else if(treeNode has only one child c){
+        //c replaces treeNode as the child of treeNode's parent
+        if(c is the left child of treeNode){
+            return treeNode.getLeft();
+        }else{
+            return treeNode.getRight();
+        }
+    }else{
+        // treeNode has two children
+        // find the inorder successor of the search key in treeNode: it is in the leftmost node of the subtree rooted at treeNode's right child
+        replacementItem=findLeftMost(treeNode.getRight()).getItem();
+        replacementrChild=deleteLeftMost(treeNode.getRight());
+        treeNode.item=replacementItem;
+        treeNode.right=replacementrChild;
+        return treeNode;
+    }
++findLeftMost(in treeNode: TreeNode): TreeNode
+// returns the item that is the leftmost descendant of the tree rootedao treeNode
+    if(treeNode.getLeft() == null){
+        return treeNode;
+    }else{
+        return findLeftMost(treeNode.getLeft());
+    }
++deleteLeftMost(in treeNode: TreeNode):TreeNode
+// deletes the node that is the leftmost descendant of the tree rooted at treeNode returns subtree of deleted node
+    if(treeNode.getLeft()==null){
+        // this is the node you want; it has no left child, but it might have a right subtree
+        return treeNode.getRight();
+    }else{
+        replacementLChild=deleteLeftMost(treeNode.getLeft())
+        treeNode.setLeft(replacementLChild);
+        return treeNode;
+    }
+```
+3. 检索
+就是简单的搜索算法;
+4. 遍历
+### ADT二叉树的基于引用的实现
+

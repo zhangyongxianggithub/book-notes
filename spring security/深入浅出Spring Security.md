@@ -5046,6 +5046,153 @@ public class FilterChainProxy extends GenericFilterBean {
 - firedwalledRequest表示当前请求对象;
 - size表示过滤器链的大小;
 - currentPosition表示过滤链执行的下标;
+### SecurityConfigurer
+核心源码:
+```java
+public interface SecurityConfigurer<O, B extends SecurityBuilder<O>> {
 
+	/**
+	 * Initialize the {@link SecurityBuilder}. Here only shared state should be created
+	 * and modified, but not properties on the {@link SecurityBuilder} used for building
+	 * the object. This ensures that the {@link #configure(SecurityBuilder)} method uses
+	 * the correct shared objects when building. Configurers should be applied here.
+	 * @param builder
+	 * @throws Exception
+	 */
+	void init(B builder) throws Exception;
 
+	/**
+	 * Configure the {@link SecurityBuilder} by setting the necessary properties on the
+	 * {@link SecurityBuilder}.
+	 * @param builder
+	 * @throws Exception
+	 */
+	void configure(B builder) throws Exception;
+}
+```
+- init 用来完成配置类的初始化工作;
+- configure进行配置类的配置.
+方法的参数都是SecurityBuilder对象，用来对SecurityBuilder做初始化与配置.其几个主要的实现类如下:
+![SecurityConfigurer对象](SecurityConfigurer.png)
+1. `SecurityConfigurerAdapter`的核心源码如下:
+```java
+public abstract class SecurityConfigurerAdapter<O, B extends SecurityBuilder<O>> implements SecurityConfigurer<O, B> {
+
+	private B securityBuilder;
+
+	private CompositeObjectPostProcessor objectPostProcessor = new CompositeObjectPostProcessor();
+
+	@Override
+	public void init(B builder) throws Exception {
+	}
+
+	@Override
+	public void configure(B builder) throws Exception {
+	}
+
+	/**
+	 * Return the {@link SecurityBuilder} when done using the {@link SecurityConfigurer}.
+	 * This is useful for method chaining.
+	 * @return the {@link SecurityBuilder} for further customizations
+	 */
+	public B and() {
+		return getBuilder();
+	}
+
+	/**
+	 * Gets the {@link SecurityBuilder}. Cannot be null.
+	 * @return the {@link SecurityBuilder}
+	 * @throws IllegalStateException if {@link SecurityBuilder} is null
+	 */
+	protected final B getBuilder() {
+		Assert.state(this.securityBuilder != null, "securityBuilder cannot be null");
+		return this.securityBuilder;
+	}
+
+	/**
+	 * Performs post processing of an object. The default is to delegate to the
+	 * {@link ObjectPostProcessor}.
+	 * @param object the Object to post process
+	 * @return the possibly modified Object to use
+	 */
+	@SuppressWarnings("unchecked")
+	protected <T> T postProcess(T object) {
+		return (T) this.objectPostProcessor.postProcess(object);
+	}
+
+	/**
+	 * Adds an {@link ObjectPostProcessor} to be used for this
+	 * {@link SecurityConfigurerAdapter}. The default implementation does nothing to the
+	 * object.
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} to use
+	 */
+	public void addObjectPostProcessor(ObjectPostProcessor<?> objectPostProcessor) {
+		this.objectPostProcessor.addObjectPostProcessor(objectPostProcessor);
+	}
+
+	/**
+	 * Sets the {@link SecurityBuilder} to be used. This is automatically set when using
+	 * {@link AbstractConfiguredSecurityBuilder#apply(SecurityConfigurerAdapter)}
+	 * @param builder the {@link SecurityBuilder} to set
+	 */
+	public void setBuilder(B builder) {
+		this.securityBuilder = builder;
+	}
+
+	/**
+	 * An {@link ObjectPostProcessor} that delegates work to numerous
+	 * {@link ObjectPostProcessor} implementations.
+	 *
+	 * @author Rob Winch
+	 */
+	private static final class CompositeObjectPostProcessor implements ObjectPostProcessor<Object> {
+
+		private List<ObjectPostProcessor<?>> postProcessors = new ArrayList<>();
+
+		@Override
+		@SuppressWarnings({ "rawtypes", "unchecked" })
+		public Object postProcess(Object object) {
+			for (ObjectPostProcessor opp : this.postProcessors) {
+				Class<?> oppClass = opp.getClass();
+				Class<?> oppType = GenericTypeResolver.resolveTypeArgument(oppClass, ObjectPostProcessor.class);
+				if (oppType == null || oppType.isAssignableFrom(object.getClass())) {
+					object = opp.postProcess(object);
+				}
+			}
+			return object;
+		}
+
+		/**
+		 * Adds an {@link ObjectPostProcessor} to use
+		 * @param objectPostProcessor the {@link ObjectPostProcessor} to add
+		 * @return true if the {@link ObjectPostProcessor} was added, else false
+		 */
+		private boolean addObjectPostProcessor(ObjectPostProcessor<?> objectPostProcessor) {
+			boolean result = this.postProcessors.add(objectPostProcessor);
+			this.postProcessors.sort(AnnotationAwareOrderComparator.INSTANCE);
+			return result;
+		}
+	}
+}
+```
+- 这是一个抽象类，主要是用于继承的，里面定义securityBuilder属性，主要and()方法是用来支持链式调用的;
+- 定义了复合的`CompositeObjectPostProcessor`对象后置处理器;
+2. `UserDetailsAwareConfigurer`
+UserDetailsAwareConfigurer的子类主要负责配置用户认证相关的组件，如UserDetailsService等，UserDetailsAwareConfigurer中提供了获取UserDetailsService的抽象方法，具体实现在子类中，核心源码如下:
+```java
+public abstract class UserDetailsAwareConfigurer<B extends ProviderManagerBuilder<B>, U extends UserDetailsService>
+		extends SecurityConfigurerAdapter<AuthenticationManager, B> {
+
+	/**
+	 * Gets the {@link UserDetailsService} or null if it is not available
+	 * @return the {@link UserDetailsService} or null if it is not available
+	 */
+	public abstract U getUserDetailsService();
+
+}
+```
+![](./UserDetailsAwareConfigurer.png)
+- `AbstractDaoAuthenticationConfigurer`完成对DaoAuthenticationProvider的配置;
+- `UserDetailsServiceConfigurer`完成对UserDetailsService的配置;
+- `UserDetailsManagerConfigurer`
 
