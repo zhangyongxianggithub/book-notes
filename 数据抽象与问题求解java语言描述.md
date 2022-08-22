@@ -2825,4 +2825,12 @@ public class BinarySearchTree<T extends KeyedItem<KT>, KT extends Comparable<? s
     return treeNode
 ```
 ### JCF的二叉树查找算法
-
+Java集合框架提供了2个二叉树查找方法都在Collections类中作为静态方法存在,一个可以查找Comparable数组，一个基于Comparator查找。如果找到元素，返回index，没找到返回插入点的负值-(insertIndex)-1，如果List实现了RandomAccess接口，那么使用二叉查找法，如果没有则遍历搜索。
+## 一般树
+$n$元树是二叉树的泛化，一种表示形式是使用二叉树节点表示，左引用指向节点的第一个子节点，右引用指向下一个兄弟节点，当然如果能确定最大的子节点数$n$，那么也可以直接引用.
+## 小结
+- 二叉树以层次结构组织数据;
+- 二叉树的实现基于引用，若是完全二叉树，也可以使用数组的方式;
+- 二叉查找树允许使用类似于二叉查找的算法来查找包含指定值的项;
+- 二叉查找树的形状多种多样；
+- 
