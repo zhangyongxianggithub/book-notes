@@ -2673,4 +2673,156 @@ BinarySearchTree继承于BinaryTreeBasis，多余的操作有:
 就是简单的搜索算法;
 4. 遍历
 ### ADT二叉树的基于引用的实现
+基于引用的实现:
+```java
+public class BinarySearchTree<T extends KeyedItem<KT>, KT extends Comparable<? super KT>>
+        extends BinaryTreeBasis<T> {
+    public BinarySearchTree() {
+        // default constructor
+    }
+    
+    public BinarySearchTree(final T rootItem) {
+        super(rootItem);
+    }
+    
+    @Override
+    public void setRootItem(final T newItem) {
+        throw new UnsupportedOperationException();
+    }
+    
+    public void insert(final T newItem) {
+        root = root = insertItem(root, newItem);
+    }
+    
+    public T retrieve(final KT searchKey) {
+        return retrieveItem(root, searchKey);
+    }
+    
+    public void delete(final KT searchKey) throws TreeException {
+        root = deleteItem(root, searchKey);
+    }
+    
+    public void delete(final T item) throws TreeException {
+        root = deleteItem(root, item.getSearchKey());
+    }
+    
+    private TreeNode<T> deleteItem(TreeNode<T> treeNode, final KT searchKey) {
+        final TreeNode<T> newSubtree;
+        if (treeNode == null) {
+            throw new TreeException("tree is empty");
+        } else {
+            final T nodeItem = treeNode.getItem();
+            if (searchKey.compareTo(nodeItem.getSearchKey()) == 0) {
+                treeNode = deleteNode(treeNode);
+            } else if (searchKey.compareTo(nodeItem.getSearchKey()) < 0) {
+                newSubtree = deleteItem(treeNode.getLeftChild(), searchKey);
+                treeNode.setLeftChild(newSubtree);
+            } else {
+                newSubtree = deleteItem(treeNode.getRightChild(), searchKey);
+                treeNode.setRightChild(newSubtree);
+            }
+        }
+        return treeNode;
+    }
+    
+    private TreeNode<T> deleteNode(final TreeNode<T> tNode) {
+        final T replacementItem;
+        // test for a leaf
+        if (tNode.getLeftChild() == null && tNode.getRightChild() == null) {
+            return null;
+        } else if (tNode.getLeftChild() == null) {
+            return tNode.getRightChild();
+        } else if (tNode.getRightChild() == null) {
+            return tNode.getLeftChild();
+        } else {
+            replacementItem = findLeftmost(tNode.getRightChild());
+            tNode.setItem(replacementItem);
+            tNode.setRightChild(deleteLeftmost(tNode.getRightChild()));
+        }
+        return null;
+    }
+    
+    private T findLeftmost(final TreeNode<T> tNode) {
+        if (tNode.getLeftChild() == null) {
+            return tNode.getItem();
+        } else {
+            return findLeftmost(tNode.getLeftChild());
+        }
+    }
+    
+    private TreeNode<T> deleteLeftmost(final TreeNode<T> tNode) {
+        if (tNode.getLeftChild() == null) {
+            return tNode.getRightChild();
+        } else {
+            tNode.setLeftChild(deleteLeftmost(tNode.getLeftChild()));
+            return tNode;
+        }
+    }
+    
+    private T retrieveItem(final TreeNode<T> treeNode, final KT searchKey) {
+        final T treeItem;
+        if (treeNode == null) {
+            treeItem = null;
+        } else {
+            final T nodeItem = treeNode.getItem();
+            if (searchKey.compareTo(nodeItem.getSearchKey()) == 0) {
+                treeItem = nodeItem;
+            } else if (searchKey.compareTo(nodeItem.getSearchKey()) < 0) {
+                treeItem = retrieveItem(treeNode.getLeftChild(), searchKey);
+            } else {
+                treeItem = retrieveItem(treeNode.getRightChild(), searchKey);
+            }
+        }
+        return treeItem;
+    }
+    
+    private TreeNode<T> insertItem(TreeNode<T> treeNode, final T newItem) {
+        TreeNode<T> newSubtree = null;
+        if (treeNode == null) {
+            // position of insertion found,
+            treeNode = new TreeNode<>(newItem);
+        }
+        final T nodeItem = treeNode.getItem();
+        if (newItem.getSearchKey().compareTo(nodeItem.getSearchKey()) < 0) {
+            newSubtree = insertItem(treeNode.getLeftChild(), newItem);
+            treeNode.setLeftChild(newSubtree);
+        } else {
+            newSubtree = insertItem(treeNode.getRightChild(), newItem);
+            treeNode.setRightChild(newSubtree);
+        }
+        return treeNode;
+    }
+}
+```
+### 二叉查找树的效率
+二叉查找树的操作中涉及到值的比较，比较的次数与路径上的节点数相同，也就是二叉树的高度，二叉树的最大高度就是节点数，也就是每个节点只有一个子节点，计算树的最小高度的定理如下:
+- 当$ h\geq 0 $高度为$h$的满二叉树包含$ {2}^{h}-1 $个节点
+- 高度为$h$的二叉树最多包含$ {2}^{h}-1 $个节点;
+- 包含$n$个节点的二叉树的最小高度是$ \lceil \log_{2} {(n+1)}\rceil  $
+### 树排序
+原理很简单，就是利用二叉查找树的原理，中序遍历;
+```java
++treesort(inout anArray: ArrayType, in n: integer)
+// sorts the n integers in array anArray into ascending order
+    Insert anArray's elements into a binary search tree bTree
+    Traverse bTree inorder, as you visit bTree's nodes, copy their data items into successive locations of anArray
+```
+平均时间复杂度是$O(n*log_{2}{n})$.
+### 将二叉树保存到文件中
+- 保存二叉查找树，然后恢复到原始形状，用二叉树的先序顺序保存树，恢复时也按照先序顺序插入二叉查找树，则恢复的树与原来一样;
+- 中序遍历将树保存到文件中，通过观察中序遍历的数据吗，可以发现，此时数据符合二叉查找算法的特点，每次分一半可以确保树的高度最小，所以以中间节点为树根，再找左面数据与右面数据的中间节点，构造二叉查找子树，最后得到满二叉树或者非严格定义的完全二叉树。下面是伪代码，就跟二叉查找的过程差不多:
+```java
++readTree(in inputFile: FileType , in n: integer): TreeNode
+    // builds a minimum-height binary search tree from n sorted values in a file, will return the tree's root
+    if(n>0){
+        treeNode=reference to new node with null child references
+        // construct the left subtree
+        Set treeNode's left child to readTree(inputFile, n/2)
+        Read item from file into treeNode's item
+        // construct the right subtree
+        Set treeNode's right child to readTree(inputFile, (n-1)/2)
+    }
+    return treeNode
+```
+### JCF的二叉树查找算法
 
