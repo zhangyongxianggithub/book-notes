@@ -5194,5 +5194,44 @@ public abstract class UserDetailsAwareConfigurer<B extends ProviderManagerBuilde
 ![](./UserDetailsAwareConfigurer.png)
 - `AbstractDaoAuthenticationConfigurer`完成对DaoAuthenticationProvider的配置;
 - `UserDetailsServiceConfigurer`完成对UserDetailsService的配置;
-- `UserDetailsManagerConfigurer`
+- `UserDetailsManagerConfigurer`使用UserDetailsManager构建用户对象，完成对AuthenticationManagerBuilder的填充;
+- `JdbcUserDetailsManagerConfigurer`配置JdbcUserDetailsManager并填充到AuthenticationManagerBuilder中;
+- `InMemoryUserDetailsManagerConfigurer`配置InMemoryUserDetailsManager
+- `DaoAuthenticationConfigurer`完成对DaoAuthenticationProvider的配置
+3. AbstractHttpConfigurer
+AbstractHttpConfigurer主要是为了给在HttpSecurity中使用的配置类添加方便的父类，提取出共同的操作，核心源码如下:
+```java
+public abstract class AbstractHttpConfigurer<T extends AbstractHttpConfigurer<T, B>, B extends HttpSecurityBuilder<B>>
+		extends SecurityConfigurerAdapter<DefaultSecurityFilterChain, B> {
 
+	/**
+	 * Disables the {@link AbstractHttpConfigurer} by removing it. After doing so a fresh
+	 * version of the configuration can be applied.
+	 * @return the {@link HttpSecurityBuilder} for additional customizations
+	 */
+	@SuppressWarnings("unchecked")
+	public B disable() {
+		getBuilder().removeConfigurer(getClass());
+		return getBuilder();
+	}
+
+	@SuppressWarnings("unchecked")
+	public T withObjectPostProcessor(ObjectPostProcessor<?> objectPostProcessor) {
+		addObjectPostProcessor(objectPostProcessor);
+		return (T) this;
+	}
+
+}
+```
+只有2个方法，一个用于禁用某一个配置，一个用于添加对象后置处理器.它的实现类比较多。这个后续补充吧.
+4. GlobalAuthenticationConfigrerAdapter
+主要用于配置全局AuthenticationManagerBuilder，在AuthenticationConfiguration类中会自动使用`GlobalAuthenticationConfigrerAdapter`提供的Bean来配置全局AuthenticationManagerBuilder.有4个不同的子类:
+- `InitializeAuthenticationProviderBeanManagerConfigurer`，初始化全局的AuthenticationProvider对象;
+- `InitializeAuthenticationProviderManagerConfigurer`，配置全局的AuthenticationProvider对象，配置过程就是从Spring容器中查找AuthenticationProvider并设置给全局的AuthenticationManagerBuilder对象;
+- `InitializeUserDetailsBeanManagerConfigurer`，初始化全局的UserDetailsService对象;
+- `InitializeUserDetailsManagerConfigurer`，配置全局的UserDetailsService对象，配置过程就是从Spring容器中查找UserDetailsService，并设置给全局的AuthenticationManagerBuilder对象;
+- `EnableGlobalAuthenticationAutowiredConfigurer`，从Spring容器中加载被@EnableGlobalAuthentication注解标记的Bean。
+5. WebSecurityConfigurer
+一个空接口，用来定制化WebSecurity，只有一个实现类，就是`WebSecurityConfigurerAdapter`，多数都是继承`WebSecurityConfigurerAdapter`实现对WebSecurity的自定义配置
+6. WebSecurityConfigurerAdapter
+`WebSecurityConfigurerAdapter`是一个创建`WebSecurityConfigurer`的基类，可以覆盖类内的方法完成对WebSecurity与HttpSecurity的定制，
