@@ -2839,4 +2839,98 @@ $n$元树是二叉树的泛化，一种表示形式是使用二叉树节点表�
 # 第12章 表与优先队列
 ADT表适合通过值来管理数据的问题
 ## ADT表
+ADT表用于查找信息基于查找关键字。基本操作有:
+- 创建空表;
+- 确定表是否为空;
+- 确定表中的项数;
+- 将新项插入表;
+- 从表中删除包含给定关键字的项;
+- 从表中检索给定关键字的项;
+- 按有序的查找关键字顺序遍历表项;
+一个城市表的例子如下:
+首先定义表项与其查找关键字
+```java
+public class City extends KeyedItem<String> {
+    private final String city;
+    private String country;
+    
+    private int pop;
+    
+    public City(final String searchKey, final String city) {
+        super(searchKey);
+        this.city = city;
+    }
+    
+    public String getCountry() {
+        return country;
+    }
+    
+    public void setCountry(final String country) {
+        this.country = country;
+    }
+    
+    public int getPop() {
+        return pop;
+    }
+    
+    public void setPop(final int pop) {
+        this.pop = pop;
+    }
+}
+```
+然后定义表的接口:
+```java
+/**
+ * Precondition for all operations:
+ * No two items of the table have the same search key.
+ * the table's items are sorted by search key.
+ **/
+
+public interface TableInterface<T extends KeyedItem<KT>, KT extends Comparable<? super KT>> {
+    
+    /**
+     * Determines whether a table is empty
+     * Postcondition: Returns true if the table is empty;otherwise returns
+     * false.
+     */
+    boolean tableIsEmpty();
+    
+    /**
+     * Determines the length of a table
+     * Postcondition: Returns the number of items in the table.
+     */
+    int tableLength();
+    
+    /**
+     * Inserts an item into a table in its proper sorted order according to the
+     * item's search key
+     * Precondition: the item to be inserted into the table is newItem, whose
+     * search key differs from
+     * all search keys presently in the table.
+     * Postcondition: If the insertion was successful, newItem is in its proper
+     * order in the table. otherwise the table
+     * is unchanged, and TableException is thrown.
+     */
+    void tableInsert(T newItem) throws TableException;
+    
+    /**
+     * deletes an item with a given search key from a table.
+     * Precondition: searchKey is the search key of the item to be deleted.
+     * Postcondition: if the item whose search key equals searchkey existed in the table, the item was
+     * deleted and method returns true, Otherwise, the table is unchanged and the method return false.
+     */
+    boolean tableDelete(KT searchKey);
+
+    /**
+     * 
+     * @param searchKey
+     * @return
+     */
+    KeyedItem<KT> tableRetrieve(KT searchKey);
+}
+```
+ADT实现要么基于数组，要么基于引用，即用数组或者链表来存储ADT的项，这些称为线性实现，因为逐一表示数据结构中的各个项，应用程序的要求影响ADT实现的选择，因为操作在不同的实现下的效率不同，还要计算每个操作执行的频率；需要考虑的3个因素:
+- 需要什么操作;
+- 这些操作的执行频率;
+- 操作要求的响应时间。
 
