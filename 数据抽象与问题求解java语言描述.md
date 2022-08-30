@@ -2933,3 +2933,84 @@ ADT实现要么基于数组，要么基于引用，即用数组或者链表来�
 - 需要什么操作;
 - 这些操作的执行频率;
 - 操作要求的响应时间。
+
+- ADT表的基于数组的无序实现插入数据项快，删除时需要移动数据，因为是无序的，检索时需要顺序遍历;
+- ADT表的基于有序数组的实现，插入/删除都需要移动数据，检索时可以用使用二分查找;
+- ADT表基于引用的无序实现插入数据项快，删除需要顺序查找不需要移动数据，检索也需要顺序查找;
+- ADT表的基于引用的有序实现插入/删除都需要顺序查找，不移动数据，检索也需要顺序查找.
+
+项不多的情况下，可以使用线性实现，因为此时简单性与清晰性比效率显得更重要。使用二叉查找树实现表与线性实现有优势，集合了优点，摒弃了缺点.有序数组实现表的源代码如下:
+```java
+
+/**
+ * ADT table，sorted array-based implementation,
+ * Assumption: A table contains at most one item with a given search key at any
+ * time
+ */
+public class TableArrayBased<T extends KeyedItem<KT>, KT extends Comparable<? super KT>>
+        implements TableInterface<T, KT> {
+    private final int MAX_TABLE = 100; // maximum size of table
+    protected ArrayList<T> items; // table items
+    
+    public TableArrayBased() {
+        items = new ArrayList<>(MAX_TABLE);
+    }
+    
+    @Override
+    public boolean tableIsEmpty() {
+        return items.size() == 0;
+    }
+    
+    @Override
+    public int tableLength() {
+        return items.size();
+    }
+    
+    @Override
+    public void tableInsert(final T newItem) throws TableException {
+        if (tableLength() < MAX_TABLE) {
+            // there is room to insert; locate the position where newItem
+            // belongs
+            final int spot = position(newItem.getSearchKey());
+            if (spot < tableLength() && items.get(spot).getSearchKey()
+                    .compareTo(newItem.getSearchKey()) == 0) {
+                throw new TableException();
+            } else {
+                items.add(spot, newItem);
+            }
+        } else {
+            throw new TableException();
+        }
+    }
+    
+    @Override
+    public boolean tableDelete(final KT searchKey) {
+        final int spot = position(searchKey);
+        if (spot < tableLength()
+                && items.get(spot).getSearchKey().compareTo(searchKey) == 0) {
+            items.remove(spot);
+            return true;
+        }
+        return false;
+    }
+    
+    @Override
+    public KeyedItem<KT> tableRetrieve(final KT searchKey) {
+        final int spot = position(searchKey);
+        if (spot < tableLength()
+                && items.get(spot).getSearchKey().compareTo(searchKey) == 0) {
+            return items.get(spot);
+        }
+        return null;
+    }
+    
+    private int position(final KT searchKey) {
+        int pos = 0;
+        while (pos < tableLength()
+                && items.get(pos).getSearchKey().compareTo(searchKey) > 0) {
+            pos++;
+        }
+        return pos;
+    }
+}
+```
