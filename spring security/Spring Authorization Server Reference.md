@@ -198,4 +198,32 @@ public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
 	return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
 }
 ```
+OAuth2AuthorizationServerConfiguration主要用来提供一种方便的方式配置OAuth2认证服务器的最小缺省配置，然而，在大多数情况下，自定义配置也是需要的.
+## 自定义配置
+OAuth2AuthorizationServerConfigurer类可以完整的定制化OAuth2认证服务器的安全配置，你可以指定要使用的核心组件，比如:  RegisteredClientRepository, OAuth2AuthorizationService, OAuth2TokenGenerator以及其他的组件。更多的，你可以自定义endpoint的请求处理逻辑，比如:  authorization endpoint, token endpoint, token introspection endpoint.比如:
+```java
+@Bean
+public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+	OAuth2AuthorizationServerConfigurer<HttpSecurity> authorizationServerConfigurer =
+		new OAuth2AuthorizationServerConfigurer<>();
+	http.apply(authorizationServerConfigurer);
 
+	authorizationServerConfigurer
+		.registeredClientRepository(registeredClientRepository) // 用来管理客户端
+		.authorizationService(authorizationService) // 管理认证信息
+		.authorizationConsentService(authorizationConsentService)  // 管理认证批准信息
+		.providerSettings(providerSettings) // OAuth2认证服务器的自定义配置设置
+		.tokenGenerator(tokenGenerator) //
+		.clientAuthentication(clientAuthentication -> { })  
+		.authorizationEndpoint(authorizationEndpoint -> { })    
+		.tokenEndpoint(tokenEndpoint -> { })    
+		.tokenIntrospectionEndpoint(tokenIntrospectionEndpoint -> { })  
+		.tokenRevocationEndpoint(tokenRevocationEndpoint -> { })    
+		.oidc(oidc -> oidc
+			.userInfoEndpoint(userInfoEndpoint -> { })  
+			.clientRegistrationEndpoint(clientRegistrationEndpoint -> { })  
+		);
+
+	return http.build();
+}
+```
