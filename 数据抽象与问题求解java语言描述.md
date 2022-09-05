@@ -3069,3 +3069,140 @@ public class TableBSTBased<T extends KeyedItem<KT>, KT extends Comparable<? supe
     }
 }
 ```
+## ADT优先队列: ADT表的变体
+具有优先级的ADT表，日常生活中有很多的案例，比如，排队看病、任务优先级等。它的基本操作有:
+- 构建空优先队列;
+- 确定优先队列是否为空;
+- 将新项插入优先队列;
+- 检索然后删除优先队列中具有最高优先级值的项.
+优先级就类似于检索关键字。与ADT表的操作有2点不同:
+- 检索然后删除优先队列中具有最高优先级值的项，没有像表那样，传递搜索关键字参数;
+- 检索然后删除优先队列中具有最高优先级值的项不能删除指定搜索关键字的项;
+使用线性ADT表实现ADT优先队列，在插入时都是$O(n)$的时间复杂度，比较高。检索是最方便的，都是$O(1)$的时间复杂度。使用二叉查找树是最方便的，插入与检索都是$O(log_2n)$，检索就是删除最右节点的操作，最右节点的子节点至多为1，一种最简单的实现方案是堆.
+### 堆
+堆不同二叉查找树的地方:
+- 堆不是严格有序的;
+- 堆是完全二叉树;
+堆也是树，也符合递归定义逻辑:
+- 堆的根节点的关键字>=子树的关键字;
+- 子树也是堆;
+分为最大堆与最小堆。操作的伪代码如下:
+- +createHeap()// creates an empty heap
+- +heapIsEmpty():Boolean {query} // determines whether a heap is empty
+- +heapInsert(in newItem: HeapItemType) throws HeapException // inserts nwItem into a heap, Throws HeapException if heap is full
+- +heapDelete(): HeapItemType // Retrieves and then deletes a heap's root item.this item has the largest search key
+堆是完全二叉树，可以用数组表示。items表示数组，size表示堆的大小.
+- heapDelete: 最大的查找关键字是树根，很容易检索，删除树根，留下2个分离的堆，需要将剩余的节点转换为新的堆。此时最容易检索的节点是最后一个节点，把最后一个节点复制到根节点，这时候还是完全二叉树，子树是堆，只有根节点不符合条件，这样的堆叫做半堆(semiheap)，半堆转换为堆类似于冒泡排序，逐渐下沉到合适的位置。交换一次后，子树变成半堆，这是一个递归的处理逻辑。伪代码如下:
+```java
++heapRebuild(inout items: ArrayType, in root:integer, in size:integer)
+ //converts a semiheap rooted at index root into a heap
+ // recursively trickle the item at index root down to its proper position by swapping it with its larger child,
+ // if the child is larger than the item. If the item is at a leaf, nothing needs to be done.
+ if(the root is not a leaf){
+    // root must have a left child
+    child=2*root+1
+    if(the root has a right child){
+        rightChild=child+1
+        if(items[rightChild].getKey()>items[child].getKey()){
+            child=rightChild
+        }
+    }
+    // if the item in the root has a smaller search key than the search key of the item in the larger child, swap items
+    if(items[root].getKey()>items[child].getKey()){
+        Swap items[root] and items[child]
+        heapRebuild(items,child,size)
+    }
+ }
+```
+时间复杂度是$log_2n$，最大交换次数就是从根节点交换到叶节点，也就是树的最大高度。
+- heapInsert: 与heapDelete的操作相反，为了保持完全二叉树，在最后插入新的项，然后根据(i-1)/2定位父节点来上移。也是一种冒泡操作。伪代码如下:
+```java
+// insert newItem into the bottom of the tree
+items[size]=newItem
+// trickle new item up to appropriate spot in the tree
+place=size
+parent=(place-1)/2
+while(parent>=0 and items[place]>items[parent]){
+    swap items[place] and items[parent]
+    place=parent
+    parent=(parent-1)/2
+}
+increment size
+```java
+public class Heap<T> {
+    
+    private final ArrayList<T> items;
+    
+    private Comparator<? super T> comparator;
+    
+    private Heap() {
+        items = new ArrayList<>();
+    }
+    
+    public Heap(final Comparator<? super T> comparator) {
+        this();
+        this.comparator = comparator;
+    }
+    
+    private boolean heapIsEmpty() {
+        return items.size() == 0;
+    }
+    
+    public void heapInsert(final T newItem) {
+        items.add(newItem);
+        int place = items.size() - 1;
+        int parent = (place - 1) / 2;
+        while (parent >= 0
+                && compareItems(items.get(place), items.get(parent)) > 0) {
+            final T temp = items.get(parent);
+            items.set(parent, items.get(place));
+            items.set(place, temp);
+            place = parent;
+            parent = (place - 1) / 2;
+        }
+    }
+    
+    public T heapDelete() {
+        T rootItem = null;
+        final int loc;
+        if (!heapIsEmpty()) {
+            rootItem = items.get(0);
+            loc = items.size() - 1;
+            items.set(0, items.get(loc));
+            items.remove(loc);
+            heapRebuild(0);
+        }
+        return rootItem;
+    }
+
+    // if the root is not a leaf and the root's search key is less than the
+    // larger of search keys in the root's children
+    private void heapRebuild(final int root) {
+        int child = 2 * root + 1;// index of root's left child if any
+        if (child < items.size()) {
+            // root is not a leaf, so it has a left child at child
+            final int rightChild = child + 1;
+            // if root has a right child, find larger child
+            if (rightChild < items.size() && compareItems(items.get(rightChild),
+                    items.get(child)) > 0) {
+                child = rightChild;
+            }
+            if (compareItems(items.get(root), items.get(child)) < 0) {
+                final T temp = items.get(root);
+                items.set(root, items.get(child));
+                items.set(child, temp);
+                heapRebuild(child);
+            }
+        }
+    }
+    
+    private int compareItems(final T item1, final T item2) {
+        if (comparator == null) {
+            return ((Comparable<T>) item1).compareTo(item2);
+        } else {
+            return comparator.compare(item1, item2);
+        }
+    }
+} 
+```
+
