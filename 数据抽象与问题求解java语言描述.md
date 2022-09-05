@@ -3014,3 +3014,58 @@ public class TableArrayBased<T extends KeyedItem<KT>, KT extends Comparable<? su
     }
 }
 ```
+ADT表基于二叉查找树的实现如下:
+```java
+public class TableBSTBased<T extends KeyedItem<KT>, KT extends Comparable<? super KT>>
+        implements TableInterface<T, KT> {
+    // binary search tree that contains the table's items
+    private final BinarySearchTree<T, KT> bst;
+    
+    protected int size; // number of items in the table
+    
+    public BinarySearchTree<T, KT> getBst() {
+        return bst;
+    }
+    
+    TableBSTBased() {
+        bst = new BinarySearchTree<T, KT>();
+        size = 0;
+    }
+    
+    @Override
+    public boolean tableIsEmpty() {
+        return size == 0;
+    }
+    
+    @Override
+    public int tableLength() {
+        return size;
+    }
+    
+    @Override
+    public void tableInsert(final T newItem) throws TableException {
+        if (bst.retrieve(newItem.getSearchKey()) == null) {
+            bst.insert(newItem);
+            size++;
+        } else {
+            throw new TableException();
+        }
+    } // end tableInsert
+    
+    @Override
+    public boolean tableDelete(final KT searchKey) {
+        try {
+            bst.delete(searchKey);
+        } catch (final TreeException e) {
+            return false;
+        }
+        size--;
+        return true;
+    }
+    
+    @Override
+    public KeyedItem<KT> tableRetrieve(final KT searchKey) {
+        return bst.retrieve(searchKey);
+    }
+}
+```
