@@ -3205,4 +3205,60 @@ public class Heap<T> {
     }
 } 
 ```
+### 使用堆实现ADT优先队列
+ADT优先队列的操作使用堆操作完美匹配，核心实现源码如下:
+```java
+public class PriorityQueue<T> {
+    private final Heap<T> h;
+    
+    public PriorityQueue() {
+        this.h = new Heap<>();
+    }
+    
+    public PriorityQueue(final Comparator<T> comparator) {
+        this.h = new Heap<>(comparator);
+    }
+    
+    public boolean pqIsEmpty() {
+        return h.heapIsEmpty();
+    }
+    
+    public void pqInsert(final T newItem) {
+        h.heapInsert(newItem);
+    }
+    
+    public T pqDelete() {
+        return h.heapDelete();
+    }
+}
+```
+堆不能替代二叉查找树成为表的实现，如果多项具有相同的优先级值，按出现的先后顺序排序处理相同优先级值的项，可以在节点中存储队列。
+### 堆排序
+使用堆类排序数组，需要首先将数组构建为堆，heapRebuild将半堆转化为堆，从后向前，每个都是半堆，一直向上就转化为堆了。算法说明如下:
+```java
+for ( index = n-1 down to 0)
+    // Assertion: the tree rooted at index is a semiheap
+    heapRebuild(anArray, index, 0)
+    // Assertion: the tree rooted at index is a heap
+```
+index通常可以设置为(n-1)/2，转化为堆后，数组分为2个片区，左片区是堆，右片区是已经排序的元素，堆排序算法的不变式:
+- 在步骤$k$后，Sorted区域包含anArray的$k$个最大值且有序;
+- Heap区域中的项构成堆.
+交换anArray[0]与anArray[last]，此时last位置是已经排序的项，last--，此时左侧的heap区构成新的半堆，使用HeapRebuild转换为堆.伪代码如下:
+```java
++heapSort(in anArray: ArrayType, in n:integer)
+// sorts anArray[0...n-1]
+    // build initial heap
+    for(index=n-1 down to 0){
+        // invariant: the tree rooted at index is a semiheap
+        heapRebuild(anArray,index,n)
+    }
+    last=n-1
+    for(step=1 through n){
+        Swap anArray[0 and anArray[last]
+        last--
+        heapRebuild(anArray,0,last)
+    }
+```
+## JCF中的表和优先队列
 
