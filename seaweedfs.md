@@ -27,6 +27,10 @@
   - [Write and Read](#write-and-read)
 - [Store file with Time To Live](#store-file-with-time-to-live)
   - [How to use it?](#how-to-use-it)
+  - [高级用法](#高级用法-1)
+  - [Supported TTL format](#supported-ttl-format)
+  - [如何生效的](#如何生效的)
+  - [实现细节](#实现细节)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -784,5 +788,14 @@ curl http://localhost:9333/dir/assign?ttl=3m
 ```shell
 curl -F "file=@x.go" http://127.0.0.1:8080/5,01637037d6?ttl=3m
 ```
+如果在过期时间前读取文件，得到正常的文件内容，在过期时间后读取文件，会返回404报告文件不存在.对于新的ttl=3m的文件写入，会使用ttl=3m的卷的集合,如果卷满了，就创建新的卷，3分钟没有新的写入操作，那么这些卷会被删除.
+## 高级用法
+你可能注意到了，ttl=3m使用了2次，第一次是为了分配文件ID，第二次是在上传文件时，第一次用于master查找满足条件的卷，第二次是与文件一起写入，2次的ttl不需要完全一样，只要volume的ttl>=文件的ttl就行了，这为微调文件TTL提供了一定的灵活性，同时减少了卷TTL变化的数量，从而简化了TTL卷的管理。
+## Supported TTL format
+TTL的格式`{integer}{time unit}`,比如1m、，1h等。
+## 如何生效的
+TTL似乎很容易实现，因为如果时间超过TTL，我们只需要报告文件丢失。然而，真正的困难是如何有效地回收过期文件的磁盘空间，类似于JVM内存垃圾收集，这是一项需要多年努力的复杂工作。Memcached也支持TTL。它通过将数据放入固定大小的slab中来解决这个问题。如果一个slab过期，不需要任何工作并且可以立即覆盖slab。然而，这种固定大小的slab方法不适用于文件，因为文件内容很少完全适合slab。SeaweedFS以非常简单的方式有效地解决了这个磁盘空间垃圾收集问题。与正常实现的主要区别之一是TTL与卷以及每个特定文件相关联。在文件id分配步骤中，文件id将分配给具有>=ttl值的卷。卷会定期检查（默认每5~10秒）。如果过了最新的过期时间，整个卷中的所有文件都将全部过期，可以安全地删除卷。
+## 实现细节
+
 
 
