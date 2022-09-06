@@ -26,6 +26,7 @@
   - [在特定的数据中心上分配File Key](#在特定的数据中心上分配file-key)
   - [Write and Read](#write-and-read)
 - [Store file with Time To Live](#store-file-with-time-to-live)
+  - [How to use it?](#how-to-use-it)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -771,5 +772,16 @@ curl http://localhost:9333/dir/assign?dataCenter=dc1
 在weed shell中，你可以改变volume的复制相关的设置，通过`volume.configure.replication`配置。
 
 # Store file with Time To Live
+SeaweedFS是一个key-file存储，文件可以指定TTL定义设置过期。
+## How to use it?
+假设想要存储一个ttl=3分钟的文件，首先，需要向master请求一个ttl=3m的文件ID:
+```shell
+curl http://localhost:9333/dir/assign?ttl=3m
 
+{"count":1,"fid":"5,01637037d6","url":"127.0.0.1:8080","publicUrl":"localhost:8080"}
+```
+然后，使用文件ID把文件存储到volume服务器上:
+```shell
+curl -F "file=@x.go" http://127.0.0.1:8080/5,01637037d6?ttl=3m
+```
 
