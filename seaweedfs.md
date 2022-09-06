@@ -31,6 +31,12 @@
   - [Supported TTL format](#supported-ttl-format)
   - [如何生效的](#如何生效的)
   - [实现细节](#实现细节)
+  - [部署](#部署)
+- [Failover Master Server](#failover-master-server)
+  - [Cheat Sheet: Startup multiple servers](#cheat-sheet-startup-multiple-servers)
+  - [如何工作](#如何工作)
+  - [starup multiple master servers](#starup-multiple-master-servers)
+- [Erasure Coding for warm storage](#erasure-coding-for-warm-storage)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -796,6 +802,43 @@ TTL的格式`{integer}{time unit}`,比如1m、，1h等。
 ## 如何生效的
 TTL似乎很容易实现，因为如果时间超过TTL，我们只需要报告文件丢失。然而，真正的困难是如何有效地回收过期文件的磁盘空间，类似于JVM内存垃圾收集，这是一项需要多年努力的复杂工作。Memcached也支持TTL。它通过将数据放入固定大小的slab中来解决这个问题。如果一个slab过期，不需要任何工作并且可以立即覆盖slab。然而，这种固定大小的slab方法不适用于文件，因为文件内容很少完全适合slab。SeaweedFS以非常简单的方式有效地解决了这个磁盘空间垃圾收集问题。与正常实现的主要区别之一是TTL与卷以及每个特定文件相关联。在文件id分配步骤中，文件id将分配给具有>=ttl值的卷。卷会定期检查（默认每5~10秒）。如果过了最新的过期时间，整个卷中的所有文件都将全部过期，可以安全地删除卷。
 ## 实现细节
+- 在分配文件ID时，master会选择一个与TTL匹配的TTL卷。如果不存在此类卷，请创建一些;
+- 卷服务器将存储具有到期时间的文件，当检索文件时，如果文件过期，将报告文件未找到;
+- 卷服务器会跟踪每个卷的最大过期时间，并停止向master报告过期的卷;
+- 主服务器会认为以前存在的卷已经死了，并停止向它们分配写请求;
+- 在大约 10% 的 TTL 时间之后，或者最多 10 分钟，卷服务器将删除过期的卷;
+## 部署
+为了部署到生产环境，应考虑TTL卷的最大大小。如果写入频繁，则TTL卷将增长到最大卷大小。所以当磁盘空间不够大时，最好减小最大卷大小。建议不要在同一个集群中混合使用TTL卷和非TTL卷。这是因为卷最大大小（默认为 30GB）是在master上配置的。我们可以为每个TTL实现最大卷大小的配置。但是，它可能会变得相当冗长。 如果强烈需要，可能会在以后。
+# Failover Master Server
+一些用户会要求没有单点故障。尽管google多年来一直使用单个master运行其文件系统，但似乎没有SPOF成为架构师选择解决方案的标准。幸运的是，开启Seaweedfs的master故障恢复功能不是很复杂.
+## Cheat Sheet: Startup multiple servers
+```shell
+weed server -master.ip=localhost -master.port=9333 -dir=./1 -volume.port=8080 
+  -master.peers=localhost:9333,localhost:9334,localhost:9335;
+weed server -master.ip=localhost -master.port=9334 -dir=./2 -volume.port=8081 
+  -master.peers=localhost:9333,localhost:9334,localhost:9335;
+weed server -master.ip=localhost -master.port=9335 -dir=./3 -volume.port=8082
+  -master.peers=localhost:9333,localhost:9334,localhost:9335;
+```
+## 如何工作
+master由Raft协议协调，选举领导者。领导者接管所有工作以管理卷、分配文件ID。所有其他主服务器只是简单地将请求转发给领导者。如果领导者死亡，将选举另一个领导者。 所有的卷服务器都会将它们的心跳连同它们的卷信息一起发送给新的领导者。新领导人将承担全部责任。在过渡期间，可能会有新领导者拥有有关所有卷服务器的部分信息的时刻。 这只是意味着那些尚未心跳的卷服务器将暂时不可写。
+## starup multiple master servers
+指定peer时，peer由主机名或IP和端口标识。 主机名或IP应与启动master时“-ip”选项中的值一致。现在让我们按照通常的方式分别启动主服务器和卷服务器。通常您会启动几个（3 或 5 个）主服务器，然后启动卷服务器:
+```shell
+weed master -ip=localhost -port=9333 -mdir=./1 -peers=localhost:9333,localhost:9334,localhost:9335
+weed master -ip=localhost -port=9334 -mdir=./2 -peers=localhost:9333,localhost:9334,localhost:9335
+weed master -ip=localhost -port=9335 -mdir=./3 -peers=localhost:9333,localhost:9334,localhost:9335
+#now start the volume servers, specifying any one of the master server
+weed volume -dir=./1 -port=8080 -mserver=localhost:9333,localhost:9334,localhost:9335
+weed volume -dir=./2 -port=8081 -mserver=localhost:9333,localhost:9334,localhost:9335
+weed volume -dir=./3 -port=8082 -mserver=localhost:9333,localhost:9334,localhost:9335
 
+#The full list of masters is recommended, but not required.
+#You can only specify any master servers.
+weed volume -dir=./3 -port=8082 -mserver=localhost:9333
+weed volume -dir=./3 -port=8082 -mserver=localhost:9333,localhost:9334
+```
+这 6 个命令实际上与备忘单中的前 3 个命令的功能相同。卷服务器的最佳实践是包含尽可能多的主服务器。 因此，当其中一个主服务器发生故障时，卷服务器可以切换到另一台。
+# Erasure Coding for warm storage
 
 
