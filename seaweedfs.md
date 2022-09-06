@@ -37,6 +37,11 @@
   - [如何工作](#如何工作)
   - [starup multiple master servers](#starup-multiple-master-servers)
 - [Erasure Coding for warm storage](#erasure-coding-for-warm-storage)
+- [Filer](#filer)
+  - [Filer Setup](#filer-setup)
+  - [Directories and Files](#directories-and-files)
+    - [Introduction](#introduction)
+    - [architecture](#architecture)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -840,5 +845,62 @@ weed volume -dir=./3 -port=8082 -mserver=localhost:9333,localhost:9334
 ```
 这 6 个命令实际上与备忘单中的前 3 个命令的功能相同。卷服务器的最佳实践是包含尽可能多的主服务器。 因此，当其中一个主服务器发生故障时，卷服务器可以切换到另一台。
 # Erasure Coding for warm storage
+# Filer
+## Filer Setup
+请添加filer.toml文件到当前文件夹、${HOME}/.seaweedfs/或者/etc/seaweedfs/文件夹下。也可以通过命令生成这个文件
+```shell
+ weed scaffold -config=filer -output="."
+```
+如果只是想看看配置的内容，可以执行下面的命令:
+```shell
+ weed scaffold -config=filer
+```
+## Directories and Files
+### Introduction
+在谈到文件系统时，很多人会想到目录，列出目录下的文件等操作。如果我们可以通过FUSE将seaweedFS与linux或Hadoop等文件系统挂钩，就可以实现普通的文件系统操作。
+filer.toml最简单的内容是
+```toml
+[leveldb2]
+enabled = true
+dir = "."					# directory to store level db files
+```
+启动filer的2种方式:
+```shell
+#assuming you already started weed master and weed volume
+weed filer
 
+#Or assuming you have nothing started yet,
+#this command starts master server, volume server, and filer in one shot. 
+#It's strictly the same as starting them separately.
+weed server -filer=true
+```
+现在你可以添加/删除文件，甚至浏览目录与文件
+```shell
+#POST a file and read it back
+curl -F "filename=@README.md" "http://localhost:8888/path/to/sources/"
+curl "http://localhost:8888/path/to/sources/README.md"
 
+#POST a file with a new name and read it back
+curl -F "filename=@Makefile" "http://localhost:8888/path/to/sources/new_name"
+curl "http://localhost:8888/path/to/sources/new_name"
+
+#list sub folders and files, use browser to visit this url: "http://localhost:8888/path/to/"
+#To list the results in JSON:
+curl -H "Accept: application/json" "http://localhost:8888/path/to"
+#To list the results in pretty JSON
+curl -H "Accept: application/json" "http://localhost:8888/path/to?pretty=y"
+
+#The directory list limit is default to 100
+#if lots of files under this folder, here is a way to efficiently paginate through all of them
+http://localhost:8888/path/to/sources/?lastFileName=abc.txt&limit=50
+```
+### architecture
+Filer有一个连接到Master的持久客户端，以获取所有卷的位置更新。没有网络往返来查找卷ID位置。
+对于读文件来说:
+- Filer lookup metadata from Filer Store, which can be Cassandra/Mysql/Postgres/Redis/LevelDB/etcd/Sqlite;
+- Filer read from volume servers and pass along to the read request;
+![文件读](seaweed/FilerRead.png)
+对于写文件来说:
+- Client stream files to Filer
+- Filer uploads data to Weed Volume Servers, and break the large files into chunks.
+- Filer writes the metadata and chunk information into Filer store.
