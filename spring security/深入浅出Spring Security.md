@@ -5858,3 +5858,232 @@ class SpringBootWebSecurityConfiguration {
 	}
 }
 ```
+- `SecurityDataConfiguration`提供Security的SpEL支持
+```java
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(SecurityEvaluationContextExtension.class)
+public class SecurityDataConfiguration {
+
+	@Bean
+	@ConditionalOnMissingBean
+	public SecurityEvaluationContextExtension securityEvaluationContextExtension() {
+		return new SecurityEvaluationContextExtension();
+	}
+
+}
+```
+`WebSecurityEnablerConfiguration`是一个非常重要的类，这里添加了@EnableWebSecurity注解，这个注解又引入了关键的配置类`WebSecurityConfiguration`
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Documented
+@Import({ WebSecurityConfiguration.class, SpringWebMvcImportSelector.class, OAuth2ImportSelector.class,
+		HttpSecurityConfiguration.class })
+@EnableGlobalAuthentication
+@Configuration
+public @interface EnableWebSecurity {
+
+	/**
+	 * Controls debugging support for Spring Security. Default is false.
+	 * @return if true, enables debug support with Spring Security
+	 */
+	boolean debug() default false;
+
+}
+```
+- WebSecurityConfiguration用来配置WebSecurity
+- SpringWebMvcImportSelector，如果是Mvc环境，引入相关的配置;
+- OAuth2ImportSelector是否存在OAuth2，引入相关的配置;
+- `@EnableGlobalAuthentication`开启全局配置;
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+@Documented
+@Import(AuthenticationConfiguration.class)
+@Configuration
+public @interface EnableGlobalAuthentication {
+}
+```
+最重要的2个类: WebSecurityConfiguration与AuthenticationConfiguration;
+#### WebSecurityConfiguration
+它的主要的作用就是创建FilterChainProxy，先构建WebSecurity对象，再通过WebSecurity构建出FilterChainProxy。核心源码如下:
+```java
+@Configuration(proxyBeanMethods = false)
+public class WebSecurityConfiguration implements ImportAware, BeanClassLoaderAware {
+
+	private WebSecurity webSecurity;
+
+	private Boolean debugEnabled;
+
+	private List<SecurityConfigurer<Filter, WebSecurity>> webSecurityConfigurers;
+
+	private List<SecurityFilterChain> securityFilterChains = Collections.emptyList();
+
+	private List<WebSecurityCustomizer> webSecurityCustomizers = Collections.emptyList();
+
+	private ClassLoader beanClassLoader;
+
+	@Autowired(required = false)
+	private ObjectPostProcessor<Object> objectObjectPostProcessor;
+
+	@Bean
+	public static DelegatingApplicationListener delegatingApplicationListener() {
+		return new DelegatingApplicationListener();
+	}
+
+	@Bean
+	@DependsOn(AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME)
+	public SecurityExpressionHandler<FilterInvocation> webSecurityExpressionHandler() {
+		return this.webSecurity.getExpressionHandler();
+	}
+	/**
+	 * Creates the Spring Security Filter Chain
+	 * @return the {@link Filter} that represents the security filter chain
+	 * @throws Exception
+	 */
+	@Bean(name = AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME)
+	public Filter springSecurityFilterChain() throws Exception {
+		boolean hasConfigurers = this.webSecurityConfigurers != null && !this.webSecurityConfigurers.isEmpty();
+		boolean hasFilterChain = !this.securityFilterChains.isEmpty();
+		Assert.state(!(hasConfigurers && hasFilterChain),
+				"Found WebSecurityConfigurerAdapter as well as SecurityFilterChain. Please select just one.");
+		if (!hasConfigurers && !hasFilterChain) {
+			WebSecurityConfigurerAdapter adapter = this.objectObjectPostProcessor
+					.postProcess(new WebSecurityConfigurerAdapter() {
+					});
+			this.webSecurity.apply(adapter);
+		}
+		for (SecurityFilterChain securityFilterChain : this.securityFilterChains) {
+			this.webSecurity.addSecurityFilterChainBuilder(() -> securityFilterChain);
+			for (Filter filter : securityFilterChain.getFilters()) {
+				if (filter instanceof FilterSecurityInterceptor) {
+					this.webSecurity.securityInterceptor((FilterSecurityInterceptor) filter);
+					break;
+				}
+			}
+		}
+		for (WebSecurityCustomizer customizer : this.webSecurityCustomizers) {
+			customizer.customize(this.webSecurity);
+		}
+		return this.webSecurity.build();
+	}
+	/**
+	 * Creates the {@link WebInvocationPrivilegeEvaluator} that is necessary to evaluate
+	 * privileges for a given web URI
+	 * @return the {@link WebInvocationPrivilegeEvaluator}
+	 */
+	@Bean
+	@DependsOn(AbstractSecurityWebApplicationInitializer.DEFAULT_FILTER_NAME)
+	public WebInvocationPrivilegeEvaluator privilegeEvaluator() {
+		return this.webSecurity.getPrivilegeEvaluator();
+	}
+	/**
+	 * Sets the {@code <SecurityConfigurer<FilterChainProxy, WebSecurityBuilder>}
+	 * instances used to create the web configuration.
+	 * @param objectPostProcessor the {@link ObjectPostProcessor} used to create a
+	 * {@link WebSecurity} instance
+	 * @param beanFactory the bean factory to use to retrieve the relevant
+	 * {@code <SecurityConfigurer<FilterChainProxy, WebSecurityBuilder>} instances used to
+	 * create the web configuration
+	 * @throws Exception
+	 */
+	@Autowired(required = false)
+	public void setFilterChainProxySecurityConfigurer(ObjectPostProcessor<Object> objectPostProcessor,
+			ConfigurableListableBeanFactory beanFactory) throws Exception {
+		this.webSecurity = objectPostProcessor.postProcess(new WebSecurity(objectPostProcessor));
+		if (this.debugEnabled != null) {
+			this.webSecurity.debug(this.debugEnabled);
+		}
+		List<SecurityConfigurer<Filter, WebSecurity>> webSecurityConfigurers = new AutowiredWebSecurityConfigurersIgnoreParents(
+				beanFactory).getWebSecurityConfigurers();
+		webSecurityConfigurers.sort(AnnotationAwareOrderComparator.INSTANCE);
+		Integer previousOrder = null;
+		Object previousConfig = null;
+		for (SecurityConfigurer<Filter, WebSecurity> config : webSecurityConfigurers) {
+			Integer order = AnnotationAwareOrderComparator.lookupOrder(config);
+			if (previousOrder != null && previousOrder.equals(order)) {
+				throw new IllegalStateException("@Order on WebSecurityConfigurers must be unique. Order of " + order
+						+ " was already used on " + previousConfig + ", so it cannot be used on " + config + " too.");
+			}
+			previousOrder = order;
+			previousConfig = config;
+		}
+		for (SecurityConfigurer<Filter, WebSecurity> webSecurityConfigurer : webSecurityConfigurers) {
+			this.webSecurity.apply(webSecurityConfigurer);
+		}
+		this.webSecurityConfigurers = webSecurityConfigurers;
+	}
+	@Autowired(required = false)
+	void setFilterChains(List<SecurityFilterChain> securityFilterChains) {
+		this.securityFilterChains = securityFilterChains;
+	}
+	@Autowired(required = false)
+	void setWebSecurityCustomizers(List<WebSecurityCustomizer> webSecurityCustomizers) {
+		this.webSecurityCustomizers = webSecurityCustomizers;
+	}
+	@Bean
+	public static BeanFactoryPostProcessor conversionServicePostProcessor() {
+		return new RsaKeyConversionServicePostProcessor();
+	}
+	@Override
+	public void setImportMetadata(AnnotationMetadata importMetadata) {
+		Map<String, Object> enableWebSecurityAttrMap = importMetadata
+				.getAnnotationAttributes(EnableWebSecurity.class.getName());
+		AnnotationAttributes enableWebSecurityAttrs = AnnotationAttributes.fromMap(enableWebSecurityAttrMap);
+		this.debugEnabled = enableWebSecurityAttrs.getBoolean("debug");
+		if (this.webSecurity != null) {
+			this.webSecurity.debug(this.debugEnabled);
+		}
+	}
+	@Override
+	public void setBeanClassLoader(ClassLoader classLoader) {
+		this.beanClassLoader = classLoader;
+	}
+	/**
+	 * A custom version of the Spring provided AnnotationAwareOrderComparator that uses
+	 * {@link AnnotationUtils#findAnnotation(Class, Class)} to look on super class
+	 * instances for the {@link Order} annotation.
+	 *
+	 * @author Rob Winch
+	 * @since 3.2
+	 */
+	private static class AnnotationAwareOrderComparator extends OrderComparator {
+
+		private static final AnnotationAwareOrderComparator INSTANCE = new AnnotationAwareOrderComparator();
+
+		@Override
+		protected int getOrder(Object obj) {
+			return lookupOrder(obj);
+		}
+		private static int lookupOrder(Object obj) {
+			if (obj instanceof Ordered) {
+				return ((Ordered) obj).getOrder();
+			}
+			if (obj != null) {
+				Class<?> clazz = ((obj instanceof Class) ? (Class<?>) obj : obj.getClass());
+				Order order = AnnotationUtils.findAnnotation(clazz, Order.class);
+				if (order != null) {
+					return order.value();
+				}
+			}
+			return Ordered.LOWEST_PRECEDENCE;
+		}
+	}
+}
+```
+- 实现了ImportAware接口，与@Import注解一起使用，获取到导入地方的一些设置;
+- webSecurity是需要构建的对象;
+- webSecurityConfigurers保存了所有的配置类，一个SecurityConfigurer可以创建一个HttpSecurity，构建出一条过滤器链;
+- objectObjectPostProcessor是对象后置处理器，从spring容器中注入.
+- setFilterChainProxySecurityConfigurer用来构建一个WebSecurity对象，并加载所有的配置.使用`new AutowiredWebSecurityConfigurersIgnoreParents(beanFactory)`获取BeanFactory中的所有的WebConfigurer对象，获取方法如下:
+```java
+	public List<SecurityConfigurer<Filter, WebSecurity>> getWebSecurityConfigurers() {
+		List<SecurityConfigurer<Filter, WebSecurity>> webSecurityConfigurers = new ArrayList<>();
+		Map<String, WebSecurityConfigurer> beansOfType = this.beanFactory.getBeansOfType(WebSecurityConfigurer.class);
+		for (Entry<String, WebSecurityConfigurer> entry : beansOfType.entrySet()) {
+			webSecurityConfigurers.add(entry.getValue());
+		}
+		return webSecurityConfigurers;
+	}
+```
+可以看到是调用的BeanFactory的getBeansOfType方法，
