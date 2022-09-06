@@ -1,4 +1,31 @@
 [TOC]
+- [组件](#组件)
+  - [Master service](#master-service)
+  - [Volume service](#volume-service)
+  - [Filer service](#filer-service)
+  - [S3 service](#s3-service)
+  - [Volume](#volume)
+  - [Collection](#collection)
+- [Getting Started](#getting-started)
+  - [安装Seaweedfs](#安装seaweedfs)
+  - [以Docker的方式运行](#以docker的方式运行)
+- [Master Server API](#master-server-api)
+- [Volume Server API](#volume-server-api)
+- [Filer服务的API](#filer服务的api)
+- [客户端库](#客户端库)
+  - [GRPC APIs](#grpc-apis)
+  - [使用SeaweedFS的项目](#使用seaweedfs的项目)
+- [SeaweedFS Java Client](#seaweedfs-java-client)
+  - [创建jar包](#创建jar包)
+  - [读文件](#读文件)
+  - [写文件](#写文件)
+  - [观察文件变更](#观察文件变更)
+  - [标准文件操作](#标准文件操作)
+  - [高级用法](#高级用法)
+- [复制](#复制)
+  - [在特定的数据中心上分配File Key](#在特定的数据中心上分配file-key)
+  - [Write and Read](#write-and-read)
+- [Store file with Time To Live](#store-file-with-time-to-live)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -25,23 +52,26 @@ fs中的卷实际就是一个较大的文件，里面包含了很多的小文件
 ## 安装Seaweedfs
 下载github中release中的包
 解压出weed可执行程序。
-``` weed -h``` 查看可用的选项；
-``` weed master -h``` 查看master的可用的选项；
+- `weed -h` 查看可用的选项；
+- ` weed master -h`查看master的可用的选项；
+- 
 如果不需要复制机制，这也足够了，使用mdir选项配置生成的顺序文件ID保存的路径。
-```weed master -mdir="."```
-```weed master -mdir="." -ip=xxx.xxx.xxx.xxx``` 指定IP，默认是localhost
+- `weed master -mdir="."`
+- `weed master -mdir="." -ip=xxx.xxx.xxx.xxx` 指定IP，默认是localhost
+
 设置volume service
-```weed volume -h```
+- `weed volume -h`
 通常volume server分布在不同的机器上，你可以指定可用的disk space master服务的地址与存储的目录
-```weed volume -max=100 -mserver="localhost:9333" -dir="./data"```
-可以吧master与volume放在一个实例中启动
-```weed server -master.port=9333 -volume.port=8080 -dir="./data"```
-master与volume安装好了后，使用以下命令测试
-```weed upload -dir="/some/big/folder"```
-上面的命令会递归的上传所有的文件，你可以指定一些包含规则
-```weed upload -dir="/some/big/folder" -include=*.txt```
+- `weed volume -max=100 -mserver="localhost:9333" -dir="./data"`
+
+可以吧master与volume放在一个实例中启动`weed server -master.port=9333 -volume.port=8080 -dir="./data"`
+master与volume安装好了后，使用以下命令测试`weed upload -dir="/some/big/folder"`上面的命令会递归的上传所有的文件，你可以指定一些包含规则
+`weed upload -dir="/some/big/folder" -include=*.txt`
+
 ## 以Docker的方式运行
+
 # Master Server API
+
 所有的API都可以通过加上&pretty=y的参数来格式化json输出。
 - 分配一个文件key，
 ```shell
@@ -71,10 +101,10 @@ curl "http://localhost:9333/dir/lookup?volumeId=3&pretty=y"
     }
   ]v
 }
-# Other usages:
-# You can actually use the file id to lookup, if you are lazy to parse the file id.
+\# Other usages:
+\# You can actually use the file id to lookup, if you are lazy to parse the file id.
 curl "http://localhost:9333/dir/lookup?volumeId=3,01637037d6"
-# If you know the collection, specify it since it will be a little faster
+\# If you know the collection, specify it since it will be a little faster
 curl "http://localhost:9333/dir/lookup?volumeId=3&collection=turbo"
 ```
 可以使用的相关的参数
@@ -95,14 +125,14 @@ curl "http://localhost:9333/vol/vacuum?garbageThreshold=0.4"
 |garbageThreshold|minimum garbage ratio|0.3|
 - Pre-Allocate Volumes，一个卷的写入操作时串行的，如果你想要提高并发度，你可以预先分配大量的卷，下面是例子
 ```shell
-# specify a specific replication
+\# specify a specific replication
 curl "http://localhost:9333/vol/grow?replication=000&count=4"
 {"count":4}
-# specify a collection
+\# specify a collection
 curl "http://localhost:9333/vol/grow?collection=turbo&count=4"
-# specify data center
+\# specify data center
 curl "http://localhost:9333/vol/grow?dataCenter=dc1&count=4"
-# specify ttl
+\# specify ttl
 curl "http://localhost:9333/vol/grow?ttl=5d&count=4"
 ```
 |Parameter|Description|Default|
@@ -222,17 +252,22 @@ curl "http://localhost:9333/dir/status?pretty=y"
 }
 ```
 # Volume Server API
+
 你可以在所有的http的api后面追加&pretty=y来格式化json的输出。
 - 读卷
+
 GET或者HEAD+文件ID可以用来读卷的内容
-```shell
-curl http://127.0.0.1:8080/3,01637037d6
+```bash
+curl 'http://127.0.0.1:8080/3,01637037d6'
 ```
-|URL参数｜描述｜默认值
+
+
+|URL参数|描述|默认值
 |:---|:---|:---|
 |readDeleted|如果是true，就是读一个删除的文件，如果卷服务器重启了或者被压缩了，则读取不到|false|
 |width|如果存储的文件是图片类的会设置它的宽度|empty|
 |height|如果存储的文件是图片类的会设置它的高度|empty|
+
 
  请求头的设置
  |头|描述|默认值|
@@ -245,6 +280,7 @@ curl http://127.0.0.1:8080/3,01637037d6
  - 卷的写入
  ```shell
  curl -F file=@/home/chris/myphoto.jpg http://127.0.0.1:8080/3,01637037d6
+
 {"size": 43234}
  ```
  返回的size是seaweedFS上的大小，有时候文件会被gzip压缩存储.
@@ -265,7 +301,9 @@ curl http://127.0.0.1:8080/3,01637037d6
  |Seaweed-xxxx|key-value对，自定义的|empty|
  - 直接上传文件
  ```shell
+
  curl -F file=@/home/chris/myphoto.jpg http://localhost:9333/submit
+
 {"fid":"3,01fbe0dc6f1f38","fileName":"myphoto.jpg","fileUrl":"localhost:8080/3,01fbe0dc6f1f38","size":68231}
  ```
  这是一个快捷的api，master server会生成一个file id，并根据id存储文件到一个合适的volume服务器上。
@@ -357,10 +395,12 @@ curl http://127.0.0.1:8080/3,01637037d6
 }
 
  ```
- # Filer服务的API
+
+# Filer服务的API
+
  - POST/PUT/GET 文件
- ```shell
- # Basic Usage:
+ ```bash
+ \# Basic Usage:
 	//create or overwrite the file, the directories /path/to will be automatically created
 	POST /path/to/file
 	PUT /path/to/file
@@ -374,7 +414,7 @@ curl http://127.0.0.1:8080/3,01637037d6
 	//return a json format subdirectory and files listing
 	GET /path/to/
         Accept: application/json
-# options for POST a file:
+\# options for POST a file:
 	// set file TTL
 	POST /path/to/file?ttl=1d
 	// set file mode when creating or overwriting a file
@@ -392,26 +432,28 @@ curl http://127.0.0.1:8080/3,01637037d6
  |op|文件操作，支持append|empty|
  |header: Content-Type|用来自动压缩|empty|
  |header: Seaweed-xxxxx|自定义的header|empty|
- 注意的点：
-      - 当向Filer写文件时，建议要有重试的策略；
-      - PUT不支持自动分块，如果超过256MB，只有前面的256MB会被存储;
-      - 当向文件追加时，每一次的追加都会创建一个文件块，并加到文件的元数据中，如果有太多的小的追加，就会有很多小的块。
-      ```shell
-      # Basic Usage:
-> curl -F file=@report.js "http://localhost:8888/javascript/"
+
+注意的点:
+  - 当向Filer写文件时，建议要有重试的策略；
+  - PUT不支持自动分块，如果超过256MB，只有前面的256MB会被存储;
+  - 当向文件追加时，每一次的追加都会创建一个文件块，并加到文件的元数据中，如果有太多的小的追加，就会有很多小的块。
+```shell
+\# Basic Usage:
+curl -F file=@report.js "http://localhost:8888/javascript/"
 {"name":"report.js","size":866,"fid":"7,0254f1f3fd","url":"http://localhost:8081/7,0254f1f3fd"}
-> curl  "http://localhost:8888/javascript/report.js"   # get the file content
-> curl -I "http://localhost:8888/javascript/report.js" # get only header
+curl  "http://localhost:8888/javascript/report.js"   \# get the file content
+curl -I "http://localhost:8888/javascript/report.js" 
+\# get only header
 ...
-> curl -F file=@report.js "http://localhost:8888/javascript/new_name.js"    # upload the file to a different name
+curl -F file=@report.js "http://localhost:8888/javascript/new_name.js"    \# upload the file to a different name
 {"name":"report.js","size":5514}
-> curl -T test.yaml http://localhost:8888/test.yaml                         # upload file by PUT
+curl -T test.yaml http://localhost:8888/test.yaml                         \# upload file by PUT
 {"name":"test.yaml","size":866}
-> curl -F file=@report.js "http://localhost:8888/javascript/new_name.js?op=append"    # append to an file
+curl -F file=@report.js "http://localhost:8888/javascript/new_name.js?op=append"    \# append to an file
 {"name":"report.js","size":5514}
-> curl -T test.yaml http://localhost:8888/test.yaml?op=append                         # append to an file by PUT
+curl -T test.yaml http://localhost:8888/test.yaml?op=append                         \# append to an file by PUT
 {"name":"test.yaml","size":866}
-> curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y"            # list all files under /javascript/
+curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y"            \# list all files under /javascript/
 curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y"
 {
   "Path": "/javascript",
@@ -470,34 +512,41 @@ curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y"
   "ShouldDisplayLoadMore": false
 }
 ```
-- 更新于删除文件的tag
+
+- 更新与删除文件的tag
+
 ```shell
-# put 2 pairs of meta data
+\# put 2 pairs of meta data
 curl -X PUT -H "Seaweed-Name1: value1" -H "Seaweed-some: some string value" http://localhost:8888/path/to/a/file?tagging
-# read the meta data from HEAD request
+\# read the meta data from HEAD request
 curl -I "http://localhost:8888/path/to/a/file"
 ...
 Seaweed-Name1: value1
 Seaweed-Some: some string value
 ...
-# delete all "Seaweed-" prefixed meta data
+\# delete all "Seaweed-" prefixed meta data
 curl -X DELETE http://localhost:8888/path/to/a/file?tagging
-# delete specific "Seaweed-" prefixed meta data
+\# delete specific "Seaweed-" prefixed meta data
 curl -X DELETE http://localhost:8888/path/to/a/file?tagging=Name1,Some
 ```
+
+
 |Method|Request|Header|Operation|
 |:---|:---|:---|:---|
-|PUT|\<file_url>?tagging|Seaweed前缀的header|设置元数据|
-|DELETE|\<file_url>?tagging||remove all the "Seaweed-" prefixed header|
+|PUT|\<file_url\>?tagging|Seaweed前缀的header|设置元数据|
+|DELETE|\<file_url\>?tagging||remove all the "Seaweed-" prefixed header|
 |DELETE|\<file_url>?tagging=Some,Name||remove the headers "Seaweed-Some", "Seaweed-Name"|
+
 - 创建一个空的文件夹
 上传文件时，文件夹是自动创建的，创建一个空的文件夹的方式
 ```shell
 curl -X POST "http://localhost:8888/test/"
 ```
 - 列出一个目录下的所有的文件
+
 有的文件夹可能是非常大的，为了有效的列出文件，我们使用了非传统的方式迭代文件，每次分页都可以提供额外的2个参数
 lastFileName或者limit=x，filer会在log(n)的时间内定位到lastFileName的文件位置，返回接下来的x个文件
+
 ```shell
 curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y&lastFileName=jquery-2.1.3.min.js&limit=2"
 {
@@ -526,12 +575,16 @@ curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y&l
   "ShouldDisplayLoadMore": false
 }
 ```
+
 |Parameter|描述|默认值|
+|:---|:---|:---|
 |limit|显示|100|
 |lastFileName|上一批的最后一个文件的文件名|empty|
 |namePattern|筛选文件名,大小写敏感，可以使用通配符*与?|empty|
 |namePatternExclude|namePattern的反|empty|
+
 - 支持的文件模式
+
 大小写敏感
 |Pattern|匹配|
 |:---|:---|
@@ -539,6 +592,7 @@ curl -H "Accept: application/json" "http://localhost:8888/javascript/?pretty=y&l
 |*.jpg|abc.jpg|
 |a*.jp*g|abc.jpg, abc.jpeg|
 |a*.jp?g|abc.jpeg|
+
 - 删除
    - 删除文件
    ```shell
@@ -675,7 +729,7 @@ maven的形式如下：
 SeaweedFS可以支持复制，复制是基于volume实现不是文件级别.
 基本的用法如下:
 - 启动weed master，可选的指定复制类型
->#001 means for each file a replica will be created in the same rack
+> #001 means for each file a replica will be created in the same rack
 >./weed master -defaultReplication=001
 - 启动volume
 >./weed volume -port=8081 -dir=/tmp/1 -max=100 -mserver="master_address:9333" -dataCenter=dc1 -rack=rack1
@@ -702,7 +756,9 @@ SeaweedFS可以支持复制，复制是基于volume实现不是文件级别.
 x\y\x可以是0，1，2；所以存在9种可能的类型，非常方便扩展，每一种复制类型将会创建x+y+z+1份volume的拷贝.
 ## 在特定的数据中心上分配File Key
 现在当请求一个文件key的时候，dataCenter参数可以限制分配的volume是特定的data center的，如下:
-> http://localhost:9333/dir/assign?dataCenter=dc1
+```shell
+curl http://localhost:9333/dir/assign?dataCenter=dc1
+```
 
 ## Write and Read
 对于读写操作的一致性来说，W=N，R=1，也就是写入操作必须保证N个副本都写入成功，如果一个副本写入操作失败，那么整个写入失败，这使得读比较快速方便，因为读任意一个副本就可以，不需要比较数据是否一致，对于写入失败的操作，有些节点可能写入成功了，那么这些节点的内容应该删掉，因为volume是追加方式写入的，所以物理volume的大小可能优点违反直觉.当一个客户端请求写入时，流程如下:
@@ -713,6 +769,7 @@ x\y\x可以是0，1，2；所以存在9种可能的类型，非常方便扩展�
 - 如果一切都OK，那么客户端得到OK相应;
 如果写入是对filer的，在步骤1之前还有一个步骤，filer在步骤1～5就是客户端的角色.如果一个副本丢失了，不会马上自动修复，如果缺少一个副本，则不会立即进行自动修复。 这是为了防止由于临时卷服务器故障或断开连接而导致过度复制。 相反，该卷将变为只读。 对于任何新的写入，只需将不同的文件 ID 分配给不同的卷。要修复丢失的副本，您可以在杂草外壳中使用 volume.fix.replication。
 在weed shell中，你可以改变volume的复制相关的设置，通过`volume.configure.replication`配置。
+
 # Store file with Time To Live
 
 
