@@ -42,6 +42,9 @@
   - [Directories and Files](#directories-and-files)
     - [Introduction](#introduction)
     - [architecture](#architecture)
+    - [Filer Store](#filer-store)
+- [Filer Stores](#filer-stores)
+  - [Filer Cassandra Setup](#filer-cassandra-setup)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -904,3 +907,18 @@ Filer有一个连接到Master的持久客户端，以获取所有卷的位置更
 - Client stream files to Filer
 - Filer uploads data to Weed Volume Servers, and break the large files into chunks.
 - Filer writes the metadata and chunk information into Filer store.
+### Filer Store
+1. 时间复杂度分析
+- 检索文件，使用LSM或者B树是$O(log_2N)$，N是所有的文件的数量，对于redis是$O(1)$
+- list目录内容，$O(1)时间复杂度;
+- 添加文件，上级目录会被递归创建，然后创建文件本身;
+- 文件改名是$O(1)$，不会变更文件内容，只会改变文件元数据;
+- 目录改名，$O(N)$，N是目录下面的文件与子目录的总数
+2. 用例
+使用HTTP方式，weed filer可以再多台机器上启动，每个机器上可以是不同的collection，不同的命名空间，共享同样的底层blob存储。
+3. Filer负载
+- 当直接使用Filer的简单形式时，Filer除了要处理文件元数据外还要传输文件内容，所以最好添加filer集群，当使用了weed mount模式时，filer只提供文件元数据检索，实际文件内容在weed mount和weed volume服务器之间直接读写。所以filer没有那么多负载。
+# Filer Stores
+The Filer Store persists all file metadata and directory information.
+## Filer Cassandra Setup
+
