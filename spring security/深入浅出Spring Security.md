@@ -6086,4 +6086,7 @@ public class WebSecurityConfiguration implements ImportAware, BeanClassLoaderAwa
 		return webSecurityConfigurers;
 	}
 ```
-可以看到是调用的BeanFactory的getBeansOfType方法，
+可以看到是调用的BeanFactory的getBeansOfType方法，可以可能包含用户自定义的配置类或者缺省的配置类，得到后返回，可以看到这个方法中创建了一个WebSecurity对象并注入到容器中，这个方法主要用来初始化WebSecurity对象;
+- springSecurityFilterChain()方法直接调用webSecurity.build()构建Filter
+#### AuthenticationConfiguration
+
