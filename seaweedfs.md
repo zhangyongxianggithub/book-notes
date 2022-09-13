@@ -1,4 +1,5 @@
 [TOC]
+- [- Filer Cassandra Setup](#--filer-cassandra-setup)
 - [组件](#组件)
   - [Master service](#master-service)
   - [Volume service](#volume-service)
@@ -44,7 +45,13 @@
     - [architecture](#architecture)
     - [Filer Store](#filer-store)
 - [Filer Stores](#filer-stores)
+<<<<<<< HEAD
+    - [Filer Store](#filer-store)
+- [Filer Stores](#filer-stores)
   - [Filer Cassandra Setup](#filer-cassandra-setup)
+=======
+- [Filer Stores](#filer-stores)
+>>>>>>> e9c0184 (update)
 ![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
 让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
@@ -919,6 +926,5 @@ Filer有一个连接到Master的持久客户端，以获取所有卷的位置更
 3. Filer负载
 - 当直接使用Filer的简单形式时，Filer除了要处理文件元数据外还要传输文件内容，所以最好添加filer集群，当使用了weed mount模式时，filer只提供文件元数据检索，实际文件内容在weed mount和weed volume服务器之间直接读写。所以filer没有那么多负载。
 # Filer Stores
-The Filer Store persists all file metadata and directory information.
-## Filer Cassandra Setup
+Filer Store存储文件元数据与目录信息
 
