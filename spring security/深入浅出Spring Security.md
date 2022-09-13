@@ -6089,4 +6089,299 @@ public class WebSecurityConfiguration implements ImportAware, BeanClassLoaderAwa
 可以看到是调用的BeanFactory的getBeansOfType方法，可以可能包含用户自定义的配置类或者缺省的配置类，得到后返回，可以看到这个方法中创建了一个WebSecurity对象并注入到容器中，这个方法主要用来初始化WebSecurity对象;
 - springSecurityFilterChain()方法直接调用webSecurity.build()构建Filter
 #### AuthenticationConfiguration
+做全局配置
+```java
+@Configuration(proxyBeanMethods = false)
+@Import(ObjectPostProcessorConfiguration.class)
+public class AuthenticationConfiguration {
+```
+从而导入`ObjectPostProcessorConfiguration`类，源码如下:
+```java
+@Configuration(proxyBeanMethods = false)
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+public class ObjectPostProcessorConfiguration {
+	@Bean
+	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+	public ObjectPostProcessor<Object> objectPostProcessor(AutowireCapableBeanFactory beanFactory) {
+		return new AutowireBeanFactoryObjectPostProcessor(beanFactory);
+	}
+}
+```
+提供容器注入的后处理器，`AuthenticationConfiguration`的完整源代码如下:
+```java
+@Configuration(proxyBeanMethods = false)
+@Import(ObjectPostProcessorConfiguration.class)
+public class AuthenticationConfiguration {
 
+	private AtomicBoolean buildingAuthenticationManager = new AtomicBoolean();
+
+	private ApplicationContext applicationContext;
+
+	private AuthenticationManager authenticationManager;
+
+	private boolean authenticationManagerInitialized;
+
+	private List<GlobalAuthenticationConfigurerAdapter> globalAuthConfigurers = Collections.emptyList();
+
+	private ObjectPostProcessor<Object> objectPostProcessor;
+
+	@Bean
+	public AuthenticationManagerBuilder authenticationManagerBuilder(ObjectPostProcessor<Object> objectPostProcessor,
+			ApplicationContext context) {
+		LazyPasswordEncoder defaultPasswordEncoder = new LazyPasswordEncoder(context);
+		AuthenticationEventPublisher authenticationEventPublisher = getBeanOrNull(context,
+				AuthenticationEventPublisher.class);
+		DefaultPasswordEncoderAuthenticationManagerBuilder result = new DefaultPasswordEncoderAuthenticationManagerBuilder(
+				objectPostProcessor, defaultPasswordEncoder);
+		if (authenticationEventPublisher != null) {
+			result.authenticationEventPublisher(authenticationEventPublisher);
+		}
+		return result;
+	}
+
+	@Bean
+	public static GlobalAuthenticationConfigurerAdapter enableGlobalAuthenticationAutowiredConfigurer(
+			ApplicationContext context) {
+		return new EnableGlobalAuthenticationAutowiredConfigurer(context);
+	}
+
+	@Bean
+	public static InitializeUserDetailsBeanManagerConfigurer initializeUserDetailsBeanManagerConfigurer(
+			ApplicationContext context) {
+		return new InitializeUserDetailsBeanManagerConfigurer(context);
+	}
+
+	@Bean
+	public static InitializeAuthenticationProviderBeanManagerConfigurer initializeAuthenticationProviderBeanManagerConfigurer(
+			ApplicationContext context) {
+		return new InitializeAuthenticationProviderBeanManagerConfigurer(context);
+	}
+
+	public AuthenticationManager getAuthenticationManager() throws Exception {
+		if (this.authenticationManagerInitialized) {
+			return this.authenticationManager;
+		}
+		AuthenticationManagerBuilder authBuilder = this.applicationContext.getBean(AuthenticationManagerBuilder.class);
+		if (this.buildingAuthenticationManager.getAndSet(true)) {
+			return new AuthenticationManagerDelegator(authBuilder);
+		}
+		for (GlobalAuthenticationConfigurerAdapter config : this.globalAuthConfigurers) {
+			authBuilder.apply(config);
+		}
+		this.authenticationManager = authBuilder.build();
+		if (this.authenticationManager == null) {
+			this.authenticationManager = getAuthenticationManagerBean();
+		}
+		this.authenticationManagerInitialized = true;
+		return this.authenticationManager;
+	}
+
+	@Autowired(required = false)
+	public void setGlobalAuthenticationConfigurers(List<GlobalAuthenticationConfigurerAdapter> configurers) {
+		configurers.sort(AnnotationAwareOrderComparator.INSTANCE);
+		this.globalAuthConfigurers = configurers;
+	}
+
+	@Autowired
+	public void setApplicationContext(ApplicationContext applicationContext) {
+		this.applicationContext = applicationContext;
+	}
+
+	@Autowired
+	public void setObjectPostProcessor(ObjectPostProcessor<Object> objectPostProcessor) {
+		this.objectPostProcessor = objectPostProcessor;
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T lazyBean(Class<T> interfaceName) {
+		LazyInitTargetSource lazyTargetSource = new LazyInitTargetSource();
+		String[] beanNamesForType = BeanFactoryUtils.beanNamesForTypeIncludingAncestors(this.applicationContext,
+				interfaceName);
+		if (beanNamesForType.length == 0) {
+			return null;
+		}
+		String beanName = getBeanName(interfaceName, beanNamesForType);
+		lazyTargetSource.setTargetBeanName(beanName);
+		lazyTargetSource.setBeanFactory(this.applicationContext);
+		ProxyFactoryBean proxyFactory = new ProxyFactoryBean();
+		proxyFactory = this.objectPostProcessor.postProcess(proxyFactory);
+		proxyFactory.setTargetSource(lazyTargetSource);
+		return (T) proxyFactory.getObject();
+	}
+
+	private <T> String getBeanName(Class<T> interfaceName, String[] beanNamesForType) {
+		if (beanNamesForType.length == 1) {
+			return beanNamesForType[0];
+		}
+		List<String> primaryBeanNames = getPrimaryBeanNames(beanNamesForType);
+		Assert.isTrue(primaryBeanNames.size() != 0, () -> "Found " + beanNamesForType.length + " beans for type "
+				+ interfaceName + ", but none marked as primary");
+		Assert.isTrue(primaryBeanNames.size() == 1,
+				() -> "Found " + primaryBeanNames.size() + " beans for type " + interfaceName + " marked as primary");
+		return primaryBeanNames.get(0);
+	}
+
+	private List<String> getPrimaryBeanNames(String[] beanNamesForType) {
+		List<String> list = new ArrayList<>();
+		if (!(this.applicationContext instanceof ConfigurableApplicationContext)) {
+			return Collections.emptyList();
+		}
+		for (String beanName : beanNamesForType) {
+			if (((ConfigurableApplicationContext) this.applicationContext).getBeanFactory().getBeanDefinition(beanName)
+					.isPrimary()) {
+				list.add(beanName);
+			}
+		}
+		return list;
+	}
+
+	private AuthenticationManager getAuthenticationManagerBean() {
+		return lazyBean(AuthenticationManager.class);
+	}
+
+	private static <T> T getBeanOrNull(ApplicationContext applicationContext, Class<T> type) {
+		try {
+			return applicationContext.getBean(type);
+		}
+		catch (NoSuchBeanDefinitionException notFound) {
+			return null;
+		}
+	}
+
+	private static class EnableGlobalAuthenticationAutowiredConfigurer extends GlobalAuthenticationConfigurerAdapter {
+
+		private final ApplicationContext context;
+
+		private static final Log logger = LogFactory.getLog(EnableGlobalAuthenticationAutowiredConfigurer.class);
+
+		EnableGlobalAuthenticationAutowiredConfigurer(ApplicationContext context) {
+			this.context = context;
+		}
+
+		@Override
+		public void init(AuthenticationManagerBuilder auth) {
+			Map<String, Object> beansWithAnnotation = this.context
+					.getBeansWithAnnotation(EnableGlobalAuthentication.class);
+			if (logger.isTraceEnabled()) {
+				logger.trace(LogMessage.format("Eagerly initializing %s", beansWithAnnotation));
+			}
+		}
+
+	}
+
+	/**
+	 * Prevents infinite recursion in the event that initializing the
+	 * AuthenticationManager.
+	 *
+	 * @author Rob Winch
+	 * @since 4.1.1
+	 */
+	static final class AuthenticationManagerDelegator implements AuthenticationManager {
+
+		private AuthenticationManagerBuilder delegateBuilder;
+
+		private AuthenticationManager delegate;
+
+		private final Object delegateMonitor = new Object();
+
+		AuthenticationManagerDelegator(AuthenticationManagerBuilder delegateBuilder) {
+			Assert.notNull(delegateBuilder, "delegateBuilder cannot be null");
+			this.delegateBuilder = delegateBuilder;
+		}
+
+		@Override
+		public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+			if (this.delegate != null) {
+				return this.delegate.authenticate(authentication);
+			}
+			synchronized (this.delegateMonitor) {
+				if (this.delegate == null) {
+					this.delegate = this.delegateBuilder.getObject();
+					this.delegateBuilder = null;
+				}
+			}
+			return this.delegate.authenticate(authentication);
+		}
+
+		@Override
+		public String toString() {
+			return "AuthenticationManagerDelegator [delegate=" + this.delegate + "]";
+		}
+
+	}
+
+	static class DefaultPasswordEncoderAuthenticationManagerBuilder extends AuthenticationManagerBuilder {
+
+		private PasswordEncoder defaultPasswordEncoder;
+
+		/**
+		 * Creates a new instance
+		 * @param objectPostProcessor the {@link ObjectPostProcessor} instance to use.
+		 */
+		DefaultPasswordEncoderAuthenticationManagerBuilder(ObjectPostProcessor<Object> objectPostProcessor,
+				PasswordEncoder defaultPasswordEncoder) {
+			super(objectPostProcessor);
+			this.defaultPasswordEncoder = defaultPasswordEncoder;
+		}
+
+		@Override
+		public InMemoryUserDetailsManagerConfigurer<AuthenticationManagerBuilder> inMemoryAuthentication()
+				throws Exception {
+			return super.inMemoryAuthentication().passwordEncoder(this.defaultPasswordEncoder);
+		}
+
+		@Override
+		public JdbcUserDetailsManagerConfigurer<AuthenticationManagerBuilder> jdbcAuthentication() throws Exception {
+			return super.jdbcAuthentication().passwordEncoder(this.defaultPasswordEncoder);
+		}
+
+		@Override
+		public <T extends UserDetailsService> DaoAuthenticationConfigurer<AuthenticationManagerBuilder, T> userDetailsService(
+				T userDetailsService) throws Exception {
+			return super.userDetailsService(userDetailsService).passwordEncoder(this.defaultPasswordEncoder);
+		}
+
+	}
+	static class LazyPasswordEncoder implements PasswordEncoder {
+		private ApplicationContext applicationContext;
+
+		private PasswordEncoder passwordEncoder;
+
+		LazyPasswordEncoder(ApplicationContext applicationContext) {
+			this.applicationContext = applicationContext;
+		}
+		@Override
+		public String encode(CharSequence rawPassword) {
+			return getPasswordEncoder().encode(rawPassword);
+		}
+		@Override
+		public boolean matches(CharSequence rawPassword, String encodedPassword) {
+			return getPasswordEncoder().matches(rawPassword, encodedPassword);
+		}
+		@Override
+		public boolean upgradeEncoding(String encodedPassword) {
+			return getPasswordEncoder().upgradeEncoding(encodedPassword);
+		}
+		private PasswordEncoder getPasswordEncoder() {
+			if (this.passwordEncoder != null) {
+				return this.passwordEncoder;
+			}
+			PasswordEncoder passwordEncoder = getBeanOrNull(this.applicationContext, PasswordEncoder.class);
+			if (passwordEncoder == null) {
+				passwordEncoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
+			}
+			this.passwordEncoder = passwordEncoder;
+			return passwordEncoder;
+		}
+		@Override
+		public String toString() {
+			return getPasswordEncoder().toString();
+		}
+	}
+}
+```
+- `authenticationManagerBuilder`构建全局的AuthenticationManager对象;
+## ObjectPostProcessor使用
+## 多种用户定义方式
+## 定义多个过滤器链
+## 静态资源过滤
