@@ -2347,18 +2347,18 @@ public class MyUserDetailsService implements UserDetailsService {
 # 第3章 认证流程分析
 ## 登录流程分析
 登录认证流程最重要的4个类:
-- AuthenticationManager
-- ProviderManager;
-- AuthenticationProvider;
-- AbstractAuthenticationProcessingFilter
+- `AuthenticationManager`;
+- `ProviderManager`;
+- `AuthenticationProvider`;
+- `AbstractAuthenticationProcessingFilter`.
 ### AuthenticationManager
-定义了如何执行认证操作，认证成功后，会返回一个Authentication对象，然后会设置到SecurityContextHolder中；
+定义了如何执行认证操作，认证成功后，会返回一个`Authentication`对象，然后会设置到`SecurityContextHolder`中；
 ### AuthenticationProvider
 不同的身份类型执行具体的认证，这个接口有2个方法:
-- authenticate方法用来执行具体的身份认证;
-- supports用来判断当前的Provider是否支持对应的身份类型;
+- `authenticate()`方法用来执行具体的身份认证;
+- `supports()`用来判断当前的Provider是否支持对应的身份类型;
   
-当使用用户名/密码的登录方式时，AuthenticationProvider的实现是DaoAuthenticationProvider，它继承于`AbstractUserDetailsAuthenticationProvider`，先看一下核心源码:
+当使用用户名/密码的登录方式时，`AuthenticationProvider`的实现是`DaoAuthenticationProvider`，它继承于`AbstractUserDetailsAuthenticationProvider`，先看一下核心源码:
 ```java
 public abstract class AbstractUserDetailsAuthenticationProvider
 		implements AuthenticationProvider, InitializingBean, MessageSourceAware {
@@ -2792,7 +2792,7 @@ public class DaoAuthenticationProvider extends AbstractUserDetailsAuthentication
 - `createSuccessAuthentication`则是登录成功后，创建新的Token，同时判断是否需要密码升级;
 
 ### ProviderManager
-是AuthenticationManager的实现类，一个完整的认证流程可能由多个AuthenticationProvider提供，ProviderManager可以配置parent的ProviderManager，自己认证失败后，可以向parent继续认证，ProviderManager可以有多个，并且可以共用同一个parent，存在多个过滤器链的时候很有用;重点看下ProviderManager的authenticate方法:
+是`AuthenticationManager`的实现类，一个完整的认证流程可能由多个`AuthenticationProvider`提供，`ProviderManager`可以配置parent对象，也是`ProviderManager`类型，自己认证失败后，可以向parent继续认证，`ProviderManager`可以有多个，并且可以共用同一个parent，存在多个过滤器链的时候很有用，重点看下`ProviderManager`的authenticate方法:
 ```java
 @Override
 	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -3248,7 +3248,7 @@ public abstract class AbstractAuthenticationProcessingFilter extends GenericFilt
 
 }
 ```
-- 首先requiresAuthentication判断是否是登录认证请求，不是的话走剩余的过滤器链;
+- 首先`requiresAuthentication`判断是否是登录认证请求，不是的话走剩余的过滤器链;
 - 调用抽象方法`attemptAuthentication`获得认证后的对象;
 - 认证成功后，通过`this.sessionStrategy.onAuthentication(authenticationResult, request, response);`方法来处理session并发问题;
 - `continueChainBeforeSuccessfulAuthentication`变量用来判断请求是否还需要剩余的过滤器处理，通常是false;
@@ -6385,3 +6385,60 @@ public class AuthenticationConfiguration {
 ## 多种用户定义方式
 ## 定义多个过滤器链
 ## 静态资源过滤
+# RememberMe
+## RememberMe简介
+RememberMe就是保存登录状态，下次打开时不用再次登录，一般是通过cookie的方式实现，有固定的过期时间。
+## 基本用法
+```java
+    @Override
+    protected void configure(final AuthenticationManagerBuilder auth)
+            throws Exception {
+        auth.inMemoryAuthentication().withUser("zyx").password("{noop}123")
+                .roles("admin");
+    }
+```
+```bash
+curl 'http://localhost:8080/login' \
+  -H 'Origin: http://localhost:8080' \
+  --data-raw 'username=zyx&password=123&remember-me=on' \
+  --compressed
+HTTP/1.1 302 Found
+Expires: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+Set-Cookie: JSESSIONID=c8CCxsNQevy0IM7lBWgh5mJfgQcEug6YL6w3zBlI; path=/
+Set-Cookie: remember-me=enl4OjE2NjQ4MDc4NDY3MzE6MjRmMTBkMWNmN2JjMThkZjExNmFhNmYyOTJjNDU5YjU; path=/; HttpOnly; Max-Age=1209600; Expires=Mon, 03-Oct-2022 14:37:26 GMT
+X-XSS-Protection: 1; mode=block
+Pragma: no-cache
+X-Frame-Options: DENY
+Location: http://localhost:8080/hello
+Date: Mon, 19 Sep 2022 14:37:26 GMT
+Connection: keep-alive
+X-Content-Type-Options: nosniff
+Content-Length: 0
+```
+可以看到提交表单时又个remember-me的额外参数，返回的响应多了一个remember-me的cookie。安全风险大。
+## 持久化令牌
+简单思路就是每次登录时生成remember的series与token，但是有人新登录，旧的remember-me就失效了，此时就账户泄漏，可以清除remember-me令牌或者通知用户泄漏。token有2种存储方式:
+- `JdbcTokenRepositoryImpl`
+- `InMemoryTokenRepositoryImpl`
+经常使用的是`JdbcTokenRepositoryImpl`,创建存储的表如下:
+```sql
+CREATE TABLE `persistent_logins` (
+  `username` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `series` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `last_used` timestamp NOT NULL,
+  PRIMARY KEY (`series`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+配置的形式如下:
+```java
+    @Override
+    protected void configure(final HttpSecurity http) throws Exception {
+        http.authorizeRequests().anyRequest().authenticated().and().formLogin()
+                .and().rememberMe().tokenRepository(jdbcTokenRepository).and()
+                .csrf().disable();
+    }
+```
+## 二次校验
+
