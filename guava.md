@@ -565,4 +565,59 @@ Table<String, Character, Integer> table = Tables.newCustomTable(
 2. transpose
 `transpose(Table<R, C, V>)`方法可以让你将`Table<R,C,V>`视为`Table<C,R,V>`
 3. wrappers
+# Service
+Guava的Service接口表示一个带有可操作状态与启动/停止方法的对象，比如: web服务器，RPC服务器，Timer等，像这样需要适当的启动和关闭管理的服务，状态管理是非常重要的，尤其是在涉及多个线程或调度的情况下。Guava提供了一些框架来为您管理状态逻辑和线程同步的细节。
+## Using a Service
+一个`Service`的正常的生命周期顺序是:
+- Service.State.NEW;
+- Service.State.STARTING;
+- Service.State.RUNNING;
+- Service.State.STOPPING;
+- Service.State.TERMINATING;
+一个停止的`Service`不能被重启，如果`Service`在启动、运行或者停止中失败，将会进入到`Service.State.FAILED`状态，如果服务是NEW，则可以使用`startAsync()`异步启动服务。因此，您应该构建您的应用程序，使其具有启动每个服务的唯一位置。停止`Service`的操作也是类似的，使用异步的`stopAsync()`方法，但是与`startAsync()`不同，多次调用停止方法是可以的。这是为了能够处理关闭服务时可能发生的竞争。`Service`还提供了几种方法来等待服务转换完成。
+- 使用`addListener()`的异步的方式，addListener()允许您添加将在`Service`的每个状态转换时调用的`Service.Listener`，注意: 如果在添加`Listener`时服务不是NEW，则任何已经发生的状态转换都不会在`Listener`上重播。
+- 使用`awaitRunning()`的同步的方式，这是不可中断的，不会引发检查异常，并在`Service`完成启动后返回，如果服务启动失败，则抛出`IllegalStateException`异常，同样的，`awaitTerminated()`等待服务达到终止状态（TERMINATED 或 FAILED）。这两种方法还具有允许指定超时的重载版本。
+服务接口微妙而复杂。我们不建议直接实施它。相反，请使用guava中的抽象基类之一作为实现的基础。每个基类都支持特定的线程模型。
+## 接口实现
+1. AbstractIdleService
+AbstractIdleService框架实现`Service`接口，它在RUNNING状态下不执行任何操作——因此在运行时不需要CPU资源；但是有启动和关闭操作要执行。实现这样的`Service`就只需要简单的扩展`AbstractIdleService`并实现`startUp()`和 `shutDown()`方法.
+```java
+protected void startUp() {
+  servlets.add(new GcStatsServlet());
+}
+protected void shutDown() {}
+```
+2. AbstractExecutionThreadService
+一个`AbstractExecutionThreadService`在一个线程中执行`startup`、`running`、`shutdown`操作，你必须覆盖`run()`方法，它必须对停止请求进行响应，比如，你可能在一个循环中执行操作:
+```java
+public void run() {
+  while (isRunning()) {
+    // perform a unit of work
+  }
+}
+```
+或者，您可以以任何方式覆盖导致`run()`返回。覆盖`startUp()`和`shutDown()`是可选的，但将为您管理服务状态。
+```java
+protected void startUp() {
+  dispatcher.listenForConnections(port, queue);
+}
+protected void run() {
+  Connection connection;
+  while ((connection = queue.take() != POISON)) {
+    process(connection);
+  }
+}
+protected void triggerShutdown() {
+  dispatcher.stopListeningForConnections(queue);
+  queue.put(POISON);
+}
+```
+请注意，`start()`调用您的`startUp()`方法，为您创建一个线程，并在该线程中调用`run()`。`stop()`调用 `triggerShutdown()`并等待线程终止。
+3. AbstractScheduledService
+`AbstractScheduledService`在运行时执行一些周期性任务。子类实现`runOneIteration()`以指定任务的一次迭代，以及熟悉的`startUp()`和`shutDown()`方法。要描述执行计划，您必须实现`scheduler()`方法。通常，您将使用 `AbstractScheduledService.Scheduler`提供的调度之一，或者`newFixedRateSchedule(initialDelay, delay, TimeUnit)`或`newFixedDelaySchedule(initialDelay, delay, TimeUnit)`，对应于 `ScheduledExecutorService`中熟悉的方法。自定义调度可以使用`CustomScheduler`来实现；有关详细信息，请参阅 Javadoc。
+4. AbstractService
+当需要自己手动管理线程时，直接集成`AbstractService`即可。通常，前面的实现可以为您提供更良好的服务，但在某些情况下建议您实现`AbstractService`，比如，当您将提供自己的线程语义的内容建模为`Service`时，您有自己的特定线程要求。继承`AbstractService`要实现2个方法:
+- `doStart()`:
+- 
+
 
