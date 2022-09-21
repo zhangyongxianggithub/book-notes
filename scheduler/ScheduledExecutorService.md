@@ -2,3 +2,4 @@
 - `<V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit)`Creates and executes a ScheduledFuture that becomes enabled after the given delay.
 - `ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit)`Creates and executes a one-shot action that becomes enabled after the given delay.
 - `ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit)`
+- `ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit)`创建一个周期性执行的任务，任务在给定的初始延迟后开始周期性的执行，执行的间隔是固定的delay时间，如果任务执行遇到了异常，后面发生的异常会被抑制，任务一直会执行直到被取消或者执行器终止。
