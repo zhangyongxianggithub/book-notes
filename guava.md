@@ -629,6 +629,6 @@ protected void triggerShutdown() {
 - `isHealthy()`如果所有的`Service`的状态都是RUNNING，则返回true;
 - `servicesByState()`返回所有服务的状态;
 - `startupTimes()`返回所有服务的启动时间;
-虽然建议通过`ServiceManager`管理`Service`生命周期，但通过其他机制启动的状态转换不会影响其方法的正确性。例如，如果`Service`是通过`startAsync()`之外的某种机制启动的，则listeners将在适当的时候被调用，并且`awaitHealthy()`仍将按预期工作。 `ServiceManager`的唯一要求是在构造`ServiceManager`时所有服务必须是 NEW。
+虽然建议通过`ServiceManager`管理`Service`生命周期，但通过其他机制启动的状态转换不会影响其方法的正确性。例如，如果`Service`是通过`startAsync()`之外的某种机制启动的，则listeners将在适当的时候被调用，并且`awaitHealthy()`仍将按预期工作。 `ServiceManager`的唯一要求是在构造`ServiceManager`时所有服务必须是NEW。
 
 
