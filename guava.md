@@ -617,7 +617,18 @@ protected void triggerShutdown() {
 `AbstractScheduledService`在运行时执行一些周期性任务。子类实现`runOneIteration()`以指定任务的一次迭代，以及熟悉的`startUp()`和`shutDown()`方法。要描述执行计划，您必须实现`scheduler()`方法。通常，您将使用 `AbstractScheduledService.Scheduler`提供的调度之一，或者`newFixedRateSchedule(initialDelay, delay, TimeUnit)`或`newFixedDelaySchedule(initialDelay, delay, TimeUnit)`，对应于 `ScheduledExecutorService`中熟悉的方法。自定义调度可以使用`CustomScheduler`来实现；有关详细信息，请参阅 Javadoc。
 4. AbstractService
 当需要自己手动管理线程时，直接集成`AbstractService`即可。通常，前面的实现可以为您提供更良好的服务，但在某些情况下建议您实现`AbstractService`，比如，当您将提供自己的线程语义的内容建模为`Service`时，您有自己的特定线程要求。继承`AbstractService`要实现2个方法:
-- `doStart()`:
-- 
+- `doStart()`: 第一次调用`startAsync()`会调用`doStart()`，你的`doStart()`方法应该执行所有初始化，然后如果启动成功，则最终调用 notifyStarted()，如果启动失败，则最终调用 notifyFailed()；
+- `doStop()`: `doStop()`在第一次调用`stopAsync()`时调用，你的`doStop()`方法应该关闭您的服务，然后如果关闭成功则最终调用`notifyStopped()`或如果关闭失败则调用`notifyFailed()`。
+## Using ServiceManager
+除了Service框架实现之外，Guava还提供了一个`ServiceManager`类，它使涉及多个`Service`实现的某些操作更容易。使用一组`Service`创建一个新的 `ServiceManager`。然后你可以管理它们:
+- `startAsync()`启动所有管理的`Service`;
+- `stopAsync()`停止所有管理的`Service`;
+- `addListener()`添加`ServiceManager.Listener`;
+- `awaitHealthy()`等待所有的`Service`到达RUNNING状态;
+- `awaitStopped()`等待所有的`Service`到达终止状态;
+- `isHealthy()`如果所有的`Service`的状态都是RUNNING，则返回true;
+- `servicesByState()`返回所有服务的状态;
+- `startupTimes()`返回所有服务的启动时间;
+虽然建议通过`ServiceManager`管理`Service`生命周期，但通过其他机制启动的状态转换不会影响其方法的正确性。例如，如果`Service`是通过`startAsync()`之外的某种机制启动的，则listeners将在适当的时候被调用，并且`awaitHealthy()`仍将按预期工作。 `ServiceManager`的唯一要求是在构造`ServiceManager`时所有服务必须是 NEW。
 
 
