@@ -53,4 +53,26 @@ INSERT INTO t1 SET a=1,b=2,c=3 AS new
 INSERT INTO t1 SET a=1,b=2,c=3 AS new(m,n,p)
   ON DUPLICATE KEY UPDATE c = m+n;
 ```
-行别名不能与表名相同。如果不使用列别名，或者如果它们与列名相同，则必须使用`ON DUPLICATE KEY UPDATE`子句中的行别名来区分它们。列别名对于它们所应用的行别名必须是唯一的（即，引用同一行的列的列别名不能相同）。对于`INSERT ... SELECT`语句，这些规则适用于可接受形式的`SELECT`查询表达式：
+行别名不能与表名相同。如果不使用列别名，或者如果它们与列名相同，则必须使用`ON DUPLICATE KEY UPDATE`子句中的行别名来区分它们。列别名对于它们所应用的行别名必须是唯一的（即，引用同一行的列的列别名不能相同）。对于`INSERT ... SELECT`语句，这些规则适用于可接受形式的`SELECT`查询表达式，你可以在`ON DUPLICATE KEY UPDATE`子句中引用`SELECT`查询表达式的内容，可以引用的内容如下:
+- 对单个表(可能是派生表)的查询中的列的引用;
+- 对多个表的连接查询中的列的引用;
+- 对DISTINCT查询中的列的引用;
+- 对其他表中的列的引用，只要`SELECT`不使用`GROUP BY`，一个副作用是您必须限定对非唯一列名的引用;
+不支持对来自`UNION`的列的引用。要解决此限制，请将`UNION`重写为派生表，以便可以将其行视为单表结果集。例如，此语句会产生错误:
+```sql
+INSERT INTO t1 (a, b)
+  SELECT c, d FROM t2
+  UNION
+  SELECT e, f FROM t3
+ON DUPLICATE KEY UPDATE b = b + c;
+```
+相反，请使用将 UNION 重写为派生表的等效语句:
+```sql
+INSERT INTO t1 (a, b)
+SELECT * FROM
+  (SELECT c, d FROM t2
+   UNION
+   SELECT e, f FROM t3) AS dt
+ON DUPLICATE KEY UPDATE b = b + c;
+```
+将查询重写为派生表的技术还允许引用来自`GROUP BY`查询的列。因为`INSERT ... SELECT`语句的结果取决于`SELECT`中行的顺序，并且不能保证顺序的一致性，所以在记录源和副本的`INSERT ... SELECT ON DUPLICATE KEY UPDATE`语句时可能会出现分歧. 因此，`INSERT ... SELECT ON DUPLICATE KEY UPDATE`语句被标记为对基于语句的复制不安全。此类语句在使用statement-based模式时会在错误日志中产生警告，并在使用`MIXED`模式时使用 row-based格式写入二进制日志。针对具有多个唯一键或主键的表的`INSERT ... ON DUPLICATE KEY UPDATE`语句也被标记为不安全。
