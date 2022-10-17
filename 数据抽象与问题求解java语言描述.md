@@ -3283,6 +3283,37 @@ JCF中类似于表的操作就是map，只是形式稍微有点不一样，Map�
   - $L$、$M$、和$R$是等高的2–3树；
   - $a$大于$L$中的所有数据元素，并且小于等于$M$中的所有数据元素；
   - $b$大于$M$中的所有数据元素，并且小于等于$R$中的所有数据元素。
-
-
+2-3树的节点定义如下:
+```java
+public class TwoThreeTreeNode<T> {
+    private T smallItem;
+    private T midItem;
+    private T largeItem;
+    private final TwoThreeTreeNode<T> leftChild;
+    private TwoThreeTreeNode<T> midChild;
+    private final TwoThreeTreeNode<T> rightChild;
+```
+1. 遍历2-3树
+   中序遍历的方式遍历
+   ```java
+   +inorder(in ttTree: TwoThreeTree)
+   // traverses the nonempty  2-3 tree, ttTree, in sorted search-key order
+   if(ttTree''s root node r is a left){
+     visit the data item(r)
+   }else if(r has two data items){
+      inorder(left subtree of ttTree''s root)
+      visit the first data item
+      inorder(mid subtree of ttTree''s root)
+      visit the second data item
+      inorder(right subtree of ttTree''s root)
+   }else{
+      inorder(left subtree of ttTree''s root)
+      visit the data item
+      inorder(right subtree of ttTree''s root)      
+   }
+   ```
+2. 查找2-3树
+   算法与二叉查找树类似，2-3树比二叉查找树的优势就是2-3树与查找最短的二叉查找树的效率相同。但是也并不比二叉查找树的效率更高，主要是因为比较的节点次数都是差不多的，优势在于2-3树比较容易实现平衡，
+3. 2-3树插入
+   
 
