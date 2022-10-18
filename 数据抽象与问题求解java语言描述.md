@@ -3315,5 +3315,78 @@ public class TwoThreeTreeNode<T> {
 2. 查找2-3树
    算法与二叉查找树类似，2-3树比二叉查找树的优势就是2-3树与查找最短的二叉查找树的效率相同。但是也并不比二叉查找树的效率更高，主要是因为比较的节点次数都是差不多的，优势在于2-3树比较容易实现平衡，
 3. 2-3树插入
+   首先查找到递归终止的叶节点，如果节点只有一项，则加入变成2项，如果已有2项，则3者中的中间项上升到父节点，其余2项变成父节点的字节点，如果父节点项数>2则，则父节点执行此递归处理，此时父节点可能出现4个节点的情况，那么左面2项归左节点，右面2项归右节点。直至树满足2-3树条件要求，只要从根到插入新项的节点路径上存在只有一项的节点，则树高不会增长，如果都包含2个项，则要增加树高，到达根节点时，拆分出一个新的root节点。
+   ```java
+   +insertItem(in ttTree: TwoThreeTree, in newItem: TreeItemType)
+   // inserts newItem into a 2-3 tree ttTree whose Items have distinct search keys that differ from newItem's search key
+   let sKey be the search key of newItem
+   Locate the leaf leafNode in which sKey belong ttTree
+   Add newItem to leafNode
+   if (leafNode now has three items){
+      split(leafNode)
+   }
+   +split(inout n:TreeNode)
+   // splits node n, which contains 3 items, Note: if n is not a leaf, it has 4 chidlren
+   if (n is the root){
+      create a new node p
+   }else{
+      Let p be the parent of n
+   }
+   replace node n with two nodes, n1 and n2, so that p is their parent
+   Given n1 the item in n with the smallest search-key value
+   Given n2 the item in n with the largest search-key value
+   if(n is not a leaf){
+      n1 becomes the parent of n's two leftmost children
+      n2 becomes the parent of n's two rightmost children
+   }
+   move the item in n that has the middle search-key value up to p
+   if (p now has three items){
+      split(p)
+   }
+   ```
+4. 2-3树的删除
+   2-3树删除节点时，首先定位到节点$n$,如果不是叶节点，则查找中序后继，并与$n$交换，然后开始删除叶节点，如果叶节点包含2个值，只要删除一个就可以，如果删除后变成空节点，则需执行节点归并，首先检查兄弟节点，如果兄弟节点包含2项的节点则，在兄弟节点，空节点、父节点之间平衡值，如果没有，则将父节点的值下移到兄弟节点，并删除空节点，此时如果父节点不可用，则递归的执行节点的删除过程。删除算法的伪代码如下:
+   ```java
+   +deleteItem(in ttTree: TwoThreeTree, in searchKey: KeyType)
+   // deletes from  the 2-3 tree the item whose search key equals searchKey. If the deletion is successful, the method returns true, If no such item exists, the operation fails and return false.
+   Attempt to locate item theItem whose search key equals searchKey
+   if (theItem is present){
+      if (theItem is not in a leaf){
+          swap item theItem with its inorder successor, which will be in a leaf theLeaf
+      }
+      // the deletion always begins at a leaf
+      Delete item theItem from leaf theLeaf
+      if (theLeaf now has no items){
+        fix(theLeaf)
+      }
+      return true
+   }
+   return false
+   +fix(in n: TreeNode)
+   // Completes the deletion when node n is empty by either removing the root, redistributing values, or merging nodes. Note:if n is internal， it has one child
+   if (n is the root){
+     remove the root
+   }else{
+     Let p be the parent of n
+     if (some sibling of n has two items){
+        Distribute items appropriately among n, the sibling, and p
+        if (n is internal){
+            Move the appropriate child from sibling to n
+        }
+     }else{
+        Choose an adjacent sibling s of n
+        bring the appropriate item down from p into s
+
+        if(n is internal){
+            Move n''s child to s
+        }
+        remove node n
+        if (p is now empty){
+            fix(p)
+        }
+     }
+   }
+   ```
+   
    
 
