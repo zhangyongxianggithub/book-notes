@@ -533,5 +533,241 @@ docker-compose ps
 4. Flink REST API
    Flink REST API可以通过本机的localhost:8081进行访问，也可以在client容器中通过jobmanager:8081进行访问。 比如，通过如下命令可以获取所有正在运行中的Job:`curl localhost:8081/jobs`
 ## 核心特性探索 
+获取所有运行中的Job，`docker-compose run --no-deps client flink list`，一旦Job提交，flink会默认为其生成一个JobID，后续所有对该Job的操作，都需要带上JobID。在Job(部分)失败的情况下，Flink对事件处理依然能够提供精确一次的保障，在本节中你将会观察到并能够在某种程度上验证这种行为:
+1. Step1: 观察输出，如前文所述，事件以特定速率生成，刚好使得每个统计窗口都包含确切的1000条记录。因此，你可以实时查看output topic的输出，确定失败恢复后所有的窗口依然输出正确的统计数字，以此来验证Flink在TaskManager失败时能够成功恢复，而且不丢失数据、不产生数据重复;
+2. Step2: 模拟失败，为了模拟部分失败故障，你可以kill掉一个TaskManager，这种失败行为在生产环境中就相当于 TaskManager进程挂掉、TaskManager机器宕机或者从框架或用户代码中抛出的一个临时异常（例如，由于外部资源暂时不可用）而导致的失败;
+3. Step3: 失败恢复，一旦TaskManager重启成功，它将会重新连接到JobManager。`docker-compose up -d taskmanager`当 TaskManager注册成功后，JobManager就会将处于SCHEDULED状态的所有任务调度到该TaskManager的可用TaskSlots中运行，此时所有的任务将会从失败前最近一次成功的checkpoint进行恢复, 一旦恢复成功，它们的状态将转变为RUNNING。接下来该Job将快速处理 Kafka input事件的全部积压（在Job中断期间累积的数据），并以更快的速度(>24条记录/分钟)产生输出，直到它追上kafka的延迟为止。此时观察output topic输出，你会看到在每一个时间窗口中都有按page进行分组的记录，而且计数刚好是1000。由于我们使用的是 FlinkKafkaProducer 至少一次模式，因此你可能会看到一些记录重复输出多次。
+## Job升级与扩容
+升级Flink作业一般都需要两步: 第一，使用Savepoint优雅地停止Flink Job。Savepoint是整个应用程序状态的一次快照（类似于 checkpoint）,该快照是在一个明确定义的、全局一致的时间点生成的。第二，从Savepoint恢复启动待升级的Flink Job。在此，升级 包含如下几种含义:
+- 配置升级（比如Job并行度修改）
+- Job拓扑升级（比如添加或者删除算子）
+- Job的用户自定义函数升级
+在开始升级之前，你可能需要实时查看Output topic输出，以便观察在升级过程中没有数据丢失或损坏。
+```shell
+docker-compose exec kafka kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic output
+```
+- Step 1: 停止Job, 要优雅停止Job，需要使用JobID通过CLI或REST API调用`stop`命令。JobID可以通过获取所有运行中的Job接口或Flink WebUI界面获取，拿到JobID后就可以继续停止作业了:
+  ```bash
+  docker-compose run --no-deps client flink stop <job-id>
+  ```
+  Savepoint已保存在`state.savepoints.dir`指定的路径中，该配置在`flink-conf.yaml`中定义，`flink-conf.yaml`挂载在本机的`/tmp/flink-savepoints-directory/`目录下。在下一步操作中我们会用到这个Savepoint路径，如果我们是通过REST API操作的， 那么Savepoint路径会随着响应结果一起返回，我们可以直接查看文件系统来确认Savepoint保存情况；
+- Step 2a: 重启Job (不作任何变更) ，现在你可以从这个Savepoint重新启动待升级的Job，为了简单起见，不对该 Job 作任何变更就直接重启。
+  ```bash
+  docker-compose run --no-deps client flink run -s <savepoint-path> -d /opt/ClickCountJob.jar --bootstrap.servers kafka:9092 --checkpointing --event-time
+  ```
+  一旦该Job再次处于RUNNING状态，你将从output Topic中看到数据在快速输出，因为刚启动的Job正在处理停止期间积压的大量数据。另外，你还会看到在升级期间 没有产生任何数据丢失：所有窗口都在输出 1000;
+- Step 2b: 重启Job (修改并行度)，在从Savepoint重启Job之前，你还可以通过修改并行度来达到扩容Job的目的。
+  ```bash
+  docker-compose run --no-deps client flink run -p 3 -s <savepoint-path> -d /opt/ClickCountJob.jar --bootstrap.servers kafka:9092 --checkpointing --event-time
+  ```
+  现在Job已重新提交，但由于我们提高了并行度所以导致TaskSlots不够用（1个TaskSlot可用，总共需要3个），最终Job会重启失败。通过如下命令:`docker-compose scale taskmanager=2`你可以向Flink集群添加第二个TaskManager（为Flink集群提供2个TaskSlots资源），它会自动向 JobManager注册，TaskManager注册完成后，Job会再次处于`RUNNING`状态。一旦Job再次运行起来，从output Topic的输出中你会看到在扩容期间数据依然没有丢失:所有窗口的计数都正好是1000.
+## 查询Job指标 
+可以通过JobManager提供的REST API来获取系统和用户[指标](https://nightlies.apache.org/flink/flink-docs-release-1.15/zh/docs/ops/metrics/)，具体请求方式取决于我们想查询哪类指标，Job相关的指标分类可通过jobs/<job-id>/metrics获得，而要想查询某类指标的具体值则可以在请求地址后跟上get参数。
+```bash
+curl "localhost:8081/jobs/<jod-id>/metrics?get=lastCheckpointSize"
+```
+预期响应:
+```json
+[
+  {
+    "id": "lastCheckpointSize",
+    "value": "9378"
+  }
+]
+```
+
+REST API不仅可以用于查询指标，还可以用于获取正在运行中的Job详细信息。
+```bash
+curl localhost:8081/jobs/<jod-id>
+```
+预期响应:
+```json
+{
+  "jid": "<job-id>",
+  "name": "Click Event Count",
+  "isStoppable": false,
+  "state": "RUNNING",
+  "start-time": 1564467066026,
+  "end-time": -1,
+  "duration": 374793,
+  "now": 1564467440819,
+  "timestamps": {
+    "CREATED": 1564467066026,
+    "FINISHED": 0,
+    "SUSPENDED": 0,
+    "FAILING": 0,
+    "CANCELLING": 0,
+    "CANCELED": 0,
+    "RECONCILING": 0,
+    "RUNNING": 1564467066126,
+    "FAILED": 0,
+    "RESTARTING": 0
+  },
+  "vertices": [
+    {
+      "id": "<vertex-id>",
+      "name": "ClickEvent Source",
+      "parallelism": 2,
+      "status": "RUNNING",
+      "start-time": 1564467066423,
+      "end-time": -1,
+      "duration": 374396,
+      "tasks": {
+        "CREATED": 0,
+        "FINISHED": 0,
+        "DEPLOYING": 0,
+        "RUNNING": 2,
+        "CANCELING": 0,
+        "FAILED": 0,
+        "CANCELED": 0,
+        "RECONCILING": 0,
+        "SCHEDULED": 0
+      },
+      "metrics": {
+        "read-bytes": 0,
+        "read-bytes-complete": true,
+        "write-bytes": 5033461,
+        "write-bytes-complete": true,
+        "read-records": 0,
+        "read-records-complete": true,
+        "write-records": 166351,
+        "write-records-complete": true
+      }
+    },
+    {
+      "id": "<vertex-id>",
+      "name": "ClickEvent Counter",
+      "parallelism": 2,
+      "status": "RUNNING",
+      "start-time": 1564467066469,
+      "end-time": -1,
+      "duration": 374350,
+      "tasks": {
+        "CREATED": 0,
+        "FINISHED": 0,
+        "DEPLOYING": 0,
+        "RUNNING": 2,
+        "CANCELING": 0,
+        "FAILED": 0,
+        "CANCELED": 0,
+        "RECONCILING": 0,
+        "SCHEDULED": 0
+      },
+      "metrics": {
+        "read-bytes": 5085332,
+        "read-bytes-complete": true,
+        "write-bytes": 316,
+        "write-bytes-complete": true,
+        "read-records": 166305,
+        "read-records-complete": true,
+        "write-records": 6,
+        "write-records-complete": true
+      }
+    },
+    {
+      "id": "<vertex-id>",
+      "name": "ClickEventStatistics Sink",
+      "parallelism": 2,
+      "status": "RUNNING",
+      "start-time": 1564467066476,
+      "end-time": -1,
+      "duration": 374343,
+      "tasks": {
+        "CREATED": 0,
+        "FINISHED": 0,
+        "DEPLOYING": 0,
+        "RUNNING": 2,
+        "CANCELING": 0,
+        "FAILED": 0,
+        "CANCELED": 0,
+        "RECONCILING": 0,
+        "SCHEDULED": 0
+      },
+      "metrics": {
+        "read-bytes": 20668,
+        "read-bytes-complete": true,
+        "write-bytes": 0,
+        "write-bytes-complete": true,
+        "read-records": 6,
+        "read-records-complete": true,
+        "write-records": 0,
+        "write-records-complete": true
+      }
+    }
+  ],
+  "status-counts": {
+    "CREATED": 0,
+    "FINISHED": 0,
+    "DEPLOYING": 0,
+    "RUNNING": 4,
+    "CANCELING": 0,
+    "FAILED": 0,
+    "CANCELED": 0,
+    "RECONCILING": 0,
+    "SCHEDULED": 0
+  },
+  "plan": {
+    "jid": "<job-id>",
+    "name": "Click Event Count",
+    "type": "STREAMING",
+    "nodes": [
+      {
+        "id": "<vertex-id>",
+        "parallelism": 2,
+        "operator": "",
+        "operator_strategy": "",
+        "description": "ClickEventStatistics Sink",
+        "inputs": [
+          {
+            "num": 0,
+            "id": "<vertex-id>",
+            "ship_strategy": "FORWARD",
+            "exchange": "pipelined_bounded"
+          }
+        ],
+        "optimizer_properties": {}
+      },
+      {
+        "id": "<vertex-id>",
+        "parallelism": 2,
+        "operator": "",
+        "operator_strategy": "",
+        "description": "ClickEvent Counter",
+        "inputs": [
+          {
+            "num": 0,
+            "id": "<vertex-id>",
+            "ship_strategy": "HASH",
+            "exchange": "pipelined_bounded"
+          }
+        ],
+        "optimizer_properties": {}
+      },
+      {
+        "id": "<vertex-id>",
+        "parallelism": 2,
+        "operator": "",
+        "operator_strategy": "",
+        "description": "ClickEvent Source",
+        "optimizer_properties": {}
+      }
+    ]
+  }
+}
+```
+## 延伸拓展
+你可能已经注意到了，Click Event Count这个Job在启动时总是会带上`--checkpointing`和`--event-time`两个参数，如果我们去除这两个参数，那么 Job的行为也会随之改变。
+- --checkpointing参数开启了checkpoint配置，checkpoint是Flink容错机制的重要保证。如果你没有开启checkpoint，那么在Job失败与恢复这一节中，你将会看到数据丢失现象发生。
+- --event-time参数开启了Job的事件时间机制，该机制会使用ClickEvent自带的时间戳进行统计。如果不指定该参数，Flink将结合当前机器时间使用事件处理时间进行统计。如此一来，每个窗口计数将不再是准确的1000了。
+- Click Event Count这个Job还有另外一个选项，该选项默认是关闭的，你可以在client容器的docker-compose.yaml文件中添加该选项从而观察该Job在反压下的表现，该选项描述如下：--backpressure将一个额外算子添加到Job中，该算子会在偶数分钟内产生严重的反压（比如：10:12 期间，而 10:13 期间不会）。这种现象可以通过多种网络指标观察到，比如：outputQueueLength 和 outPoolUsage 指标，通过 WebUI 上的反压监控也可以观察到。
+
+
+
+
+
+
+
+
+
 
 
