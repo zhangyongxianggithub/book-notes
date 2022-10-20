@@ -1,3 +1,50 @@
+```sql
+INSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+    [INTO] tbl_name
+    [PARTITION (partition_name [, partition_name] ...)]
+    [(col_name [, col_name] ...)]
+    { {VALUES | VALUE} (value_list) [, (value_list)] ... }
+    [AS row_alias[(col_alias [, col_alias] ...)]]
+    [ON DUPLICATE KEY UPDATE assignment_list]
+
+INSERT [LOW_PRIORITY | DELAYED | HIGH_PRIORITY] [IGNORE]
+    [INTO] tbl_name
+    [PARTITION (partition_name [, partition_name] ...)]
+    SET assignment_list
+    [AS row_alias[(col_alias [, col_alias] ...)]]
+    [ON DUPLICATE KEY UPDATE assignment_list]
+
+INSERT [LOW_PRIORITY | HIGH_PRIORITY] [IGNORE]
+    [INTO] tbl_name
+    [PARTITION (partition_name [, partition_name] ...)]
+    [(col_name [, col_name] ...)]
+    { SELECT ... 
+      | TABLE table_name 
+      | VALUES row_constructor_list
+    }
+    [ON DUPLICATE KEY UPDATE assignment_list]
+
+value:
+    {expr | DEFAULT}
+
+value_list:
+    value [, value] ...
+
+row_constructor_list:
+    ROW(value_list)[, ROW(value_list)][, ...]
+
+assignment:
+    col_name = 
+          value
+        | [row_alias.]col_name
+        | [tbl_name.]col_name
+        | [row_alias.]col_alias
+
+assignment_list:
+    assignment [, assignment] ...
+```
+`INSERT`语句向已经存在的表插入心行，
+
 #### INSERT...ON DUPLICATE KEY UPDATE Statement
 如果你明确指明了`ON DUPLICATE KEY UPDATE`SQL子句，当要插入的行遇到`UNIQUE`所以或者`PRIMARY KEY`索引造成的重复值异常时，此时就会更新旧行，比如，如果`a`列被声明未唯一索引列，且值存在1，下面的2个语句有相同的效果:
 ```sql
