@@ -4,4 +4,5 @@
 !.gitignore
 # 这是一个注释
 /**/*.pdf
+**/.fleet
 
