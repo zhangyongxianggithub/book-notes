@@ -65,4 +65,19 @@ mysql> SELECT @cities;
 +---------+
 1 row in set (0.00 sec)
 ```
+上面的例子使用了mysql客户端分隔符命令将语句分隔符从;改为//，这样在定义存储过程中的;分隔符会直接传递到服务器而不是由mysql客户端本身解释。RETURNS子句只用于FUNCTION，它是强制性的。表示函数的返回类型，函数体必须一个包含`RETURN 值`语句。如果RETURN语句返回不同类型的值，则该值被强制转换为合适的类型。例如，如果一个函数在RETURNS子句中指定了一个ENUM或SET值，但RETURN语句返回一个整数，则从该函数返回的值是SET成员集的相应ENUM成员的字符串。以下示例函数接受一个参数，使用SQL函数执行操作并返回结果。在这种情况下，不需要使用分隔符，因为函数定义不包含;语句分隔符:
+```sql
+mysql> CREATE FUNCTION hello (s CHAR(20))
+mysql> RETURNS CHAR(50) DETERMINISTIC
+       RETURN CONCAT('Hello, ',s,'!');
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> SELECT hello('world');
++----------------+
+| hello('world') |
++----------------+
+| Hello, world!  |
++----------------+
+1 row in set (0.00 sec)
+```
 
