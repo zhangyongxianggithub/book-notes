@@ -331,3 +331,33 @@ spring:
 - greetings.message = Say Hello from one.
 - two.greetings.message = Say Hello from two.
 - config-map-three.greetings.message = Say Hello from three
+默认情况下，除了读取源配置中指定的ConfigMap之外，Spring还将尝试从profile属性源中读取所有属性。解释这一点的最简单方法是通过示例。假设您的应用程序激活了一个名为dev的profile，并且您的配置如下所示：
+```yaml
+spring:
+  application:
+    name: spring-k8s
+  cloud:
+    kubernetes:
+      config:
+        namespace: default-namespace
+        sources:
+          - name: config-map-one
+```
+除了读取config-map-one之外，Spring也会尝试读取config-map-one-dev，按照特定的顺序，每一个激活的profile都会尝试读取响应的ConfigMap。可能你不想要这样，这个功能可以关闭:
+```yaml
+spring:
+  application:
+    name: spring-k8s
+  cloud:
+    kubernetes:
+      config:
+        includeProfileSpecificSources: false
+        namespace: default-namespace
+        sources:
+          - name: config-map-one
+            includeProfileSpecificSources: false
+```
+正如之前的设置类似，你可以在2种级别上指定这个属性，对所有的ConfigMap或者单独的ConfigMap，单独的有更高的优先级。你应该检查K8s的安全配置部分，为了从pod内部访问ConfigMap，你需要有正确的Kubernetes service accounts、roles与role bindings。
+还存在一种使用ConfigMap实例的方式是把他们安装到pod，然后让应用从文件系统中读取它们，这种行为是通过`spring.cloud.kubernetes.config.paths`属性控制的，可以是多个path，逗号分隔；每个属性文件必须是完全路径，因为目录不会递归解析。如果你使用了`spring.cloud.kubernetes.config.paths`或者`spring.cloud.kubernetes.secrets.path`，那么自动热加载功能会关闭，你需要POST请求到/actuator/refresh端点或者重启应用实现变更。
+在一些案例里面，你的应用可能无法使用Kubernetes API加载ConfigMap，你想要应用马上失败，你可以设置`spring.cloud.kubernetes.config.fail-fast=true`属性来实现这样的能力。你也可以让你的应用在失败时重试加载ConfigMap，首先你需要设置
+`spring.cloud.kubernetes.config.fail-fast=true`，然后你需要添加`spring-retry`与`spring-boot-starter-aop`依赖，然后你可以通过`spring.cloud.kubernetes.config.retry.*`配置重试的属性，比如最大重试次数等。你也可以通过设置属性`spring.cloud.kubernetes.config.retry.enabled=false`来关闭重试机制。太多的属性设置可以参考官方文档。
