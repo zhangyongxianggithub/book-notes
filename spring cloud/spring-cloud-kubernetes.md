@@ -293,4 +293,37 @@ spring:
 - config-map-two.greetings.message = Say Hello from two;
 注意`spring.cloud.kubernetes.config.useNameAsPrefix`的优先级低于`spring.cloud.kubernetes.config.sources.useNameAsPrefix`。
 这允许您为所有源设置默认策略，同时允许覆盖少数源。
-
+如果属性中不想出现ConfigMap的名字，您可以指定属性名字的策略，使用配置`explicitPrefix`。
+由于这是您选择的显式前缀，因此它只能提供给源级别。同时它具有比useNameAsPrefix更高的优先级。
+假设我们有第三个ConfigMap，其中包含这些条目:
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: config-map-three
+data:
+  application.yml: |-
+    greeting:
+      message: Say Hello from three
+```
+```yaml
+spring:
+  application:
+    name: with-prefix
+  cloud:
+    kubernetes:
+      config:
+        useNameAsPrefix: true
+        namespace: default-namespace
+        sources:
+          - name: config-map-one
+            useNameAsPrefix: false
+          - name: config-map-two
+            explicitPrefix: two
+          - name: config-map-three
+```
+会导致生成的属性如下:
+- greetings.message = Say Hello from one.
+- two.greetings.message = Say Hello from two.
+- config-map-three.greetings.message = Say Hello from three
+  
