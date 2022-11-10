@@ -54,9 +54,13 @@ spring.cloud.kubernetes.discovery.include-not-ready-addresses=true
 - 如果上面都没指定，则使用命名为https的端口;
 - 如果上面都没指定，则使用命名为http的端口;
 - 如果上面都没，则使用端口列表的第一个端口。
-<<<<<<< HEAD
-最后一个选项可能会导致不确定的行为。确保合理地配置您的服务或应用程序。
+最后一个选项可能会导致不确定的行为，确保合理地配置您的服务或应用程序。缺省情况下，所有的端口与他们的名字会被添加到`ServiceInstance`的metadata中。如果因为某些原因，你需要关闭`DiscoveryClient`，你可以设置如下的属性:
+```properties
+spring.cloud.kubernetes.discovery.enabled=false
+```
+一些Spring Cloud组件使用`DiscoveryClient`来获取关于本地服务实例的信息。为了实现目的，你需要把`spring.application.name`的名字分配为K8s的service名字。
 spring.application.name对Kubernetes中为应用程序注册的名称没有影响，SCK也可以监听K8s service变更，并及时调整`DiscoveryClient`的实现，为了开启这个功能，你需要添加`@EnableScheduling`。
+
 # K8s native service discovery
 k8s本身就有服务发现的能力，使用native k8s服务发现要确保与额外的工具，比如Istio等兼容，Istio具有负载均衡、熔断、故障恢复等能力。调用者服务只需要引用特定k8s集群中可解析的名字，一种简单的实现方式是，使用RestTemplate，它使用完全限定域名，比如{service-name}.{namespace}.svc.{cluster}.local:{service-port}，另外，你可以使用Hystrix：
 - 在调用者端，通过添加注解`@EnableCircuitBreaker`;
@@ -327,12 +331,3 @@ spring:
 - greetings.message = Say Hello from one.
 - two.greetings.message = Say Hello from two.
 - config-map-three.greetings.message = Say Hello from three
-  
-=======
-最后一个选项可能会导致不确定的行为，确保合理地配置您的服务或应用程序。缺省情况下，所有的端口与他们的名字会被添加到`ServiceInstance`的metadata中。如果因为某些原因，你需要关闭`DiscoveryClient`，你可以设置如下的属性:
-```properties
-spring.cloud.kubernetes.discovery.enabled=false
-```
-一些Spring Cloud组件使用`DiscoveryClient`来获取关于本地服务实例的信息。为了实现目的，你需要把`spring.application.name`的名字分配为K8s的service名字。
-
->>>>>>> 6f91590 (update)
