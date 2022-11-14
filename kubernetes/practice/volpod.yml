@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vol-pod
+spec:
+  volumes:
+    - name:  data
+      persistentVolumeClaim:
+        claimName: pvc1
+  containers:
+    - image:  ubuntu:latest
+      name:  ubuntu-ctl
+      command:
+        - /bin/bash
+        - "-c"
+        - "sleep 60m"
+      volumeMounts:
+        - name:  data
+          mountPath:  /data
