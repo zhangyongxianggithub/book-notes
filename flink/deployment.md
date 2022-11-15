@@ -163,4 +163,4 @@ $ echo 'stop' | ./bin/kubernetes-session.sh \
     ```
     请参考官方文档中[RBAC授权](https://kubernetes.io/docs/reference/access-authn-authz/rbac/)了解更多的信息。
 11. Pod Template
-    
+    Flink允许用户通过template文件定义JobManager/TaskManager pod规范，这样可以支持一些Flink Kubernetes Config Options不直接支持的特性，使用kubernetes.pod-template-file指定一个包含pod定义的本地文件，它可以用来初始化JobManager/TaskManager，主要的容器的名字应该定义为`flink-main-container`，请参考
