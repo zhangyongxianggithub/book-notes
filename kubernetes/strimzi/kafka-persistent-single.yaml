@@ -22,7 +22,7 @@ spec:
         tls: true
         configuration:
           bootstrap: 
-            nodePort: 8192
+            nodePort: 30002
         authentication:
           type: tls
     config:
