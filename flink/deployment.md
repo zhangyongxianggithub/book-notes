@@ -1,3 +1,4 @@
+[TOC]
 Flink是一种通用型的框架，支持多种部署场景。在下面，我们简短的解释了Flink集群的构建、目标以及可用的构建方案。如果你只想要在本地启动Flink，我们建议你构建一个Standalone Cluster.
 # 概览
 ## 概览与参考架构
@@ -35,6 +36,176 @@ Flink可以用以下3种方式执行应用:
 4. Summary
    在*Session Mode*下，集群生命周期独立于集群上运行的任何作业的生命周期，并且资源在所有作业之间共享。Per-Job模式需要为每个提交的作业启动一个集群，但这提供了更好的隔离保证，因为资源不会在作业之间共享。在这种情况下，集群的生命周期与作业的生命周期绑定。最后，应用程序模式为每个应用程序创建一个会话集群，并在集群上执行应用程序的main()方法。
 # Resource Providers
+## Standalone
+1以完全分布式的方式运行Flink。
+### 概览
+#### 需求
+1. 软件需求
+   Flink运行在所有类UNIX环境下，机群由一个master节点及多个worker节点组成，每个节点都需要安装JDK，ssh，机群中的所有节点都可以免密登录SSH以及拥有相同的目录结构，以便让脚本来控制一切。需要指定JAVA_HOME环境变量，或者在conf/flink-conf.yaml中通过env.java.home配置项来设置此变量。
+2. Flink设置
+   去[仓库](https://flink.apache.org/zh/downloads.html)下载可运行的软件包，下载后解压。然后编辑conf/flink-conf.yaml文件为机群配置Flink，`jobmanager.rpc.address`配置项指向master节点，`jobmanager.memroy.process.size`/`taskmanager.memroy.process.size`定义允许分配的最大内存，你必须·提供机群上会被用作worker节点的所有节点列表，也就是运行TaskManager的节点，编辑文件conf/workers，输入每个节点的IP/主机名。如下图:
+   ![一个3机器的机群](pic/quickstart_cluster.png)
+   /path/to/flink/conf/flink-conf.yaml的内容
+   >jobmanager.rpc.address: 10.0.0.1
+   /path/to/flink/conf/workers的内容
+   >10.0.0.2
+   10.0.0.3
+
+   Flink目录必须放在所有worker节点的相同目录下。你可以使用共享的NFS目录，或将Flink目录复制到每个worker节点上。
+   可以在[配置](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/config/)里面了解更多的配置参数信息。
+   - jobmanager.memory.process.size每个JobManager可用的内存值;
+   - taskmanager.memory.process.size每个TaskManager的可用内存值;
+   - taskmanager.numberOfTaskSlots每台机器的可用CPU数;
+   - parallelism.default机群中所有CPU数
+   - io.tmp.dirs临时目录
+3. 启动Flink
+   下面的脚本在本地节点启动了一个JobManager并通过SSH连接到workers文件中所有的worker节点，在每个节点上启动TaskManager。现在你的Flink系统已经启动并运行着。可以通过配置的RPC端口向本地节点上的JobManager提交作业。
+   >bin/start-cluster.sh
+
+4. 为集群添加JobManager/TaskManager实例
+   你可以使用bin/jobmanager.sh和bin/taskmanager.sh脚本为正在运行的集群添加JobManager和TaskManager实例。
+   - 添加JobManager: `bin/jobmanager.sh ((start|start-foreground) [args] [webui-port])|stop|stop-all`
+   - 添加TaskManager: `bin/taskmanager.sh start|start-foreground|stop|stop-all`
+#### High-Availability with Standalone
+开启集群的HA机制，必须使用Zookeeper服务，同时还需要让机群开启多个JobManager。
+1. Masters File(masters)
+   HA机制需要配置conf/masters文件内容，里面包含JobManager所在的机器与端口
+   >jobManagerAddress1:webUIPort1
+    [...]
+    jobManagerAddressX:webUIPortX
+   缺省情况下，job manager会随机选择一个端口用于内部进程通信，你可以通过`high-availability.jobmanager.port`设置一个固定的端口，可以接受一个端口或者一个端口范围1-10,11,12-19混合也是支持的。
+2. 例子: 有2个JobManager的集群
+   - 在conf/flink-conf.yaml文件中设置高可用模式与Zookeeper quorum
+     ```properties
+     high-availability: zookeeper
+     high-availability.zookeeper.quorum: localhost:2181
+     high-availability.zookeeper.path.root: /flink
+     high-availability.cluster-id: /cluster_one # important: customize per cluster
+     high-availability.storageDir: hdfs:///flink/recovery
+     ```
+   - 在conf/masters配置masters
+     ```properties
+     localhost:8081
+     localhost:8082
+     ```
+   - 在conf/zoo.cfg文件中配置Zookeeper server，`server.0=localhost:2888:3888`
+   - Start ZooKeeper quorum, bin/start-zookeeper-quorum.sh
+   - Start an HA-cluster:
+     >$ bin/start-cluster.sh
+      Starting HA cluster with 2 masters and 1 peers in ZooKeeper quorum.
+      Starting standalonesession daemon on host localhost.
+      Starting standalonesession daemon on host localhost.
+      Starting taskexecutor daemon on host localhost.
+#### User jars & Classpath
+在standalone模式下，下面的jars会被认为是user-jars，并被包含到user的classpath:
+- session mode: 启动命令中指定的jar;
+- Application mode: 启动命令指定的jar以及在Flink的userlib目录里面的jar;
+### Kubernetes
+#### 入门
+入门描述了如何在k8s上部署Flink Session集群
+1. 介绍
+   本文描述了如何使用Flink standalone部署模式在Kubernetes上部署standalone模式的Flink集群。通常我们建议新用户使用native Kubernetes部署模式在 Kubernetes上部署Flink;
+2. 准备
+   k8s机群
+3. Kubernetes上的Flink session集群
+   Flink session机群是以一种长期运行的k8s deployment形式执行的，你可以在一个session集群上运行多个flink作业。当然，只有session集群部署好以后才可以在上面提交Flink作业。在k8s上部署一个基本的Flink session机群时，一般包括下面3个组件:
+   - 运行JobManager的Deployment;
+   - 运行TaskManagers的Deployment;
+   - 暴漏JobManager上REST和UI端口的Service;
+   使用通用[集群资源定义](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#common-cluster-resource-definitions)使用kubectl命令创建相应的组件:
+   ```bash
+   # Configuration 和 service 的定义
+   $ kubectl create -f flink-configuration-configmap.yaml
+   $ kubectl create -f jobmanager-service.yaml
+   # 为集群创建 deployment
+   $ kubectl create -f jobmanager-session-deployment.yaml
+   $ kubectl create -f taskmanager-session-deployment.yaml
+   ```
+   我们设置端口转发来访问Flink UI并提交作业:
+   - 运行kubectl port-forward ${flink-jobmanager-pod} 8081:8081将jobmanager的web ui端口映射到本地8081;
+   - 在浏览器中打开http://localhost:8081
+   - 也可以使用命令向集群提交作业: ./bin/flink run -m localhost:8081 ./examples/streaming/TopSpeedWindowing.jar
+   使用下面的命令停止运行flink集群:
+   ```bash
+    $ kubectl delete -f jobmanager-service.yaml
+    $ kubectl delete -f flink-configuration-configmap.yaml
+    $ kubectl delete -f taskmanager-session-deployment.yaml
+    $ kubectl delete -f jobmanager-session-deployment.yaml
+   ```
+#### 部署模式
+1. Application集群模式
+   Flink Application集群是运行单个Application的专用集群，部署集群时要保证该Application可用。在k8s上部署一个基本的Flink Application集群时，一般包括3个组件:
+   - 一个运行JobManager的Application;
+   - 运行若干个TaskManager的Deployment;
+   - 暴露JobManager上REST和UI端口的Service;
+   检查[Application 集群资源定义](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#application-cluster-resource-definitions)并做出相应的调整:
+   - jobmanager-job.yaml中的args属性必须指定用户作业的主类，也可以参考[如何设置 JobManager 参数](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/docker/#jobmanager-additional-command-line-arguments)来了解如何将额外的args传递给jobmanager-job.yaml配置中指定的Flink镜像。job artifacts参数必须可以从[资源定义示例](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#application-cluster-resource-definitions)中的`job-artifacts-volume`处获取。假如是在`minikube`集群中创建这些组件，那么定义示例中的 job-artifacts-volume可以挂载为主机的本地目录。如果不使用`minikube `集群，那么可以使用 `Kubernetes`集群中任何其它可用类型的`volume`来提供`job artifacts`。此外，还可以构建一个已经包含`job artifacts`参数的[自定义镜像](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/docker/#advanced-customization)。在创建[通用集群组件](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#common-cluster-resource-definitions)后，指定[Application 集群资源定义](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#application-cluster-resource-definitions)文件，执行kubectl命令来启动Flink Application集群:
+   ```bash
+   $ kubectl create -f jobmanager-job.yaml
+   $ kubectl create -f taskmanager-job-deployment.yaml
+   ```
+2. Per-Job集群模式
+   不支持
+3. Session机群
+   前面的入门就是
+#### Kubernetes 上运行 Standalone 集群指南
+1. Configuration
+   所有配置都在[配置页面](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/config/)中，在config map配置文件flink-configuration-configmap.yaml中可以添加配置.
+2. 在Kubernets上访问Flink
+   接下来可以访问 Flink UI 页面并通过不同的方式提交作业：
+   - kubectl proxy:
+     - 在终端运行kubectl proxy命令;
+     - 在浏览器中导航到 http://localhost:8001/api/v1/namespaces/default/services/flink-jobmanager:webui/proxy;
+   - kubectl port-forward:
+     - 运行kubectl port-forward ${flink-jobmanager-pod} 8081:8081将jobmanager的web ui端口映射到本地的8081;
+     - 在浏览器中导航到 http://localhost:8081;
+     - 此外，也可以使用如下命令向集群提交作业: 
+       >$ ./bin/flink run -m localhost:8081 ./examples/streaming/TopSpeedWindowing.jar
+
+   - 基于jobmanager的rest服务上创建NodePort service：
+     - 运行 kubectl create -f jobmanager-rest-service.yaml 来基于 jobmanager 创建 NodePort service。jobmanager-rest-service.yaml 
+       的示例文件可以在 附录 中找到;
+     - 运行 kubectl get svc flink-jobmanager-rest 来查询 server 的 node-port，然后再浏览器导航到 http://<public-node-ip>:<node-port>。
+     - 如果使用 minikube 集群，可以执行 minikube ip 命令来查看 public ip。
+     - 与 port-forward 方案类似，也可以使用如下命令向集群提交作业。
+       >$ ./bin/flink run -m <public-node-ip>:<node-port> ./examples/streaming/TopSpeedWindowing.jar
+3. 调试和访问日志
+   可以通过web用户界面或者kubectl logs访问日志
+4. 高可用的Standalone Kubernetes
+   对于在Kubernetes上实现HA，可以参考当前的[Kubernets高可用服务](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/ha/overview/)。
+   - Kubernetes高可用Services
+     Session模式和Application模式集群都支持使用[Kubernetes 高可用服务](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/ha/kubernetes_ha/)。需要在flink-configuration-configmap.yaml中添加如下Flink配置项，配置了HA存储目录相对应的文件系统必须在运行时可用。请参阅[自定义Flink镜像](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/docker/#advanced-customization)和[启用文件系统插件](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/docker/#using-filesystem-plugins)获取更多相关信息。
+     ```yaml
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+      name: flink-config
+      labels:
+         app: flink
+      data:
+      flink-conf.yaml: |+
+      ...
+         kubernetes.cluster-id: <cluster-id>
+         high-availability: kubernetes
+         high-availability.storageDir: hdfs:///flink/recovery
+         restart-strategy: fixed-delay
+         restart-strategy.fixed-delay.attempts: 10
+      ...  
+     ```
+     此外，你必须使用具有创建/编辑/删除ConfigMap权限的service账号启动JobManager和TaskManager pod，请查看[如何为pod配置service账号](如何为 pod 配置 service 账号)获取更多信息。当启用了高可用，Flink会使用自己的HA服务进行服务发现。因此，JobManagerPod会使用IP地址而不是kubernetes的service名称来作为jobmanager.rpc.address的·配置项启动。完整配置参考[附录](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#appendix)。通常，只启动一个JobManager pod就足够了，因为一旦pod崩溃，Kubernetes就会重新启动它。如果要实现更快的恢复，需要将jobmanager-session-deployment-ha.yaml中的`replicas`配置或 jobmanager-application-ha.yaml中的`parallelism`配置设定为大于1的整型值来启动 Standby JobManagers。
+   - 启用 Queryable State
+     如果你为TaskManager创建了NodePort service，那么你就可以访问TaskManager的Queryable State服务:
+     - 运行`kubectl create -f taskmanager-query-state-service.yaml`来为 taskmanager pod 创建 NodePort service。 
+       taskmanager-query-state-service.yaml 的示例文件可以从[附录](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/resource-providers/standalone/kubernetes/#common-cluster-resource-definitions)中找到。
+     - 运行`kubectl get svc flink-taskmanager-query-state`来查询 service 对应 node-port 的端口号。然后你就可以创建 QueryableStateClient(<public-node-ip>, <node-port> 来提交状态查询。
+   - 在 Reactive 模式下使用 Standalone Kubernetes(暂时忽略)
+
+
+
+
+### Working Directory
+### Docker设置
+### Kubernetes设置
 ## Native Kubernetes
 下面的章节描述如何部署原生的Flink到K8s上。
 ### Getting Started

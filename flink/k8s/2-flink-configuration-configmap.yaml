@@ -2,32 +2,37 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: flink-config
+  namespace: flink
   labels:
     app: flink
+    component: flink-config
 data:
   flink-conf.yaml: |+
     jobmanager.rpc.address: flink-jobmanager
-    taskmanager.numberOfTaskSlots: 2
+    taskmanager.numberOfTaskSlots: 16
     blob.server.port: 6124
     jobmanager.rpc.port: 6123
     taskmanager.rpc.port: 6122
     queryable-state.proxy.ports: 6125
     jobmanager.memory.process.size: 1600m
     taskmanager.memory.process.size: 1728m
-    parallelism.default: 2    
+    parallelism.default: 1    
+    kubernetes.cluster-id: iidp
+    high-availability: org.apache.flink.kubernetes.highavailability.KubernetesHaServicesFactory
+    high-availability.storageDir: hdfs://szth-inf-bce0979b86a.szth:8020/flink/recovery
   log4j-console.properties: |+
-    # 如下配置会同时影响用户代码和 Flink 的日志行为
+    # This affects logging for both user code and Flink
     rootLogger.level = INFO
     rootLogger.appenderRef.console.ref = ConsoleAppender
     rootLogger.appenderRef.rolling.ref = RollingFileAppender
 
-    # 如果你只想改变 Flink 的日志行为则可以取消如下的注释部分
+    # Uncomment this if you want to _only_ change Flink's logging
     #logger.flink.name = org.apache.flink
     #logger.flink.level = INFO
 
-    # 下面几行将公共 libraries 或 connectors 的日志级别保持在 INFO 级别。
-    # root logger 的配置不会覆盖此处配置。
-    # 你必须手动修改这里的日志级别。
+    # The following lines keep the log level of common libraries/connectors on
+    # log level INFO. The root logger does not override this. You have to manually
+    # change the log levels here.
     logger.akka.name = akka
     logger.akka.level = INFO
     logger.kafka.name= org.apache.kafka
@@ -37,13 +42,13 @@ data:
     logger.zookeeper.name = org.apache.zookeeper
     logger.zookeeper.level = INFO
 
-    # 将所有 info 级别的日志输出到 console
+    # Log all infos to the console
     appender.console.name = ConsoleAppender
     appender.console.type = CONSOLE
     appender.console.layout.type = PatternLayout
     appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss,SSS} %-5p %-60c %x - %m%n
 
-    # 将所有 info 级别的日志输出到指定的 rolling file
+    # Log all infos in the given rolling file
     appender.rolling.name = RollingFileAppender
     appender.rolling.type = RollingFile
     appender.rolling.append = false
@@ -57,6 +62,6 @@ data:
     appender.rolling.strategy.type = DefaultRolloverStrategy
     appender.rolling.strategy.max = 10
 
-    # 关闭 Netty channel handler 中不相关的（错误）警告
-    logger.netty.name = org.jboss.netty.channel.DefaultChannelPipeline
+    # Suppress the irrelevant (wrong) warnings from the Netty channel handler
+    logger.netty.name = org.apache.flink.shaded.akka.org.jboss.netty.channel.DefaultChannelPipeline
     logger.netty.level = OFF    
