@@ -33,8 +33,13 @@ spec:
       min.insync.replicas: 1
       inter.broker.protocol.version: "3.2"
     storage:
-      type: ephemeral
-      size: 1Gi
+      type: jbod
+      volumes:
+      - id: 0
+        type: persistent-claim
+        size: 100Gi
+        class: cephfs
+        deleteClaim: false
     template:
       pod:
         securityContext:
@@ -43,8 +48,10 @@ spec:
   zookeeper:
     replicas: 1
     storage:
-      type: ephemeral
-      size: 1Gi
+      type: persistent-claim
+      size: 100Gi
+      class: cephfs
+      deleteClaim: false
     template:
       pod:
         securityContext:
