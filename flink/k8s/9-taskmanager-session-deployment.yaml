@@ -35,6 +35,8 @@ spec:
         volumeMounts:
         - name: flink-config-volume
           mountPath: /opt/flink/conf/
+        - name: flink-kafka-volume
+          mountPath: /opt/kafka/jks/
         securityContext:
           runAsUser: 9999  # refers to user _flink_ from official flink image, change if necessary
       serviceAccountName: flink-service-account
@@ -47,3 +49,7 @@ spec:
             path: flink-conf.yaml
           - key: log4j-console.properties
             path: log4j-console.properties
+      - name: flink-kafka-volume
+        configMap:
+          name: flink-kafka-config
+            
