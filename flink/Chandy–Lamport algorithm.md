@@ -1,0 +1,1 @@
+**Chandy–Lamport algorithm**是一个在分布式系统中记录一个异步系统的全局一致状态的快照算法，它是由Leslie Lamport与K.Mani Chandy开发。
