@@ -3460,3 +3460,79 @@ AVL树是形式最古老的平衡二叉树，一种获得最小二叉查找树�
 
 ### 实现图
 图的2种最常用的实现方式邻接矩阵与邻接表。
+- 邻接矩阵是一个n*n的数组，无向图的邻接矩阵是对称的，加权图可以表示权重;
+- 邻接表，由n个链表构成，可以直接存储节点值语权重;
+根据图的使用方式不同，可以选择不同的实现。2种图中最常见的操作:
+- 确定顶点$i$到顶点$j$是否存在边（这种方式适合使用邻接矩阵，因为可以直接定位，不需要查找链表）
+- 查找给定顶点$i$的所有邻接顶点(这种方式适合邻接表，因为不需要遍历行，直接取出邻接表的链表即可)
+邻接矩阵的空间总是比邻接表要更多的。JCF中没有包含ADT图，可以有不同的实现。
+```java
+package com.zyx.java.adt.chapter14;
+
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.Vector;
+import java.util.stream.IntStream;
+
+/**
+ * Created by zhangyongxiang on 2022/11/29 1:39 AM
+ **/
+public class Graph {
+    /**
+     * num of vertices in the graph
+     */
+    private int numVertices;
+    
+    /**
+     * num of edges in the graph
+     */
+    private int numEdges;
+    
+    /**
+     * for each vertex, we need to keep track of the edges,
+     */
+    private Vector<TreeMap<Integer, Integer>> adjList;
+    
+    public Graph(final int n) {
+        this.numVertices = n;
+        this.numEdges = 0;
+        this.adjList = new Vector<>();
+        IntStream.range(0, n).forEach(i -> this.adjList.add(new TreeMap<>()));
+    }
+    
+    public int getNumVertices() {
+        return this.numVertices;
+    }
+    
+    public int getNumEdges() {
+        return this.numEdges;
+    }
+    
+    public int getEdgeWeight(final Integer source, final Integer target) {
+        return this.adjList.get(source).get(target);
+    }
+    
+    public void addEdge(final Integer source, final Integer target,
+            final int weight) {
+        this.adjList.get(source).put(target, weight);
+        this.numEdges++;
+    }
+    
+    public void removeEdge(final Integer source, final Integer target) {
+        this.adjList.get(source).remove(target);
+        this.numEdges--;
+    }
+    
+    public Edge findEdge(final Integer source, final Integer target) {
+        return new Edge(source, target, this.adjList.get(source).get(target));
+    }
+    
+    public Map<Integer, Integer> getAdjacent(final Integer source) {
+        return this.adjList.get(source);
+    }
+}
+```
+## 图的遍历
+图遍历操作可以确定图是否是连通的，遍历图不一定能访问到图的所有节点，2种图的遍历算法:
+- 深度优先查找，DFS，deep-frist search，一种回溯的思路，
+- 广度优先查找，
