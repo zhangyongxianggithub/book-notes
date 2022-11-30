@@ -3561,4 +3561,119 @@ public class Graph {
     }
   }
   ```
-- 广度优先查找，BFS，breadth-first search，先访问所有的邻接节点，再访问其他节点。
+- 广度优先查找，BFS，breadth-first search，先访问所有的邻接节点，再访问其他节点。要使用队列，迭代版本如下:
+  ```java
+  +bfs(in v: Vertex)
+  // traverse a graph beginning at Vertex v by using a breadth-first search: Iterative version
+  q.createQueue()
+  // add v to queue and mark it
+  q.enqueue(v)
+  Mark v as visited
+  while(!q.isEmpty()){
+    w=q.dequeue()
+    // loop invariant: there is a path from vertex w to every vertex in the queue q
+    for(each unvisited vertex u adjacent to w){
+        Mark u as visited
+        q.enqueue(u)
+    }
+  }
+  ```
+JCF实现的BFS代码:
+```java
+public class BFSIterator implements Iterator<Integer> {
+    private Graph g;
+    private int numVertices;
+    private int count;
+    private int[] mark;
+    private int iter;
+    public BFSIterator(final Graph g) {
+        this.g = g;
+        this.numVertices = g.getNumVertices();
+        this.mark = new int[this.numVertices];
+        Arrays.fill(this.mark, 0, this.numVertices, -1);
+        this.count = 0;
+        this.iter = -1;
+        startSearch();
+    }
+    @Override
+    public boolean hasNext() {
+        return this.iter >= 0 && this.iter < this.numVertices;
+    }
+    @Override
+    public Integer next() {
+        if (hasNext()) {
+            return this.mark[this.iter++];
+        } else {
+            throw new NoSuchElementException();
+        }
+    }
+    protected void startSearch() {
+        for (int v = 0; v < this.numVertices; v++) {
+            if (this.mark[v] == -1) {
+                search(v);
+            }
+        }
+    }
+    protected void search(final Integer vertex) {
+        final LinkedList<Integer> q = new LinkedList<>();
+        Map<Integer, Integer> m;
+        Set<Integer> connectedVertices;
+        Integer v;
+        q.add(vertex);
+        while (!q.isEmpty()) {
+            v = q.remove();
+            if (this.mark[v] == -1) {
+                this.mark[v] = this.count++;
+                m = this.g.getAdjacent(v);
+                connectedVertices = m.keySet();
+                for (final Integer w : connectedVertices) {
+                    if (this.mark[w] == -1) {
+                        q.add(w);
+                    }
+                }
+                
+            }
+        }
+    }
+}
+```
+## 图的应用
+### 拓扑排序
+拓扑排序就是自然顺序，拓扑排序中么，若x有到y的边，则x在y之前。有可能有多种拓扑排序。确定拓扑排序的算法可以是一种递归算法:
+- 查找任意一个无后继的顶点，取出放到顶点列表头，删除所有相关的边；
+- 重复执行上面的过程
+最终得到的顶点列表就是拓扑排序节点.
+```java
++topSort(in theGraph:Graph)
+// arranges the vertices in graph theGraph into a topological order and places them in list aList return aList
+n = number of vertices in theGraph
+for(step=1 through n){
+    select a vertex v that has no successors
+    aList.add(0,v);
+    delete from theGraph vertex v and its edges
+}
+return aList;
+```
+还有一种使用前驱节点的算法实现拓扑排序，思路如下:
+```java
++topSort(in theGraph: Graph): List
+//arranges the vertices in graph theGraph into a topological order and
+//  places them in list aList return aList
+s.createStack()
+for(all vertices v in the graph theGraph){
+    if(v has no predecessors){
+        s.push(v)
+        mark v as visited
+    }
+}
+while(!s.isEmpty()){
+    if(all vertices adjacent to the vertex on the top of the stack have been visited){
+        v=s.pop()
+        aList.add(0,v)
+    }else{
+        select an unvisited vertex u adjacent to the vertex on the top of the stack
+        s.push(u)
+        Mark u as visited
+    }
+}
+```
