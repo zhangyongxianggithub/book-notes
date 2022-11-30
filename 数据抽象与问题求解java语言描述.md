@@ -3534,5 +3534,31 @@ public class Graph {
 ```
 ## 图的遍历
 图遍历操作可以确定图是否是连通的，遍历图不一定能访问到图的所有节点，2种图的遍历算法:
-- 深度优先查找，DFS，deep-frist search，一种回溯的思路，
-- 广度优先查找，
+- 深度优先查找，DFS，deep-frist search，一种回溯的思路；简单的递归形式如下:
+  ```java
+  +dfs(in v:Vertex)
+  // traverse a graph begingin at Vertex v by using a dfs: recursive version
+  Mark v as visited
+  for(each unvisited vertex u adjacent to v)
+     dfs(u)
+  ```
+  使用栈的版本如下:
+  ```java
+  dfs(in v: Vertex)
+  // traverse a graph beginning at vertex v by using dfs: iteration version
+  s.createStack()
+  // push v onto the stack and mark it
+  s.push(v)
+  Mark v as visited
+  // loop invariant: there is a path from vertex v at the botom of the stack to the vertex at the top of s
+  while(!s.isEmpty()){
+    if(no unvisited vertices are adjacent to the vertex on the top of the stack){
+        s.pop()
+    }else{
+        select an unvisited vertex u adjacent to the vertex on the top of s
+        s.push(u)
+        mark u as vivited
+    }
+  }
+  ```
+- 广度优先查找，BFS，breadth-first search，先访问所有的邻接节点，再访问其他节点。
