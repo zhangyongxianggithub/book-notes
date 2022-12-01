@@ -3677,3 +3677,34 @@ while(!s.isEmpty()){
     }
 }
 ```
+### 生成树
+树是特殊的无向图，联通无环，无向联通图G的生成树(spanning tree)是G的一个子图，包含G的所有的节点以及形成树的足够的边。有环的无向联通图，删除边直至无环，则得到图的生成树，有3个事实:
+- $n$个顶点的无向联通图至少有$n-1$条边;
+- 有$n$个顶点和$n-1$条边的无向联通图不包含环;
+- 有$n$个顶点，边数大于$n-1$的无向联通图至少包含一个环;
+通过顶点数与边数可以确定联通图是否包含环，图的生成树有2种算法都是基于遍历的.
+- DFS生成树，深度遍历图时，经过的边就是生成树的边，没有遍历到的边删掉，就得到生成树（边数最少的联通图），简单的过程如下:
+  ```java
+  +dfsTree(in v: Vertex)
+  // forms a spanning tree for a connected undirected graph, beginning at vertex v by using dfs: Recursive version
+  Mark v as visited
+  for(each unvisited vertex u adjacent to v){
+    Mark the edge from u to v
+    dfsTree(u)
+  }
+  ```
+- BFS生成树，思路与DFS是一致的。
+### 最小生成树
+最小生成树，就是边的权值最小的生成树，只有在边具有权重的情况下才有效，一个算法就是Prim算法。算法的思想是开始时算法只包含起始顶点，在各个阶段，算法选择一条成本最低的边，边从树中的一个顶点开始，在一个未在树中的顶点结束，将该边与它的结束节点添加到树中。伪代码如下:
+```java
++PrimsAlgorithm(in v:Vertex)
+// Determine a minimum spanning tree for a weightted connected undirected graph whose weights are nonnegative
+// beginning with any vertex v
+Mark vertex v as visited and include it in the minimum spanning tree
+while(there are unvisited vertices){
+    Find the least-cost edge(v, u) from a visited vertex v to some unvisited vertex u
+    Mark u as visited
+    add the vertex u and the edge(v, u) to the minimum spanning tree
+}
+```
+### 最短路径
