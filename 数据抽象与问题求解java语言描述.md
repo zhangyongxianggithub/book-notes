@@ -3708,3 +3708,5 @@ while(there are unvisited vertices){
 }
 ```
 ### 最短路径
+加权有向图的常见操作是得到2点见的最短路径，这里的最短路径是指的权值之和最小。Dijkstra提出了一个算法可以确定给定原始点到其他顶点的最短路径，该算法使用选取的顶点集合$vertexSet$以及一个数组$weight$，其中$weight[v]$是从顶点0到$v$，通过$vertextSet$中顶点的最短路径的权值.
+- 
