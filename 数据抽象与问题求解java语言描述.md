@@ -3709,4 +3709,20 @@ while(there are unvisited vertices){
 ```
 ### 最短路径
 加权有向图的常见操作是得到2点见的最短路径，这里的最短路径是指的权值之和最小。Dijkstra提出了一个算法可以确定给定原始点到其他顶点的最短路径，该算法使用选取的顶点集合$vertexSet$以及一个数组$weight$，其中$weight[v]$是从顶点0到$v$，通过$vertextSet$中顶点的最短路径的权值.
-- 
+- 开始时，$vertexSet$只包含顶点0，而$weight$含从顶点0到所有其他顶点的单边路径的权值，也就是$weight[v]=matrix[0][v]$
+- 查找一个不在$vertexSet$,且使$weight[v]$最小的顶点$v$，将$v$添加到$vertexSet$，对所有不在$vertexSet$的$u$，检查$weight[v]$的值，确保最小的，$weight[u]= min(wight[u], weight[v]+matrix[v][u])$，持续不断的迭代，直到所有的节点都在$vertexSet$中。
+伪代码如下:
+```java
++shortestPath(in theGraph: Graph, in weight:WeightArray)
+// finds the minimum-cost paths between an origin vertex
+// (vertex 0) and all other vertices in a weighted directed graph theGraph.
+// the array weight contains theGraph's weights which are nonnegative
+//  Step 1: initialization
+Create a set vertexSet that contains only vertex 0
+n = number of vertices in theGraph
+for(v=0 through n-1){
+    weight[v]=matrix[0][v]
+}
+// Step 2: through n
+// invariant:
+```
