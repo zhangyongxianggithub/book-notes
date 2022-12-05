@@ -3724,5 +3724,33 @@ for(v=0 through n-1){
     weight[v]=matrix[0][v]
 }
 // Step 2: through n
-// invariant:
+// invariant: For v not in vertexSet， weight[v] is the smallest weight of all paths from 0 to v that pass
+// through only vertices in vertexSet before reaching v.
+// For v in vertexSet, weight[v] is the smallest weight of all paths from 0 to v(including paths outside vertexSet), and the shortest path from 0 to v lies entirely in vertexSet.
+for(step=2 through n){
+    Find the smallest weight[v] such that v is not in vertexSet
+    Add v to vertexSet
+    for(all vertices u not in vertexSet){
+        if(weight[u]>weight[v]+matrix[v][u]){
+            weight[u]=weight[v]+matrix[v][u]
+        }
+    }
+}
 ```
+### 回路
+循环的别名，无向图中的路径从$v$开始，正好通过图的各边一次，并在$v$终止，则称为Euler回路，当且仅当通过每个顶点的边数为偶数时，才存在Euler回路.
+### 一些复杂问题
+- 流动推销员问题;
+- 三用品问题;
+- 四颜色问题.
+## 小结
+- 图的2种最常见的实现方式是邻接矩阵与邻接表，2种实现方式各有优缺点，应根据应用程序的实际需要来选择;
+- 图的查找是栈/队列的重要应用，DFS是一种图遍历算法，使用栈跟踪一系列未访问的顶点，算法到达图的最深处，然后折回，BFS算法使用队列跟踪一系列未访问的顶点，在访问所有邻接顶点后，才进一步遍历图;
+- 拓扑排序生成无环有向图的顶点的线性顺序，若图中有从顶点$x$到顶点$y$的有向边，则$x$在$y$之前;
+- 树是无环的有向连通图，无向连通图的生成树是一个子图，包含图的所有顶点以及构成树的足够边，DFS/BFS遍历算法可以生成DFS/BFS生成树;
+- 加权无向图的最小生成树是边值和最小的生成树，一个图可以包含若干颗最小生成树，但边值和相同;
+- 在加权有向图中，2个顶点之间的最短路径是边权值和最小的路径;
+- 无向图的Euler回路是一个环，它从顶点$v$开始，恰好通过图中的每条边一次，在$v$终止;
+- 无向图的Hamilton回路是一个环，它从顶点$v$开始，正好通过图中的每个顶点一次，在$v$终止.
+
+# 第15章 外部方法
