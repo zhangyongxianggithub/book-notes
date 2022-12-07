@@ -3769,6 +3769,35 @@ buf写会dataFile文件的第i块
 
 追加块的内容，IO块的时间比内存处理块的时间更多，所以访问记录时要减少块访问的次数。要减少块访问的次数，需要对数据排序或者具备一定的查找功能。
 ## 排序外部文件的数据
-排序存储在外部文件中的数据，外部文件包含1600雇员记录，按照社会保险号排序这些记录，每个块包含100条记录，文件包含16个块，设程序每次访问的内存只能操作300条记录，即3个块。归并排序可以处理这种不能一次在内存中加载所有数据的排序，归并算法的基本原理是，将2个有序的部分合并为一个有序的部分。
+排序存储在外部文件中的数据，外部文件包含1600雇员记录，按照社会保险号排序这些记录，每个块包含100条记录，文件包含16个块，设程序每次访问的内存只能操作300条记录，即3个块。归并排序可以处理这种不能一次在内存中加载所有数据的排序，归并算法的基本原理是，将2个有序的部分合并为一个有序的部分。归并排序排序外部文件的2个阶段:
+- 排序各个记录块;
+- 执行一系列归并;
+1. 排序各个记录块
+   从$F$中读区一个块，使用内部排序算法排序后，写入到文件$F_1$中，全部处理完后，$F_1$包含所有的有序块。
+2. 归并有序块
+   $F_1$归并到$F_2$再从$F_2$归并到$F_1$，基本就是这个过程，因为内存能处理300个记录，分为in1、in2与out3个大小一样的内存区，out用于保存in1与in2归并的结果，满时写入到文件中，in1或者in2空时从文件块中加载记录。
+将$F_1$中任意大小的有序段$R_i$与$R_j$归并到$F_2$的高级算法如下:
+```java
+Read the first block of Ri into in1
+Read the first block of Rj into in2
+while(either in1 or in2 is not exhausted){
+    select the smallest leading record of in1 and in2 and place it into the next position of out(
+        if one of the buffers is exhausted, select the leading record from the other
+    )
+    if(out is full{
+        Write its contents to the next block of F2
+    }
+    if(in1 is exhausted and blocks remain in Ri){
+        Read the next block into in1
+    }
+    if(in2 is exhausted and blocks remain in Rj){
+        Read the next block into in2
+    }
+}
+```
 ## 外部表
+在外部存储文件中组织记录的技术，支持高效的执行检索、插入、删除和遍历等ADT表操作。假设随机文件中的记录是有序的（使用前面的算法排序），且作为外部表的表项，则遍历的算法如下:
+```java
++traverseTable(in dataFile: File)
+```
 ## 小结
