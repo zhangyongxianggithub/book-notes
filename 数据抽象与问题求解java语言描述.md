@@ -3798,6 +3798,47 @@ while(either in1 or in2 is not exhausted){
 ## 外部表
 在外部存储文件中组织记录的技术，支持高效的执行检索、插入、删除和遍历等ADT表操作。假设随机文件中的记录是有序的（使用前面的算法排序），且作为外部表的表项，则遍历的算法如下:
 ```java
-+traverseTable(in dataFile: File)
++traverseTable(in dataFile: File, in numberOfBlocks:integer, in recordsPerBlock:integer)
+// traverses the sorted file dataFile in sorted order. visiting each node
+// read each block of file dataFile into an internal buffer buf
+for(blockNumber = 1 through numberOfBlocks){
+    buf.readBlock(dataFile, blockNumber)
+    // visit each record in the block
+    for(recordNumber = i through recordsPerBlock){
+        visit record buf.getRecord(recordNumber-1)
+    }
+}
 ```
+在有序文件上执行tableRetrieve操作，使用二叉查找算法就可以
+```java
++tableRetrieve(in dataFile: File, in recordsPerBlock:integer, in first:integer, in last:integer, in searchKey:KeyType)
+// searches blocks first through last of file dataFile and returns the record whose search key equals // //searchKey, the operation fails and returns null if no such items exists
+if(first>last or nothing is left to read from dataFile){
+    return null
+}
+else{
+    // read middle block of file dataFile into buffer buf
+    mid=(first+last)/2
+    buf.readBlock(dataFile, mid)
+    if(searchKey>=buf.getRecord(0).getKey()&&searchKey<=buf.getRecord(recordsPerBlock-1).getKey()){
+        // desired block is found
+        Search buffer buf for record buf.getRecord(j) whose search key equals searchKey
+        if(record is found){
+            tableItem=buf.getRecord(j)
+            return tableItem
+        }else{
+            return null
+        }
+    }else if(searchKey<buf.getRecord(0).getKey()){
+        return tableRetrieve(dataFile, recordsPerBlock, first, mid-1, searchKey)
+    }else{
+        return tableRetrieve(dataFile, recordsPerBlock, mid+1, last, searchKey)
+    }
+}
+```
+- 优点: 数据有序，可以使用二叉查找;
+- 缺点: 数据插入或者删除，需要移动元素到后续所有的块.
+适合变更不多的外部表实现方案。
+### 确定外部文件的索引
+
 ## 小结
