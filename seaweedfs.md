@@ -1,59 +1,4 @@
 [TOC]
-- [- Filer Cassandra Setup](#--filer-cassandra-setup)
-- [组件](#组件)
-  - [Master service](#master-service)
-  - [Volume service](#volume-service)
-  - [Filer service](#filer-service)
-  - [S3 service](#s3-service)
-  - [Volume](#volume)
-  - [Collection](#collection)
-- [Getting Started](#getting-started)
-  - [安装Seaweedfs](#安装seaweedfs)
-  - [以Docker的方式运行](#以docker的方式运行)
-- [Master Server API](#master-server-api)
-- [Volume Server API](#volume-server-api)
-- [Filer服务的API](#filer服务的api)
-- [客户端库](#客户端库)
-  - [GRPC APIs](#grpc-apis)
-  - [使用SeaweedFS的项目](#使用seaweedfs的项目)
-- [SeaweedFS Java Client](#seaweedfs-java-client)
-  - [创建jar包](#创建jar包)
-  - [读文件](#读文件)
-  - [写文件](#写文件)
-  - [观察文件变更](#观察文件变更)
-  - [标准文件操作](#标准文件操作)
-  - [高级用法](#高级用法)
-- [复制](#复制)
-  - [在特定的数据中心上分配File Key](#在特定的数据中心上分配file-key)
-  - [Write and Read](#write-and-read)
-- [Store file with Time To Live](#store-file-with-time-to-live)
-  - [How to use it?](#how-to-use-it)
-  - [高级用法](#高级用法-1)
-  - [Supported TTL format](#supported-ttl-format)
-  - [如何生效的](#如何生效的)
-  - [实现细节](#实现细节)
-  - [部署](#部署)
-- [Failover Master Server](#failover-master-server)
-  - [Cheat Sheet: Startup multiple servers](#cheat-sheet-startup-multiple-servers)
-  - [如何工作](#如何工作)
-  - [starup multiple master servers](#starup-multiple-master-servers)
-- [Erasure Coding for warm storage](#erasure-coding-for-warm-storage)
-- [Filer](#filer)
-  - [Filer Setup](#filer-setup)
-  - [Directories and Files](#directories-and-files)
-    - [Introduction](#introduction)
-    - [architecture](#architecture)
-    - [Filer Store](#filer-store)
-- [Filer Stores](#filer-stores)
-<<<<<<< HEAD
-    - [Filer Store](#filer-store)
-- [Filer Stores](#filer-stores)
-  - [Filer Cassandra Setup](#filer-cassandra-setup)
-=======
-- [Filer Stores](#filer-stores)
->>>>>>> e9c0184 (update)
-![seaweed fs的架构](seaweedfs/seaweed-architecture.png)
-让云存储更便宜，更快。为了减少API的消耗以及传输消耗，减少读写延迟，你可以构建一个Seaweedfs集群做云存储。
 # 组件
 SeaweedFS包含3个概念性的组件：
 - master service，提供分布式的对象存储，用户可以配置复制与副本等；
@@ -909,7 +854,7 @@ Filer有一个连接到Master的持久客户端，以获取所有卷的位置更
 对于读文件来说:
 - Filer lookup metadata from Filer Store, which can be Cassandra/Mysql/Postgres/Redis/LevelDB/etcd/Sqlite;
 - Filer read from volume servers and pass along to the read request;
-![文件读](seaweed/FilerRead.png)
+![文件读](seaweedfs/FilerRead.png)
 对于写文件来说:
 - Client stream files to Filer
 - Filer uploads data to Weed Volume Servers, and break the large files into chunks.
