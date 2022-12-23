@@ -872,4 +872,7 @@ Filer有一个连接到Master的持久客户端，以获取所有卷的位置更
 - 当直接使用Filer的简单形式时，Filer除了要处理文件元数据外还要传输文件内容，所以最好添加filer集群，当使用了weed mount模式时，filer只提供文件元数据检索，实际文件内容在weed mount和weed volume服务器之间直接读写。所以filer没有那么多负载。
 # Filer Stores
 Filer Store存储文件元数据与目录信息
-
+# Amazon S3 API
+为了与S3 API兼容，seaweedfs额外提供了`weed s3`命令，相比操作云上的文件，这种方式读写文件更快。
+## how it works
+`weed s3`命令会开启一个无状态的网关服务器将S3 API请求转换为Filer操作，为了方便，`weed server -s3`会启动一个master服务、一个volume服务，一个filer处理器以及一个s3网关。`weed filer -s3`也会启动一个filer与一个s3网关。每个bucket保存在一个集合中，对应的filer路径是/buckets/<bucket_name>，删除整个集合就把bucket也删除了。
