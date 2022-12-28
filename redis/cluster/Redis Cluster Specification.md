@@ -7,4 +7,20 @@ Redis Cluster是Redis的分布式实现，设计中的目标按照重要性考�
 - 可用性，Redis Cluster在以下场景下集群总是可用：大部分master节点可用，并且对少部分不可用的master，每一个master至少有一个当前可用的slave。更进一步，通过使用 replicas migration 技术，当前没有slave的master会从当前拥有多个slave的master接受到一个新slave来确保可用性。
 ## Implemented subset
 Redis Cluster支持所有的单个key的命令，执行复杂的多个key的操作的命令比如set并集或者交集的实现只支持操作中的所有的key都必须是hash到同一个slot中的所有的key。Redis Cluster实现了一个叫做hash tags的概念，可以用来强制特定的key存储到同一个hash slot中，然而，当人工重新切分分片时，多个key的操作可能会失效。Redis Cluster不支持多个数据库，只支持数据库0，select命令不可用。
-# Redis Cluster协议中Clients与Servers角色
+## Redis Cluster协议中Clients与Servers角色
+在Redis Cluster中，节点负责持有数据，构成集群的状态，还包括映射key到正确的节点，节点要能够自动发现其他节点，检测节点被删除，当master节点发生错误时，可以帮助slave节点切换为master节点以便可以继续执行操作。集群通信使用一个TCP bus与一个二进制协议，叫做Redis Cluster Bus，集群中的节点使用bus构成强连通图，节点使用gossip协议来广播集群变更信息可以实现发现新节点，发送ping心跳信息来保证所有的节点都正常工作，还会发送特定条件满足的集群信号。cluster bus也用来广播Pub/Sub信息或者触发人工故障恢复。因为cluster节点不会代理任何请求，客户端执行操作时可能会重定向到key所在的节点，理论上，客户端可以自由地向集群中的所有节点发送请求，如果需要则进行重定向，因此客户端不需要保存集群的状态。然而，能够缓存键和节点之间的映射的客户端可以提高性能。
+## 写入安全
+Redis Cluster节点间采用异步复制，最后一次故障恢复确定最终结果。这意味着最后选出的主数据集最终会替换所有其他副本。总有一个时间窗口可能会在分区期间丢失写入。然而，对于连接到大多数master的客户端和连接到少数master的客户端，这些窗口非常不同。与连接到少数master的连接执行的写入相比，Redis集群更努力地保留由连接到大多数master的客户端执行的写入。以下是导致故障期间大多数master中接收到的已确认写入丢失的场景示例：
+- 写入会到达一个主节点，但虽然主节点可能能够回复客户端，但写入可能不会通过主节点和副本节点之间使用的异步复制传播到副本。如果master在写入未到达副本的情况下死亡，并且master在足够长的时间内无法访问，则集群将提升其副本之一成为master，则写入将永远丢失。这在主节点突然完全失效的情况下通常很难观察到，因为主节点试图几乎同时回复客户端（确认写入）和副本（传播写入）。然而，它是真实世界的故障模式;
+- 写入丢失的另一种理论上可能的故障模式如下:
+  - 因为网络分区，master节点不可达;
+  - master的一个副本被提升为master故障恢复;
+  - 一段时间后，原来的master节点又可达了;
+  - 具有过时路由表的客户端可能会在路由表更新主副本节点转换之前写入旧master。
+
+第二种故障模式不太可能发生，因为主节点无法在足够的时间内与大多数其他主节点通信以进行故障转移，将不再接受写入，并且当分区固定时，仍然会在一小段时间内拒绝写入以允许其他节点通知配置更改。这种故障模式还要求客户端的路由表尚未更新。
+写入少数派master(minority side of a partition)会有一个更长的时间窗会导致数据丢失。因为如果最终导致了failover，则写入少数派master的数据将会被多数派一侧(majority side)覆盖（在少数派master作为slave重新接入集群后）。特别地，如果要发生failover，master必须至少在NODE_TIMEOUT时间内无法被多数masters(majority of maters)连接，因此如果分区在这一时间内被修复，则不会发生写入丢失。当分区持续时间超过NODE_TIMEOUT时，所有在这段时间内对少数派master(minority side)的写入将会丢失。然而少数派一侧(minority side)将会在NODE_TIMEOUT时间之后如果还没有连上多数派一侧，则它会立即开始拒绝写入，因此对少数派master而言，存在一个进入不可用状态的最大时间窗。在这一时间窗之外，不会再有写入被接受或丢失。
+## Availability
+Redis Cluster在少数派分区侧不可用。在多数派分区侧，假设由多数派masters存在并且不可达的master有一个slave，cluster将会在NODE_TIMEOUT外加重新选举所需的一小段时间(通常1～2秒)后恢复可用。这意味着，Redis Cluster被设计为可以忍受一小部分节点的故障，但是如果需要在大网络分裂(network splits)事件中(【译注】比如发生多分区故障导致网络被分割成多块，且不存在多数派master分区)保持可用性，它不是一个合适的方案(【译注】比如，不要尝试在多机房间部署redis cluster，这不是redis cluster该做的事)。假设一个cluster由N个master节点组成并且每个节点仅拥有一个slave，在多数侧只有一个节点出现分区问题时，cluster的多数侧(majority side)可以保持可用，而当有两个节点出现分区故障时，只有 1-(1/(N2-1)) 的可能性保持集群可用。 也就是说，如果有一个由5个master和5个slave组成的cluster，那么当两个节点出现分区故障时，它有 1/(52-1)=11.11%的可能性发生集群不可用。Redis cluster提供了一种成为 Replicas Migration 的有用特性特性，它通过自动转移备份节点到孤master节点，在真实世界的常见场景中提升了cluster的可用性。在每次成功的failover之后，cluster会自动重新配置slave分布以尽可能保证在下一次failure中拥有更好的抵御力。
+## 性能(Performance)
+Redis Cluster不会将命令路由到其中的key所在的节点，而是向client发一个重定向命令 (-MOVED) 引导client到正确的节点。 最终client会获得一个最新的cluster(hash slots分布)展示，以及哪个节点服务于命令中的keys，因此clients就可以获得正确的节点并用来继续执行命令。因为master和slave之间使用异步复制，节点不需要等待其他节点对写入的确认（除非使用了WAIT命令）就可以回复client。 同样，因为multi-key命令被限制在了临近的key(near keys)(【译注】即同一hash slot内的key，或者从实际使用场景来说，更多的是通过hash tag定义为具备相同hash字段的有相近业务含义的一组keys)，所以除非触发resharding，数据永远不会在节点间移动。普通的命令(normal operations)会像在单个redis实例那样被执行。这意味着一个拥有N个master节点的Redis Cluster，你可以认为它拥有N倍的单个Redis性能。同时，query通常都在一个round trip中执行，因为client通常会保留与所有节点的持久化连接（连接池），因此延迟也与客户端操作单台redis实例没有区别。在对数据安全性、可用性方面提供了合理的弱保证的前提下，提供极高的性能和可扩展性，这是Redis Cluster的主要目标。
