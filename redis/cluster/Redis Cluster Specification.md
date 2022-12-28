@@ -32,5 +32,74 @@ Redis Cluster没有使用一致性哈希，而是引入了哈希槽的概念，R
 - 节点A包含0-5500号哈希槽;
 - 节点B包含5501到11000号哈希槽;
 - 节点C包含11001到16384号哈希槽;
-key空间分为16384个槽，所以集群最大的大小是16384个主节点，但是建议的最大大小是1000个节点，每个主节点都处理16384个hash槽中的子集，当slot不需要再节点间移动时，表示集群是稳定的，
-## 
+key空间分为16384个槽，所以集群最大的大小是16384个主节点，但是建议的最大大小是1000个节点，每个主节点都处理16384个hash槽中的子集，当slot不需要再节点间移动时，表示集群是稳定的，当集群稳定时，单个哈希槽将由单个节点提供服务（但是，服务节点可以有一个或多个副本，在网络分裂或故障的情况下替换它，并且可以用于扩展 读取陈旧数据是可接受的操作）。将key映射到slot的基本算法如下:
+```bash
+HASH_SLOT = CRC16(key) mod 16384
+```
+CRC16会输出16bit的校验码，使用集中的14位校验码，这也就是为什么以16384为模的底，
+## Hash tags
+hash槽的计算有一种例外情况就是hash tags，hash tags是一种保证多个key位于同一个slot的方案，这是为了解决集群中的多key操作限制的，为了实现hash tags，slot的计算方式是不同的，如果key包含"{...}"这样的模式，在{}中间的子串会被用来计算hash slot，然而，因为可能可能出现多个{}，算法的的计算规则如下:
+- 如果key包含{;
+- 并且{有对应的};
+- 并且在第一次遇到的{}中至少存在一个字符;
+相比于通过完整的key计算hash slot，只有{}中的字串会被计算hash值。
+比如:
+- {user1000}.following与{user1000}.followers将会hash到同一个slot中，因为字串user1000会被用来计算hash槽;
+- foo{}{bar}整个key会被用来计算hash，因为第一个{}中不含任何字符;
+- foo{{bar}}zap中用来计算的是{bar字符串，因为截取是从第一次遇到{开始，到第一次遇到}结束;
+- foo{bar}{zap}会使用bar计算hash，因为算法在找到满足的字串后就停止搜索了;
+- 如果key以{}开头，那么肯定是通过完整的key来计算hash，通常用于二进制数据作为key的名字.
+下面是HASH_SLOT函数的ruby与c实现:
+```ruby
+def HASH_SLOT(key)
+    s = key.index "{"
+    if s
+        e = key.index "}",s+1
+        if e && e != s+1
+            key = key[s+1..e-1]
+        end
+    end
+    crc16(key) % 16384
+end
+```
+```c
+unsigned int HASH_SLOT(char *key, int keylen) {
+    int s, e; /* start-end indexes of { and } */
+
+    /* Search the first occurrence of '{'. */
+    for (s = 0; s < keylen; s++)
+        if (key[s] == '{') break;
+
+    /* No '{' ? Hash the whole key. This is the base case. */
+    if (s == keylen) return crc16(key,keylen) & 16383;
+
+    /* '{' found? Check if we have the corresponding '}'. */
+    for (e = s+1; e < keylen; e++)
+        if (key[e] == '}') break;
+
+    /* No '}' or nothing between {} ? Hash the whole key. */
+    if (e == keylen || e == s+1) return crc16(key,keylen) & 16383;
+
+    /* If we are here there is both a { and a } on its right. Hash
+     * what is in the middle between { and }. */
+    return crc16(key+s+1,e-s-1) & 16383;
+}
+```
+## Cluster节点属性
+每个节点在集群中都有一个唯一的名字，node名字是随机的160bit的16进制表示，在节点第一次启动时生成，节点将会保存ID在节点的配置文件中，将会永远使用这个ID，或者管理员将配置文件删除，或者通过`CLUSTER RESET`执行重置操作。节点ID用来标识集群中的每个节点，更改节点的IP也不需要更改节点的ID，集群可以检测到节点的IP/PORT的变化，使用gossip协议重新配置集群。节点ID不是每个节点有关的唯一的信息，但是是唯一的全局一致的信息。每个节点也有下面的关联的信息，一些信息是关于这个特定节点的集群配置细节，并且最终在整个集群中是一致的。 一些其他信息，例如上次对节点执行 ping 操作的时间，对于每个节点都是本地的。每个节点包含下面的信息:
+- ID;
+- port;
+- flags，如果节点被标记为replica，则节点是master节点;
+- node被ping的最后时间;
+- pong接收的最后时间;
+- 节点当前配置的epoch;
+- 连接状态;
+- 节点持有的hash slots;
+更多的节点的信息在`CLUSTER NODES`文档中。`CLUSTER NODES`命令可以被发送到集群中的任意节点，提供集群的状态还有每个节点的信息。下面是一个输出例子:
+```bash
+$ redis-cli cluster nodes
+d1861060fe6a534d42d8a19aeb36600e18785e04 127.0.0.1:6379 myself - 0 1318428930 1 connected 0-1364
+3886e65cc906bfd9b1f7e7bde468726a052d1dae 127.0.0.1:6380 master - 1318428930 1318428931 2 connected 1365-2729
+d289c575dcbc4bdd2931585fd4339089e461a27d 127.0.0.1:6381 master - 1318428931 1318428931 3 connected 2730-4095
+```
+在上面的列表中，不同的字段按顺序排列：节点 ID、地址：端口、标志、最后发送的 ping、最后接收的 pong、配置纪元、链路状态、插槽。 当我们谈到 Redis Cluster 的特定部分时，将涵盖有关上述字段的详细信息。
