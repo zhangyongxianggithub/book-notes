@@ -1,4 +1,5 @@
 本参考文档，你可以发现Redis Cluster算法的设计考虑，本文档一直跟随最新的Redis版本更新。
+[TOC]
 # 主要的设计考虑
 ## Redis Cluster目标
 Redis Cluster是Redis的分布式实现，设计中的目标按照重要性考虑如下:
