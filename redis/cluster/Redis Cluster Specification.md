@@ -130,4 +130,16 @@ Redis Cluster是一个强连通网络，在一个N个节点的集群中，每个
 ## 配置epoch
 ## 副本选举与角色提升
 ## 副本排名
-## 
+## Masters reply to replica vote request
+## Practical example of configuration epoch usefulness during partitions
+## Hash slots configuration propagation
+## UPDATE messages, a closer look
+## 节点如何重新加入到集群
+## 副本迁移
+## 副本迁移算法
+## configEpoch conflicts resolution algorithm
+## 节点重置
+## 从集群中移除节点
+## Pub/Sub
+## 附录
+
