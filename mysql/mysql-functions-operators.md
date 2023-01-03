@@ -39,6 +39,9 @@ json函数表
 MySQL 支持两个聚合 JSON 函数 JSON_ARRAYAGG() 和 JSON_OBJECTAGG()。 有关这些的说明，请参见第 12.20 节，“聚合函数”。
 
 MySQL 还支持使用 JSON_PRETTY() 函数以易于阅读的格式“漂亮地打印”JSON 值。 您可以分别使用 JSON_STORAGE_SIZE() 和 JSON_STORAGE_FREE() 查看给定的 JSON 值占用了多少存储空间，以及剩余多少空间用于额外存储。 有关这些函数的完整说明，请参阅第 12.18.8 节，“JSON 实用程序函数”。
+# SUM([DISTINCT] expr)[over_clause]
+返回expr的总数，如果返回的集合没有行，SUM()返回NULL。DISTINCT用于计算不同的expr值的总数。如果空行或者expr是NULL，则函数返回NULL。如果出现了over_clause,则函数是作为窗口函数运行的。
+# Flow Control Functions
 
 
 
