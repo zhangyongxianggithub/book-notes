@@ -136,7 +136,17 @@ Redis Cluster支持在集群运行时添加/移除节点，添加或删除节点
 - 当重新平衡集群时，hash slots会在节点间互相移动.
 
 核心要实现的操作是移动hash slots，从实际存储的角度看，一个hash slot就是一组key的集合，所以Redis Cluster在充分片(移动hash slot)时做的操作就是将一个实例节点的一组keys（属于该hash slot的所有的key）移动到另一个示例节点。为了理解它的工作过程，我们需要使用到`CLUSTER`子命令，这些子命令是用来操作集群节点中的槽转换表。
-## Ask重定向
+- `CLUSTER ADDSLOTS slot1 [slot2] ... [slotN]`
+- `CLUSTER DELSLOTS slot1 [slot2] ... [slotN]`
+- `CLUSTER ADDSLOTSRANGE start-slot1 end-slot1 [start-slot2 end-slot2] ... [start-slotN end-slotN]`;
+- `CLUSTER DELSLOTSRANGE start-slot1 end-slot1 [start-slot2 end-slot2] ... [start-slotN end-slotN]`;
+- `CLUSTER SETSLOT slot NODE node`;
+- `CLUSTER SETSLOT slot MIGRATING node`;
+- `CLUSTER SETSLOT slot IMPORTING node`
+
+前面的4个命令，`ADDSLOTS`，`DELSLOTS`，`ADDSLOTSRANGE`，`DELSLOTSRANGE`用来分配(移除)节点的slot。分配slot到一个给定的master节点就意味着这个master节点要负责保存hash slot的内容，提供相关key的操作服务。分配完成后，这些信息会通过gossip协议在集群内传播，`ADDSLOTS`与`ADDSLOTSRANGE`命令通常用在一个新的集群初始创建时，这时候需要为master节点分配16384个slot的子集。`DELSLOTS`与`DELSLOTSRANGE`指令很少使用，主要用于集群配置的人工修改或者debug。`SETSLOT`指令主要用于将一个slot分配给一个特定的节点，这种模式下，slot可以被设置2种状态`MIGRATING`与`IMPORTING`，这2个特殊的状态主要用于在节点间的slot迁移。
+- 
+# Ask重定向
 ## 客户端连接与重定向处理
 ## 多key操作
 ## 使用副本节点扩展读操作
