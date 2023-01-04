@@ -145,8 +145,25 @@ Redis Cluster支持在集群运行时添加/移除节点，添加或删除节点
 - `CLUSTER SETSLOT slot IMPORTING node`
 
 前面的4个命令，`ADDSLOTS`，`DELSLOTS`，`ADDSLOTSRANGE`，`DELSLOTSRANGE`用来分配(移除)节点的slot。分配slot到一个给定的master节点就意味着这个master节点要负责保存hash slot的内容，提供相关key的操作服务。分配完成后，这些信息会通过gossip协议在集群内传播，`ADDSLOTS`与`ADDSLOTSRANGE`命令通常用在一个新的集群初始创建时，这时候需要为master节点分配16384个slot的子集。`DELSLOTS`与`DELSLOTSRANGE`指令很少使用，主要用于集群配置的人工修改或者debug。`SETSLOT`指令主要用于将一个slot分配给一个特定的节点，这种模式下，slot可以被设置2种状态`MIGRATING`与`IMPORTING`，这2个特殊的状态主要用于在节点间的slot迁移。
-- 
-# Ask重定向
+- 当一个slot被设置为MIGRATING时，节点将接受所有关于这个slot的查询，但前提是存在键，否则查询将使用-ASK 重定向转发到作为迁移目标的节点;
+- 当一个slot被设置IMPORTING状态时，节点将接受所有关于这个slot的查询，但前提是请求之前有一个ASKING命令。如果客户端没有给出ASKING命令，则查询将通过-MOVED重定向错误重定向到真正的slot所在的节点，这与正常情况一样;
+
+看一个例子，假设我们有2个redis master节点，A与B，我们想要将slot-8从A移动到B，我们发送的命令如下:
+- We send B: CLUSTER SETSLOT 8 IMPORTING A;
+- We send A: CLUSTER SETSLOT 8 MIGRATING B;
+
+所有其他的节点当接收到对slot8的查询时，仍然将客户端重定向到A，所以发生的事情是:
+- 所有的已存在的key的查询都继续由A处理;
+- A中不存在的key的查询由B处理，因为A将会把客户端重定向到B;
+
+而且也不会再在A中创建新的key，与此同时，redis-cli可以查询迁移的key，如下命令:
+>CLUSTER GETKEYSINSLOT slot count
+
+上面的命令将会输出slot中keys，发送MIGRRATE命令，keys将会迁移，迁移的过程如下:
+>MIGRATE target_host target_port "" target_database id timeout KEYS key1 key2 ...
+
+MIGRATE命令将连接到目标实例，发送key的序列化版本，一旦收到OK代码，它自己数据集中的旧key将被删除。从外部客户端的角度来看，在任何一个给定时间点，key要么存在A中要么存在于B中。在Redis Cluster中不需要指定0以外的数据库，但是MIGRATE是一个通用命令，可以用于不涉及 Redis Cluster的其他任务。MIGRATE被优化为尽可能快，即使在移动复杂键（如长列表）时也是如此，但在Redis集群中，如果使用数据库的应用程序存在延迟要求，则重新配置存在大键的集群并不是一个明智的过程。当迁移过程最终完成时，SETSLOT \<slot> NODE \<node-id>命令被发送到迁移中涉及的两个节点，以便将slot再次设置为正常状态。相同的命令通常会发送到所有其他节点，以避免等待新配置在集群中自然传播。
+## Ask重定向
 ## 客户端连接与重定向处理
 ## 多key操作
 ## 使用副本节点扩展读操作
