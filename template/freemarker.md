@@ -55,11 +55,64 @@ cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
 Template temp = cfg.getTemplate("test.ftl");
 ```
 当调用这个方法的时候，将会创建一个test.ftl的Template实例，通过读取/where/you/store/templates/test.ftl文件，之后解析(编译)它。Template 实例以解析后的形式存储模板， 而不是以源文件的文本形式。Configuration缓存Template实例，当再次获得test.ftl的时候，它可能再读取和解析模板文件了， 而只是返回第一次的Template实例。
-### 合并模板语数据模型
+### 合并模板与数据模型
+我们已经知道，数据模型+模板-输出，我们有了一个数据模型和一个模板，为了输出就要合并他们，这是由模板的process方法完成的，它又数据模型root和Writer作为参数，然后向Writer对象写入产生的内容，为简单起见，这里我们只做标准的输出。
+```java
+Writer out = new OutputStreamWriter(System.out);
+temp.process(root, out);
+```
+这会向终端输出合并后的内容。
 ### 将代码放在一起
+```java
+import freemarker.template.*;
+import java.util.*;
+import java.io.*;
+
+public class Test {
+
+    public static void main(String[] args) throws Exception {
+        
+        /* ------------------------------------------------------------------------ */    
+        /* You should do this ONLY ONCE in the whole application life-cycle:        */    
+    
+        /* Create and adjust the configuration singleton */
+        Configuration cfg = new Configuration(Configuration.VERSION_2_3_22);
+        cfg.setDirectoryForTemplateLoading(new File("/where/you/store/templates"));
+        cfg.setDefaultEncoding("UTF-8");
+        cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW);
+
+        /* ------------------------------------------------------------------------ */    
+        /* You usually do these for MULTIPLE TIMES in the application life-cycle:   */    
+
+        /* Create a data-model */
+        Map root = new HashMap();
+        root.put("user", "Big Joe");
+        Map latest = new HashMap();
+        root.put("latestProduct", latest);
+        latest.put("url", "products/greenmouse.html");
+        latest.put("name", "green mouse");
+
+        /* Get the template (uses cache internally) */
+        Template temp = cfg.getTemplate("test.ftl");
+
+        /* Merge data-model with template */
+        Writer out = new OutputStreamWriter(System.out);
+        temp.process(root, out);
+        // Note: Depending on what `out` is, you may need to call `out.close()`.
+        // This is usually the case for file output, but not for servlet output.
+    }
+}
+```
 ## 数据模型
 ### 基本内容
+入门章节中，已经演示过如何使用基本的Java类来构建数据模型，在内部，模板中可用的变量都是实现了`freemarker.template.TemplateModel`接口的Java对象，但在数据模型中，可以使用基本的Java集合类作为变量，因为这些变量会在内部被替换为适当的TemplateModel类型，这种功能特性被称作是对象包装。对象包装功能可以透明的把任何类型的对象转换为实现了TemplateModel接口类型的实例，这就使得下面的转换成为可能，如在模板中把`java.sql.ResultSet`转换为序列变量， 把`javax.servlet.ServletRequest`对象转换成包含请求属性的哈希表变量，甚至可以遍历XML文档作为FTL变量(参考这里)。包装(转换)这些对象，需要使用合适的，也就是所谓的对象包装器实现(可能是自定义的实现)；这将在后面讨论。现在的要点是想从模板访问任何对象，它们早晚都要转换为实现了`TemplateModel`接口的对象。那么首先你应该熟悉来写`TemplateModel`接口的实现类。
+有一个粗略的`freemarker.template.TemplateModel`子接口对应每种基本变量类型(TemplateHashModel对应哈希表，TemplateSequenceModel应序列， TemplateNumberModel对应数字等等)。比如，想为模板使用`java.sql.ResultSet` 变量作为一个序列，那么就需要编写一个`TemplateSequenceModel`的实现类，这个类要能够读取`java.sql.ResultSet`中的内容。我们常这么说，使用`TemplateModel`的实现类包装了`java.sql.ResultSet`，基本上只是封装`java.sql.ResultSet`来提供使用普通的`TemplateSequenceModel`接口访问它。请注意一个类可以实现多个 `TemplateModel`接口；这就是为什么FTL变量可以有多种类型 (参看模板开发指南/数值，类型/基本内容)
+这些接口的一个细小的实现是和`freemarker.template`包一起提供的，例如，将一个String转换为FTL的字符串变量，可以使用SimpleScalar，将`java.util.Map`转换成FTL的哈希表变量，可以使用`SimpleHash`等等。如果向尝试自己的`TemplateModel`实现，一个简单的方式是创建它的实例，然后将这个实例放入数据模型中(也就是把它放到哈希表的根root上)。对象包装器会给模板提供它的原状，因为它已经实现了TemplateModel接口，所以没有转换的需要。
 ### 标量
+- 布尔值
+- 数字
+- 字符串
+- 日期类型(子类型： 日期(没有时间部分)，时间或者日期-时间)
 ### 容器
 ### 方法
 ### 指令
