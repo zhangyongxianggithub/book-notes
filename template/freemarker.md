@@ -19,8 +19,42 @@
 # 程序开发指南
 ## 入门
 ### 创建Configuration实例
+首创建`freemarker.template.Configuration`实例，然后调整设置，`Configuration`实例是存储FreeMarker应用级设置的核心部分，同时，它处理创建和缓存预解析模板的工作。也许你只在应用生命周期的开始执行一次:
+```java
+// Create your Configuration instance, and specify if up to what FreeMarker
+// version (here 2.3.22) do you want to apply the fixes that are not 100%
+// backward-compatible. See the Configuration JavaDoc for details.
+Configuration cfg = new Configuration(Configuration.VERSION_2_3_22);
+
+// Specify the source where the template files come from. Here I set a
+// plain directory for it, but non-file-system sources are possible too:
+cfg.setDirectoryForTemplateLoading(new File("/where/you/store/templates"));
+
+// Set the preferred charset template files are stored in. UTF-8 is
+// a good choice in most applications:
+cfg.setDefaultEncoding("UTF-8");
+
+// Sets how errors will appear.
+// During web page *development* TemplateExceptionHandler.HTML_DEBUG_HANDLER is better.
+cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+```
+应该使用单例实例配置。不需要重复创建`Configuration`实例；它的代价很高，尤其是会丢失缓存。`Configuration`实例就是应用级别的单例。当使用多线程应用程序(比如Web网站)，`Configuration`实例中的设置就不能被修改。它们可以被视作为有效的不可改变的对象，也可以继续使用安全发布技术(参考JSR 133和相关的文献)来保证实例对其它线程也可用。比如，通过final或volatile字段来声明实例，或者通过线程安全的IoC容器，但不能作为普通字段。(Configuration中不处理修改设置的方法是线程安全的。)
 ### 创建数据模型
+在简单的示例中你可以使用java.lang和java.util包中的类，还有用户自定义的Java Bean来构建数据对象:
+- 使用java.lang.String来构建字符串;
+- 使用java.lang.Number来派生数字类型;
+- 使用java.lang.Boolean来构建布尔值;
+- 使用java.util.List或Java数组来构建序列;
+- 使用java.util.Map来构建哈希表;
+- 使用自定义的bean类来构建哈希表，bean中的项和bean的属性对应。比如，product的price属性(getProperty())可以通过product.price获取。(bean的action也可以通过这种方式拿到；要了解更多可以参看[这里](file:///Users/zhangyongxiang/Downloads/FreeMarker_2.3.23_Manual_zh_CN/pgui_misc_beanwrapper.html);
+
+如果配置设置项object_wrapper的值是用于所有真实步骤，这里描述的行为才好用。任何由ObjectWrapper包装成的哈希表可以用作根root，也可以在模板中和点、 []操作符使用。如果不是包装成哈希表的对象不能作为根root，也不能像那样在模板中使用。
 ### 获取模版
+模板代表了`freemarker.template.Template`实例。典型的做法是从`Configuration`实例中获取一个`Template`实例。无论什么时候你需要一个模板实例， 都可以使用它的`getTemplate`方法来获取。在之前设置的目录中的test.ftl文件中存储示例模板，那么就可以这样来做:
+```java
+Template temp = cfg.getTemplate("test.ftl");
+```
+当调用这个方法的时候，将会创建一个test.ftl的Template实例，通过读取/where/you/store/templates/test.ftl文件，之后解析(编译)它。Template 实例以解析后的形式存储模板， 而不是以源文件的文本形式。Configuration缓存Template实例，当再次获得test.ftl的时候，它可能再读取和解析模板文件了， 而只是返回第一次的Template实例。
 ### 合并模板语数据模型
 ### 将代码放在一起
 ## 数据模型
