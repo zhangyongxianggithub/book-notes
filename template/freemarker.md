@@ -113,11 +113,204 @@ public class Test {
 - 数字
 - 字符串
 - 日期类型(子类型： 日期(没有时间部分)，时间或者日期-时间)
+  
+每一种标量类型都是Template*type*Model接口的实现，这里的type就是类型的名称，这些接口只定义了一个方法`type getAsType()`，它返回变量的Java类型(boolean、Number、String和Date各自代表的值)。由于历史遗留的原因，字符串标量的接口是`TemplateScalarModel`，而不是TemplateStringModel。这些接口的一个细小的实现和`Simple*type*`类在freemarker.template包中，但是却没有SimpleBooleanModel类型；为了代表布尔值，可以使用`TemplateBooleanModel.TRUE`和`TemplateBooleanModel.FALSE`来单独使用。由于历史遗留的原因，字符串标量的实现类是SimpleScalar，而不是 SimpleString。
+对于日期类型来说，有一些难题，因为Java API通常不区别`java.util.Date`只存储日期部分、时间部分或者2者都存储。为了用本文正确显示值(或者进行其他确定的操作)，Freemarker必须知道哪个部分存储了有意义的信息，那部分没有被使用（通常是标记为0）。不幸的是，通常该信息只是当值从数据库中取得时可用，因为大多数数据库有独立的日期、时间和日期-时间类型，java.sql有3个对应的java.util.Date子类和它们相匹配。`TemplateDateModel`接口有2个方法:
+- java.sql.Date getAsDate()
+- int getDateType()
+
+该接口典型的实现时存储一个java.util.Date对象，加上一个整数来辨别子类型。这个整数的值是TemplateDateModel接口中的常量之一: DATE、TIME、DATETIME、UNKNOWN。`java.lang`和 `java.util`下的类通常被自动转换成`TemplateModel`的实现类，就是所谓的对象包装器ObjectWrapper(请参考之前的对象包装介绍)。如果对象包装器要包装`java.util.Date`类，它不是`java.sq`日期类的实例，那就不能决定子类型是什么，所以使用`UNKNOWN`。之后，如果模板需要使用这个变量，而且操作也需要子类型，那就会停止执行并抛出错误。为了避免这种情况的发生，对于那些可能有问题的变量，模板开发人员必须明确地指定子类型，使用内建函数date，time或datetime(比如lastUpdated?datetime)。请注意，如果和格式化参数一起使用内建函数string，比如foo?string("MM/dd/yyyy")，那么FreeMarker就不必知道子类型了。
 ### 容器
+1. 哈希表
+   哈希表是实现了TemplateHashModel接口的Java对象，TemplateHashModel有2个方法:
+   - TemplateModel get(String key)
+   - boolean isEmpty()
+   
+   get方法当在给定的名称没有找到子变量时返回null。`TemplateHashModelEx`接口扩展了`TemplateHashModel`。它增加了更多的方法，使得可以使用内建函数values和keys来枚举哈希表中的子变量。经常使用的实现类是SimpleHash，该类实现了`TemplateHashModelEx`接口，从内部来说，它使用一个`java.util.Hash`类型的对象存储子变量。 `SimpleHash`类的方法可以添加和移除子变量。 这些方法应该用来在变量被创建之后直接初始化。在FTL中，容器时一成不变的，也就是不能添加、替换和移除容器中的子变量。
+2. 序列
+   序列是实现了TemplateSequenceModel接口的Java对象，包含2个方法:
+   - `TemplateModel get(int index)`
+   - `int size()`
+   
+   经常使用的实现类是`SimpleSequence`。该类内部使用一个`java.util.List`类型的对象存储它的子变量。`SimpleSequence`有添加子元素的方法。在序列创建之后应该使用这些方法来填充序列。
+3. 集合
+   集合是实现了`TemplateCollectionModel`接口的Java对象。这个接口定义了一个方法： `TemplateModelIterator iterator()`。 `TemplateModelIterator`接口和`java.util.Iterator`相似，但是它返回`TemplateModels`而不是`Object`， 而且它能抛出 `TemplateModelException`异常。通常使用的实现类是`SimpleCollection`。
 ### 方法
+方法变量在存于实现了`TemplateMethodModel`接口的模板中，这个接口包含一个方法: `TemplateModel exec(java.util.List arguments)`。当使用方法调用表达式调用方法时，exec方法将会被调用，形参将会包含FTL方法调用形参的值。`exec`方法的返回值给出了FTL方法调用表达式的返回值。`TemplateMethodModelEx`接口扩展了`TemplateMethodModel`接口。它没有添加任何新方法。事实上这个对象实现这个标记接口是给FTL引擎暗示，形式参数应该直接以 `TemplateModel`的形式放进`java.util.List`。否则将会以String形式放入list。出于这些很明显的原因，这些接口没有默认的实现。例如：下面这个方法，返回第一个字符串在第二个字符串第一次出现时的索引位置， 如果第二个字符串中不包含第一个字符串，则返回-1:
+```java
+public class IndexOfMethod implements TemplateMethodModel {
+    
+    public TemplateModel exec(List args) throws TemplateModelException {
+        if (args.size() != 2) {
+            throw new TemplateModelException("Wrong arguments");
+        }
+        return new SimpleNumber(
+            ((String) args.get(1)).indexOf((String) args.get(0)));
+    }
+}
+```
+如果将一个实例放入根数据模型中，像这样:
+```java
+root.put("indexOf", new IndexOfMethod());
+```
+那么可以在模板中调用
+```ftl
+<#assign x = "something">
+${indexOf("met", x)}
+${indexOf("foo", x)}
+```
+如果需要访问FTL运行时环境(读/写变量，获取本地化信息等)，则可以使用Environment.getCurrentEnvironment()来获取。
 ### 指令
+Java程序员可以使用`TemplateDirectiveModel`接口在Java代码中实现自定义指令。详情可以参加API文档。我们要实现一个指令， 这个指令可以将在它开始标签和结束标签之内的字符都转换为大写形式。 就像这个模板:
+```html
+foo
+<@upper>
+  bar
+  <#-- All kind of FTL is allowed here -->
+  <#list ["red", "green", "blue"] as color>
+    ${color}
+  </#list>
+  baaz
+</@upper>
+wombat
+```
+指令源码:
+```java
+package com.example;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.Map;
+
+import freemarker.core.Environment;
+import freemarker.template.TemplateDirectiveBody;
+import freemarker.template.TemplateDirectiveModel;
+import freemarker.template.TemplateException;
+import freemarker.template.TemplateModel;
+import freemarker.template.TemplateModelException;
+
+/**
+ *  FreeMarker user-defined directive that progressively transforms
+ *  the output of its nested content to upper-case.
+ *  
+ *  
+ *  <p><b>Directive info</b></p>
+ * 
+ *  <p>Directive parameters: None
+ *  <p>Loop variables: None
+ *  <p>Directive nested content: Yes
+ */
+public class UpperDirective implements TemplateDirectiveModel {
+    
+    public void execute(Environment env,
+            Map params, TemplateModel[] loopVars,
+            TemplateDirectiveBody body)
+            throws TemplateException, IOException {
+        // Check if no parameters were given:
+        if (!params.isEmpty()) {
+            throw new TemplateModelException(
+                    "This directive doesn't allow parameters.");
+        }
+        if (loopVars.length != 0) {
+                throw new TemplateModelException(
+                    "This directive doesn't allow loop variables.");
+        }
+        
+        // If there is non-empty nested content:
+        if (body != null) {
+            // Executes the nested body. Same as <#nested> in FTL, except
+            // that we use our own writer instead of the current output writer.
+            body.render(new UpperCaseFilterWriter(env.getOut()));
+        } else {
+            throw new RuntimeException("missing body");
+        }
+    }
+    
+    /**
+     * A {@link Writer} that transforms the character stream to upper case
+     * and forwards it to another {@link Writer}.
+     */ 
+    private static class UpperCaseFilterWriter extends Writer {
+       
+        private final Writer out;
+           
+        UpperCaseFilterWriter (Writer out) {
+            this.out = out;
+        }
+
+        public void write(char[] cbuf, int off, int len)
+                throws IOException {
+            char[] transformedCbuf = new char[len];
+            for (int i = 0; i < len; i++) {
+                transformedCbuf[i] = Character.toUpperCase(cbuf[i + off]);
+            }
+            out.write(transformedCbuf);
+        }
+
+        public void flush() throws IOException {
+            out.flush();
+        }
+
+        public void close() throws IOException {
+            out.close();
+        }
+    }
+
+}
+```
+现在我们需要创建这个类的实例， 然后让这个指令在模板中可以通过名称"upper"来访问 (或者是其它我们想用的名字)。一个可行的方案是把这个指令放到数据模型中:`root.put("upper", new com.example.UpperDirective());`，但更好的做法是将常用的指令作为共享变量放到 Configuration中。当然也可以使用内建函数new将指令放到一个FTL库(宏的集合，就像在模板中， 使用 include或import)中：
+```ftl
+<#-- Maybe you have directives that you have implemented in FTL -->
+<#macro something>
+  ...
+</#macro>
+
+<#-- Now you can't use <#macro upper>, but instead you can: -->
+<#assign upper = "com.example.UpperDirective"?new()>
+示例 2
+```
+`TemplateDirectiveModel`对象通常不应该是有状态的，这一点非常重要。一个经常犯的错误是存储指令的状态然后在对象的属性中调用执行。想一下相同指令的嵌入调用，或者指令对象被用作共享变量，并通过多线程同时访问。不幸的是，`TemplateDirectiveModel`不支持传递参数的位置(而不是参数名称)。从FreeMarker 2.4版本开始，它将被修正。
 ### 结点变量
+节点变量体现了树形结构中的结点，结点变量的引入是为了帮助用户在数据模型中处理XML文档。但是它们也可以用于构建树状模型。如需要有关从模板语言角度考虑的结点信息，那么可以阅读之前章节。结点变量有下列属性，它们都由TemplateNodeModel接口的方法提供:
+- 基本属性:
+  - `TemplateSequenceModel getChildNodes()`: 一个结点的子结点序列(除非这个结点是叶子结点，这时方法返回一个空序列或者是null)。 子结点本身应该也是结点变量;
+  - `TemplateNodeModel getParentNode()`:  一个结点只有一个父结点(除非这个结点是结点树的根结点，这时方法返回null).
+- 可选属性，如果一个属性在具体的使用中没有意义，那对应的方法应该返回null:
+  - `String getNodeName()`: 结点名称也是宏的名称，当使用 recurse 和 visit指令时， 它用来控制结点。因此，如果想通过结点使用这些指令， 那么结点的名称是 必须的。
+  - `String getNodeType()`: 在XML中: "element"，"text"，"comment"等。如果这些信息可用，就是通过recurse 和 visit 指令来查找结点的默认处理宏。而且，它对其他有具体用途的应用程序也是有用的;
+  - `String getNamespaceURI()`:这个结点所属的命名空间(和用于库的FTL命名空间无关)。例如，在XML中， 这就是元素和属性所属XML命名空间的URI。这个信息如果可用，就是通过 recurse 和 visit 指令来查找存储控制宏的FTL命名空间。
 ### 对象包装
+对象包装器是实现了`freemarker.template.ObjectWrapper`接口的类，它的目标是实现Java对象(应用程序中特定类等，比如String、Map、List实例)和FTL类型系统之间的映射。它指定了模板如何在数据模型(包含从模板中调用的Java方法的返回值)中发现Java对象。 对象包装器作为插件放入Configuration中，可以使用 object_wrapper属性设置(或者使用Configuration.setObjectWrapper)。从技术角度来说，FTL类型系统由之前介绍过的`TemplateModel`子接口 (`TemplateScalarModel`，`TemplateHashMode`， `TemplateSequenceModel`等)来表示。要映射Java对象到FTL类型系统中，对象包装器的`TemplateModel wrap(java.lang.Object obj)`方法会被调用。有时FreeMarker需要撤回映射，此时 对象包装器ObjectWrapper的`Object unwrap(TemplateModel)`方法就被调用了(或其他的变化，请参考API文档来获取详细内容)。最后的操作是在`ObjectWrapperAndUnwrapper`中，它是`ObjectWrapper`的子接口。很多实际的包装器会实现`ObjectWrapperAndUnwrapper`接口。我们来看一下包装Java对象并包含其他对象(比如 `Map`，`List`，数组，或者有JavaBean属性的对象)是如何进行的。可以这么说，对象包装器将`Object[]`数组包装成`TemplateSquenceModel`接口的一些实现。当FreeMarker需要FTL序列中项的时候，它会调用 `TemplateSquenceModel.get(int index)`方法。该方法的返回值是`TemplateModel`，也就是说，`TemplateSquenceModel`实现不仅仅可以从给定的数组序列获取对象，也可以负责在返回它之前包装该值。为了解决这个问题，典型的`TemplateSquenceModel`实现将会存储创建它的`ObjectWrapper`，之后再调用该 `ObjectWrapper`来包装包含的值。相同的逻辑代表了`TemplateHashModel`或其他的`TemplateModel`，它是其它`TemplateModel`的容器。因此，通常不论值的层次结构有多深，所有值都会被同一个 ObjectWrapper包装。(要创建`TemplateModel`的实现类，请遵循这个原则，可以使用`freemarker.template.WrappingTemplateModel`作为基类。)。数据模型本身(root变量)是`TemplateHashModel`。 在`Template.process`中指定的root对象将会被在`object_wrapper`配置中设置的对象包装器所包装，并产生一个`TemplateHashModel`。从此，被包含值的包装遵循之前描述的逻辑(比如，容器负责包装它的子实例)。行为良好的对象包装器都会绕过已经实现`TemplateModel`接口的对象。如果将已经实现`TemplateModel`的对象放到数据模型中(或者从模板中调用的Java方法返回这个对象)，那么就可以避免实际的对象包装。当特别是通过模板访问创建的值时，通常会这么做。因此，要避免更多上面对象包装的性能问题，但也可以精确控制模板可以看到的内容(不是基于当前对象包装器的映射策略)。常见的应用程序使用该手法是使用`freemarker.template.SimpleHash`作为数据模型的根root(而不是Map)，当使用`SimpleHash`的put方法来填充(这点很重要，它不会复制已经填充并存在的Map)。这会加快顶层数据模型变量的访问速度。
+
+object_wrapper Configuration的默认设置是`freemarker.template.DefaultObjectWrapper`实例。除非有特别的需求，那么建议使用这个对象包装器，或者是自定义的DefaultObjectWrapper的子类。它会识别大部分基本的Java类型，比如`String`， `Number`，`Boolean`，`Date`，`List`(通常还有全部的`java.util.Collection`类型)，数组，`Map`等。并把它们自然地包装成匹配`TemplateModel`接口的对象。它也会使用`freemarker.ext.dom.NodeModel`来包装W3C DOM结点，所以可以很方便地处理XML，在XML章节会有描述)。对于Jython对象，会代理到`freemarker.ext.jython.JythonWrapper`上。 而对于其它所有对象，则会调用`BeansWrapper.wrap(超类的方法)`，暴露出对象的JavaBean属性作为哈希表项 (比如FTL中的 myObj.foo会在后面调用getFoo())， 也会暴露出对象(比如FTL中的 myObj.bar(1, 2) 就会调用方法) 的公有方法(JavaBean action)。(关于对象包装器的更多信息，请参阅 该章节。)关于 DefaultObjectWrapper 更多值得注意的细节:
+- 不用经常使用它的构造方法，而是使用`DefaultObjectWrapperBuilder`来创建它。这就允许 FreeMarker使用单例;
+- DefaultObjectWrapper有incompatibleImprovements属性，这在2.3.22或更高版本中是极力推荐的(参看该效果的 API文档)。如何来设置:
+  - 如果已经在2.3.22或更高版本的Configuration中设置了incompatible_improvements选项，而没有设置object_wrapper选项(那么它就保留默认值)，我们就什么都做不了了，因为它已经使用了同等 incompatibleImprovements属性值的DefaultObjectWrapper单例;
+  - 另外也可以在`Configuration`中独立设置incompatibleImprovements。基于如何创建/设置 ObjectWrapper，可以通过这样完成 (假设想要 incompatibleImprovements 2.3.22):
+    - `... = new DefaultObjectWrapperBuilder(Configuration.VERSION_2_3_22).build()`;
+    - `... = new DefaultObjectWrapper(Configuration.VERSION_2_3_22)`;
+    - 使用object_wrapper属性`object_wrapper=DefaultObjectWrapper(2.3.21)`;
+    - 通过`FreemarkerServlet`配置 object_wrapper 和在 web.xml 中的 init-param 属性来配置
+      ```xml
+      <init-param>
+        <param-name>object_wrapper</param-name>
+        <param-value>DefaultObjectWrapper(2.3.21)</param-value>
+      </init-param>
+      ```
+- 在新的或测试覆盖良好的项目中，也建议设置`forceLegacyNonListCollections`属性为false。 如果使用.properties或FreemarkerServlet初始化参数，就会像DefaultObjectWrapper(2.3.22, forceLegacyNonListCollections=false),同时，使用Java API可以在 DefaultObjectWrapperBuilder对象调用 build()之前调用 setForceLegacyNonListCollections(false);
+- 自定义 DefaultObjectWrapper 的最常用方法是覆盖`handleUnknownType`方法.
+
+假定有一个特定的类:
+```java
+package com.example.myapp;
+
+public class Tupple<E1, E2> {
+    public Tupple(E1 e1, E2 e2) { ... }
+    public E1 getE1() { ... }
+    public E2 getE2() { ... }
+}
+```
+
+
 ## 配置
 ### 基本内容
 ### 共享变量
