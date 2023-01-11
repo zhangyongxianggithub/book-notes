@@ -309,11 +309,80 @@ public class Tupple<E1, E2> {
     public E2 getE2() { ... }
 }
 ```
+若想让模板将它视作长度为2的序列，那么就可以这么来调用`someTuple[1]`、 `<#list someTupple ...>`, 或者`someTupple?size`。需要创建一个`TemplateSequenceModel`实现来适配Tuple到`TemplateSequenceModel`接口:
+```java
+package com.example.myapp.freemarker;
 
+...
 
+public class TuppleAdapter extends WrappingTemplateModel implements TemplateSequenceModel,
+        AdapterTemplateModel {
+    
+    private final Tupple<?, ?> tupple;
+    
+    public TuppleAdapter(Tupple<?, ?> tupple, ObjectWrapper ow) {
+        super(ow);  // coming from WrappingTemplateModel
+        this.tupple = tupple;
+    }
+
+    @Override  // coming from TemplateSequenceModel
+    public int size() throws TemplateModelException {
+        return 2;
+    }
+    
+    @Override  // coming from TemplateSequenceModel
+    public TemplateModel get(int index) throws TemplateModelException {
+        switch (index) {
+        case 0: return wrap(tupple.getE1());
+        case 1: return wrap(tupple.getE2());
+        default: return null;
+        }
+    }
+
+    @Override  // coming from AdapterTemplateModel
+    public Object getAdaptedObject(Class hint) {
+        return tupple;
+    }
+}
+```
+- `TemplateSequenceModel`: 将原有对象定义为序列接口对象;
+- `WrappingTemplateModel`: 只是一个方便使用的类，用于`TemplateModel`对象进行自身包装，通常仅对包含其他对象的对象需要，参考上面的`wrap(...)`调用;
+- `AdapterTemplateModel`: 表明模板模型适配一个已经存在的对象到`TemplateModel`接口，那么丢掉包装就会给出原有对象;
+  
+最后，我们告诉FreeMarker用`TuppleAdapter`(或者可以将它们传递到FreeMarker之前手动包装它们)包装Tupple。那样的话，首先创建一个自定义的对象包装器:
+```java
+package com.example.myapp.freemarker;
+
+...
+
+public class MyAppObjectWrapper extends DefaultObjectWrapper {
+
+    public MyAppObjectWrapper(Version incompatibleImprovements) {
+        super(incompatibleImprovements);
+    }
+    
+    @Override
+    protected TemplateModel handleUnknownType(final Object obj) throws TemplateModelException {
+        if (obj instanceof Tupple) {
+            return new TuppleAdapter((Tupple<?, ?>) obj, this);
+        }
+        
+        return super.handleUnknownType(obj);
+    }
+}
+```
+那么当配置FreeMarker将我们的对象包装器插在:
+```java
+// Where you initialize the cfg *singleton* (happens just once in the application life-cycle):
+cfg = new Configuration(Configuration.VERSION_2_3_22);
+...
+cfg.setObjectWrapper(new MyAppObjectWrapper(cfg.getIncompatibleImprovements()));
+```
 ## 配置
 ### 基本内容
+首先，确保你已经阅读了入门章节。配置(configuration)就是`freemarker.template.Configuration`对象，它存储了常用(全局，应用程序级)的设置，定义了想要在所有模板中可用的变量(称为共享变量)，而且他会处理`Template`实例的新建和缓存。应用程序典型的用法是使用一个独立的共享Configuration实例，更精确的说，典型的做法是每一个独立开发的组件都有一个`Configuration`实例，它在内部使用FreeMarker，每一个都创建它自己的实例。运行中的模板会受配置设置的影响，每个`Template`实例通过对应`Template`构造方法参数，都有和它相关联的`Configuration`实例。通常可以使用 `Configuration.getTemplate`(而不是直接调用Template的构造方法)来获得`Template`实例，此时，关联的 `Configuration`实例就是调用`getTemplate`方法的。
 ### 共享变量
+Shared variables(共享变量)是为所有模板定义的变量。
 ### 配置设置
 ### 模板加载
 ### 错误控制
