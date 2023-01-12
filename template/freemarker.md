@@ -381,10 +381,74 @@ cfg.setObjectWrapper(new MyAppObjectWrapper(cfg.getIncompatibleImprovements()));
 ## 配置
 ### 基本内容
 首先，确保你已经阅读了入门章节。配置(configuration)就是`freemarker.template.Configuration`对象，它存储了常用(全局，应用程序级)的设置，定义了想要在所有模板中可用的变量(称为共享变量)，而且他会处理`Template`实例的新建和缓存。应用程序典型的用法是使用一个独立的共享Configuration实例，更精确的说，典型的做法是每一个独立开发的组件都有一个`Configuration`实例，它在内部使用FreeMarker，每一个都创建它自己的实例。运行中的模板会受配置设置的影响，每个`Template`实例通过对应`Template`构造方法参数，都有和它相关联的`Configuration`实例。通常可以使用 `Configuration.getTemplate`(而不是直接调用Template的构造方法)来获得`Template`实例，此时，关联的 `Configuration`实例就是调用`getTemplate`方法的。
+
 ### 共享变量
-Shared variables(共享变量)是为所有模板定义的变量。
+Shared variables(共享变量)是为所有模板定义的变量。可以使用`setSharedVariable`方法向配置中添加共享变量:
+```java
+Configuration cfg = new Configuration(Configuration.VERSION_2_3_22);
+cfg.setSharedVariable("warp", new WarpDirective());
+cfg.setSharedVariable("company", "Foo Inc.");
+```
+在所有使用这个配置的模板中，名为wrap的用户自定义指令和一个名称为company的字符串会在数据模型的根root上可见，那就不用在根哈希表上一次又一次的添加它们。在传递给`Template.process`的根root对象里的变量将会隐藏同名的共享变量。如果配置对象在多线程环境中使用，不要使用`TemplateModel`实现类来作为共享变量，因为它不是线程安全的，这也是基于Servlet应用程序的典型情形。出于向后兼容的特性，共享变量的集合初始化时不能为空，它包含下列用户自定义指令(用户自定义指令使用时需要用@来代替#):
+|**名称**|**类**|
+|:----|:---|
+|capture_output|freemarker.template.utility.CaptureOutput|
+|compress|freemarker.template.utility.StandardCompress|
+|html_escape|freemarker.template.utility.HtmlEscape|
+|normalize_newlines|freemarker.template.utility.NormalizeNewlines|
+|xml_escape|freemarker.template.utility.XmlEscape|
 ### 配置设置
+Settings(配置设置)是影响FreeMarker行为的已被命名的值。配置设置有很多，例如: locale, number_format, default_encoding, template_exception_handler。可以参考[Configuration.setSetting(...)的Java API文档](http://freemarker.org/docs/api/freemarker/template/Configuration.html#setSetting-java.lang.String-java.lang.String-)来查看配置设置的完整列表。配置设置存储在`Configuration`实例中，可以在Template实例中被覆盖。比如，在配置中给locale设置为en_US，那么使用该配置的所有模版中的locale都适用en_US，除非在模版中locale被明确的设置成其他不同的值(参见[localization](file:///Users/zhangyongxiang/Downloads/FreeMarker_2.3.23_Manual_zh_CN/ref_directive_include.html#ref_directive_include_localized))。因此，在Configuration中的值充当默认值，这些值在每个模板中也可以被覆盖。在Configuration或Template实例中的值也可以在单独调用Templat.process方法后被覆盖。对于每个调用了`freemarker.core.Environment`对象的值在内部创建时就持有模板执行的运行时环境，也包括了那个级别被覆盖了的设置信息。在模板执行时，那里存储的值也可以被改变。所以模板本身也可以设置配置信息，比如在输出中途来变换locale设置。配置信息可以被想象成3层(Configuration\Template\Environment)，最高层包含特定的值，它为设置信息提供最有效的值。比如:
+![设置](settings.png)
+配置信息的有效值是: A=1, B=2, C=3, D=1, E=2。F=null。如何准确设置配置信息:
+- Configuration层: 原则上设置配置信息时使用`Configuration`对象的setter方法，例如:
+  ```java
+    Configuration myCfg = new Configuration(Configuration.VERSION_2_3_23);
+    myCfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+    myCfg.setDefaultEncoding("UTF-8");
+  ```
+  在真正使用Configuration对象之前来配置它，后面必须将它视为只读的对象。在实践中，比如很多Web应用框架中，就应该使用这种框架特定的配置方式来进行配置，比如使用成对的String来配置(像在.properties属性配置文件中那样)。在这种情况下，框架的作者大多数使用`Configuration`对象的setString(String name, String value)方法。Spring框架中可以这么设置:
+  ```xml
+  <bean id="freemarkerConfig"
+    class="org.springframework.web.servlet.view.freemarker.FreeMarkerConfigurer">
+  <property name="freemarkerSettings">
+    <props>
+      <prop key="incompatible_improvements">2.3.23</prop>
+      <prop key="template_exception_handler">rethrow</prop>
+      <prop key="default_encoding">UTF-8</prop>
+    </props>
+  </property>
+  </bean>
+  ```
+- Template层: 对于被请求的本地化信息，模板的locale设备由`Configuration.getTemplate(...)`来设置。否则，就不能在这里进行设置，除非想控制Template对象来代替`freemarker.cache.TemplateCache`，这样的话，应该在Template对象第一次被使用前就设置配置信息，然后将Template对象视为只读的;
+- Environment层: 这里有2种配置方法:
+  - 使用Java API: 使用Environment对象的setter方法。当然需要在模板执行之前来做。因为当调用`template.process(...)`时会遇到问题，因为在内部创建Environment对象后立即就执行模板了，导致没有机会来进行设置。这个问题的解决可以使用下面的步骤:
+  ```java
+  Environment env = myTemplate.createProcessingEnvironment(root, out);
+  env.setLocale(java.util.Locale.ITALY);
+  env.setNumberFormat("0.####");
+  env.process();  // process the template
+  ```
+  - 在模板中(通常这被认为是不好的做法)直接使用setting指令，例如:
+  ```ftl
+  <#setting locale="it_IT">
+  <#setting number_format="0.####">
+  ```
+要知道`FreeMarker`支持什么样的配置信息还有它们的意义，可以先看看FreeMarker Java API文档中的下面这部分内容：
+- 在三层中`freemarker.core.Configurable`的setter方法来配置;
+- 只在`Configuration`层可用的`freemarker.template.Configuration`的setter方法来配置;
+- 在三层中可用String键-值对书写的`freemarker.core.Configurable.setSetting(String,String)`配置;
+- 只在Configuration层中可用String键-值对书写的`freemarker.template.Configuration.setSetting(String, String)`配置;
+
 ### 模板加载
+#### 模板加载器
+模板加载器是加载基于抽象模板路径下，比如"index.ftl"或者"products/catalog.ftl"的原生文本数据对象。这由具体的模板加载器对象来确定它们取得请求数据时使用了什么样的数据来源(文件夹中的文件，数据等)。当调用`cfg.getTemplate()`时，FreeMarker询问模板加载器是否已经为cfg建立返回给定模板路径的文本，之后freemarker解析文本生成模板。
+##### 内建模板加载器
+
+##### 从多个位置加载模板
+##### 从其他资源加载模板
+##### 模板名称(模板路径)
+#### 模板缓存
 ### 错误控制
 ### 不兼容改进设置
 ## 其他
