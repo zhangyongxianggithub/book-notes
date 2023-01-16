@@ -444,10 +444,34 @@ Settings(配置设置)是影响FreeMarker行为的已被命名的值。配置设
 #### 模板加载器
 模板加载器是加载基于抽象模板路径下，比如"index.ftl"或者"products/catalog.ftl"的原生文本数据对象。这由具体的模板加载器对象来确定它们取得请求数据时使用了什么样的数据来源(文件夹中的文件，数据等)。当调用`cfg.getTemplate()`时，FreeMarker询问模板加载器是否已经为cfg建立返回给定模板路径的文本，之后freemarker解析文本生成模板。
 ##### 内建模板加载器
-
+在`Configuration`中可以使用下面的方法来方便3种模板加载。每种方法都会在其内部新建一个模板加载器对象，然后创建`Configuration`实例来使用它。
+```java
+void setDirectoryForTemplateLoading(File dir);
+```
+```java
+void setClassForTemplateLoading(Class cl, String prefix);
+```
+```java
+void setServletContextForTemplateLoading(Object servletContext, String path);
+```
+上述的第一种方法在磁盘的文件系统上设置了一个明确的目录，它确定了从哪里加载模板。不要说可能，File参数肯定是一个存在的目录。否则将会抛出异常。第二个调用方法使用了一个Class类型的参数和一个前缀。这是让你来指定什么时候通过相同的机制来加载模板，不过是用Java的ClassLoader来加载类。这就意味着传入的class参数会被`Class.getResource()`用来调用方法来找到模板。参数prefix是给模板的名称来加前缀的。在实际运行的环境中，类加载机制首选用来加载模板的方法，通常情况下，从类路径下加载文件的这种机制，要比从文件系统的特定目录位置加载安全而且简单。在最终的应用程序中，所有代码都使用.jar文件打包也是不错的，这样用户就可以直接执行包含所有资源的.jar文件了。第三种调用方式需要web应用地上下文和一个基路径作为参数，这个基路径是web应用根路径(WEB-INF目录的上级目录)的相对路径。那么加载器会从Web应用目录开始加载模板。尽管加载方法对没有打包的.war文件起作用，因为它使用了`servletContext.getResource()`方法来访问模板，注意这里我们指的是目录。如果忽略了第二个参数，那么就可以混合存储静态文件和.ftl文件，只是.ftl文件可以被送到客户端执行。当然必须在WEB-INF/web.xml中配置一个Servlet来处理URI格式为*.ftl的用户请求，否则客户端无法获取到模板，因此你将会看到Web服务器给出的秘密提示内容。在站点中不能使用空路径，在站点中不能使用空路径，这是一个问题， 你应该在 WEB-INF 目录下的某个位置存储模板文件， 这样模板源文件就不会偶然地被执行到，这种机制对servlet应用程序来加载模板来说， 是非常好用的方式，而且模板可以自动更新而不需重启Web应用程序， 但是对于类加载机制，这样就行不通了。
 ##### 从多个位置加载模板
+如果需要从多个位置加载模板，那就不得不为每个位置都实例化模板加载器对象，将它们包装到一个称为`MultiTemplateLoader`的特殊模板加载器，最终这个加载器传递给`Configuration`对象setTemplateLoader(TemplateLoader loader)方法。下面给出一个使用类加载器从2个不同位置加载模板模板的实例:
+```java
+import freemarker.cache.*; // template loaders live in this package
+...
+FileTemplateLoader ftl1 = new FileTemplateLoader(new File("/tmp/templates"));
+FileTemplateLoader ftl2 = new FileTemplateLoader(new File("/usr/data/templates"));
+ClassTemplateLoader ctl = new ClassTemplateLoader(getClass(), "");
+TemplateLoader[] loaders = new TemplateLoader[] { ftl1, ftl2, ctl };
+MultiTemplateLoader mtl = new MultiTemplateLoader(loaders);
+cfg.setTemplateLoader(mtl);
+```
+现在，FreeeMarker将会尝试从/tmp/templates目录加载模板，如果在这个目录下没有发现请求的模板额，它就会继续尝试从/user/data/templates目录下加载，如果还是没有发现请求的模板，那么它就会使用类加载器来加载模板。
 ##### 从其他资源加载模板
+如果内建的类加载器都不适合使用，那么就需要来编写自己的类加载器了，这个类需要实现`freemarker.cache.TemplateLoader`接口，然后将它传递给`Configuration`对象的`setTemplateLoader(TemplateLoader loader)`方法。可以阅读API Javadoc文档获取更多信息。如果模板需要通过URL访问其他模板，那么就不需要实现TemplateLoader接口了，可以选择子接口`freemarker.cache.URLTemplateLoader`来替代，只需要实现`URL getURL(String templateName)`方法即可。
 ##### 模板名称(模板路径)
+
 #### 模板缓存
 ### 错误控制
 ### 不兼容改进设置
