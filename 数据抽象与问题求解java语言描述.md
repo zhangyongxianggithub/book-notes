@@ -3840,5 +3840,33 @@ else{
 - 缺点: 数据插入或者删除，需要移动元素到后续所有的块.
 适合变更不多的外部表实现方案。
 ### 确定外部文件的索引
+2种最佳的外部表实现方案是内部散列/查找树方案的变体。主要的思想就是建立数据文件的索引，类似图书馆编目一样。数据文件的索引只是一个文件，称为索引文件，索引文件包含数据文件中各个记录的索引记录，包含2个部分: 关键字与指针。维护索引文件的好处:
+- 索引记录比数据记录小的多;
+- 不需要按照特定的顺序维护数据文件;
+- 可以同时维护若干个索引
 
+索引文件先考虑简单的方式，也就是按照关键字有序排列，所以可以使用二分查找:
+```java
+tableRetrieve(in tIndex:File, in tData:File, in searchKey:KeyItemType):TableItemType
+// returns the record whose search key equals searchKey，where tIndex is the index file 
+// and tData is the data file. the operation fails and returns null if no such record exists.
+if(no blocks are left in tIndex to read){
+    return null
+}else{
+    // read the middle block of index
+    mid=number of middle block of index file tIndex
+    buf.readBlock(tIndex,mid)
+    num=indexRecordsPerBlock
+    if(searchKey>=buf.getRecord(0).getKey()&&searchKey<=buf.getRecord(num-1).getKey()){
+        //desired block of index file found
+        Search buf for index file record buf.getRecord(j) whose key value equals searchKey
+        if(index record buf.getRecord(j) is found){
+
+        }
+    }
+    ....// 后续这里看书吧，不写了
+}
+```
+### 外部散列
+外部散列方案中，table的每一项包含一个块指针，指向列表开头，列表由索引记录的块组成。散列的是索引文件而不是数据文件，检索的源代码可以看书。
 ## 小结
