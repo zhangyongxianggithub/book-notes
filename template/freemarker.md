@@ -471,10 +471,59 @@ cfg.setTemplateLoader(mtl);
 ##### 从其他资源加载模板
 如果内建的类加载器都不适合使用，那么就需要来编写自己的类加载器了，这个类需要实现`freemarker.cache.TemplateLoader`接口，然后将它传递给`Configuration`对象的`setTemplateLoader(TemplateLoader loader)`方法。可以阅读API Javadoc文档获取更多信息。如果模板需要通过URL访问其他模板，那么就不需要实现TemplateLoader接口了，可以选择子接口`freemarker.cache.URLTemplateLoader`来替代，只需要实现`URL getURL(String templateName)`方法即可。
 ##### 模板名称(模板路径)
-
+解析模板的名称，也就是模板路径，是由模板解析器来决定的。但是要和其他对路径的格式要求很严格的组件一起使用。通常来说，强烈建议模板加载器使用URL风格的路径。在URL路径(或者在UNIX路径)中符号有其他含义时，那么路径中不要使用/(路径分隔符)字符，.(目录符号)和..(父目录符号)。字符\*(星号)是被保留的，它用于FreeMarker的模板获取特性。://(假如使用了template_name_format配置设置到DEFAULT_2_4_0，:字符)是被保留用来指定体系部分的，和URI中的相似。比如someModule://foo/bar.ftl使用someModule，或者假定DEFAULT_2_4_0格式，classpath://foo/bar.ftl使用classpath体系。解释体系部分完全由TemplateLoader决定。FreeMarker通常在将路径传递到TemplateLoader之前把它们正常化，所以路径中不会包含/../这样的内容，路径会相对于虚构的模板根路径(也就是它们不会以/开头)。其中也不会包含\*，因为模板获取发生在很早的阶段。此外，将template_name_format设置为DEFAULT_2_4_0，多个连续的/将会被处理成单独的/，除非它们是://模式分隔符的一部分。
 #### 模板缓存
+FreeMarker是会缓存模板的假如使用Configuration对象的方法来创建Template对象)。这就是会说当调用`getTemplate()`方法时，FreeMarker不但返回了Template对象，而且还将会将它换存在缓存中。当下一次再以相同路径调用`getTemplate()`方法时，那么它只会返回缓存的Template实例，而不会再次加载和解析模板文件了。如果更改了模板文件，当下次调用模板时，FreeMarker将会自动重新载入和解析模板。然而，要检查模板文件是否改变内容了是需要时间的，有一个`Configuration`级别的设置被称作更新延迟，它可以用来配置这个时间。这个时间就是从上次对某个模板检查更新后，再次检查模板所要的间隔的时间。其默认是5秒，如果想要看到模板立即更新的效果，那么就要把它设置为0，要注意某些模板加载器也许在模板更新时可能会有问题。例如，典型的例子就是在基于类加载器的模板加载器就不会注意到模板文件内容的改变。当调用了`getTemplate()`方法时，于此同时FreeMarker意识到这个模板文件已经被移除了，所以这个模板也会在从缓存中移除。如果Java虚拟机认为会有内存溢出时，默认情况它会从缓存中移除任意模板。此外，你还可以使用`Configuration`对象的clearTemplateCache方法手动清空缓存。何时将一个被缓存了的模板清除的实际应用策略是由配置的属性cache_storage来确定的，通过这个属性可以配置任何CacheStorage的实现。对于大部分用户来说，使用`freemarker.cache.MruCacheStorage`就足够了。这个缓存存储实现了二级最近使用的缓存。在第一级缓存中，组件被强烈引用到特定的最大数目(引用次数最多的组件不会被Java虚拟机抛弃，而引用次数很少的组件则相反)。当超过最大数量时，最近最少使用的组件将被送至二级缓存中，在那里它们被很少引用，直到达到另一个更大的数目。引用强度的大小可以由构造方法来指定，例如，设置强烈部分为20，轻微部分为250:
+```java
+cfg.setCacheStorage(new freemarker.cache.MruCacheStorage(20, 250))
+```
+或者使用MruCacheStorage缓存，它是默认的缓存存储实现:
+```java
+cfg.setSetting(Configuration.CACHE_STORAGE_KEY, "strong:20, soft:250");
+```
+当创建了一个新的Configuration对象时，它使用一个strongSizeLimit值为0的MruCacheStorage缓存来初始化，softSizeLimit的值是Integer.MAX_VALUE。但是使用非0的strongSizeLimit对于高负载的服务器来说也许是一个更好的策略，对于少量引用的组件来说，如果资源消耗已经很高的话。
 ### 错误控制
+#### 可能的异常
+关于FreeMarker发生的异常分类如下:
+- 当配置FreeMarker时发生异常: 典型的情况，就是在应用程序初始化时，仅仅配置了一次FreeMarker。在这个过程中，异常就会发生，从FreeMarker的API中就很清楚;
+- 当加载和解析模板时发生异常: 调用了`Configuration.getTemplate(...)`方法，FreeMarker就要把模板文件加载到内存中然后来解析它。这期间可能发生的异常有:
+  - 因为模板文件没找到发生的IOException异常，或在读取文件时发生其他的I/O问题。比如没有读取文件的权限，或者是磁盘错误。这些错误的发出者是TemplateLoader对象，可以将它作为插件设置到Configuration对象中。
+  - 根据FTL语言的规则，模板文件发生语法错误时发生`freemarker.core.ParseEception`异常，这是IOException异常的一个子类.
+- 执行模板时发生的异常，当调用了`Template.process(...)`方法时会发生的2种异常:
+  - 写入输出对象时发生错误而导致的IOException异常;
+  - 执行模板时发生其他问题导致的`freemarker.template.TemplateException`异常。
+#### 根据TemplateException来自定义处理方式
+`TemplateException`异常在模板处理期间的抛出是由`freemarker.template.TemplateExceptionHandler`对象控制的，这个对象可以使用 `setTemplateExceptionHandler(...)`方法配置到`Configuration`对象中。`TemplateExceptionHandler`对象只包含一个方法:
+```java
+void handleTemplateException(TemplateException te, Environment env, Writer out) 
+        throws TemplateException;
+```
+无论`TemplateException`异常什么时候发生，这个方法都会被调用。异常处理是传递的te参数控制的，模板处理的运行时(Runtime，译者注)环境可以访问env变量，处理器可以使用out变量来打印输出信息。如果方法抛出异常(通常是重复抛出te)，那么模板的执行就会中止，而且`Template.process(...)`方法也会抛出同样的异常。如果`handleTemplateException`对象不抛出异常，那么模板将会继续执行，就好像什么也没有发生过一样，但是引发异常的语句将会被跳过(后面会详细说)。当然，控制器仍然可以在输出中打印错误提示信息。任何一种情况下，当 `TemplateExceptionHandler`被调用前， FreeMarker将会记录异常日志。我们用实例来看一下，当错误控制器不抛出异常时，FreeMarker是如何跳过出错语句的。假设我们已经使用了如下模板异常控制器:
+```java
+class MyTemplateExceptionHandler implements TemplateExceptionHandler {
+    public void handleTemplateException(TemplateException te, Environment env, java.io.Writer out)
+            throws TemplateException {
+        try {
+            out.write("[ERROR: " + te.getMessage() + "]");
+        } catch (IOException e) {
+            throw new TemplateException("Failed to print error message. Cause: " + e, env);
+        }
+    }
+}
+cfg.setTemplateExceptionHandler(new MyTemplateExceptionHandler());
+```
+详细的参考文档，FreeMarker带有的预先编写的错误控制器:
+- TemplateExceptionHandler.RETHROW_HANDLER: 简单重新抛出所有异常而不会做其它的事情。这个控制器对Web应用程序(假设你在发生异常之后不想继续执行模板)来说非常好，因为它在生成的页面发生错误的情况下，给了你很多对Web应用程序的控制权 (因为FreeMarker不向输出中打印任何关于该错误的信息);
+- TemplateExceptionHandler.IGNORE_HANDLER: 简单地压制所有异常(但是要记住，FreeMarker 仍然会写日志)。 它对处理异常没有任何作用，也不会重新抛出异常。
+- TemplateExceptionHandler.HTML_DEBUG_HANDLER: 和DEBUG_HANDLER相同，但是它可以格式化堆栈跟踪信息， 那么就可以在Web浏览器中来阅读错误信息。 当你在制作HTML页面时，建议使用它而不是 DEBUG_HANDLER;
+- TemplateExceptionHandler.DEBUG_HANDLER: 打印堆栈跟踪信息(包括FTL错误信息和FTL堆栈跟踪信息)和重新抛出的异常。 这是默认的异常控制器(也就是说，在所有新的 Configuration 对象中，它是初始化好的)。
+
+#### 在模板中明确地处理错误
+尽管它和FreeMarker的配置(本章的主题)无关，但是为了说明的完整性，在这里提及一下，你可以在模板中直接控制错误。通常这不是一个好习惯(尽量保持模板简单，技术含量不要太高)，但有时仍然需要:
+- 处理不存在/为空的变量: 模板开发指南/模板/表达式/处理不存在的值;
+- 在发生障碍的"porlets"中留存下来，还可以扩展参考： 模板语言参考 /指令参考/attempt, recover;
 ### 不兼容改进设置
+todo
 ## 其他
 ### 变量，范围
 当调用Template.process方法时，它会在方法内部创建一个Environment对象，在process返回之前一直使用，该对象存储模板执行时的运行状态信息。除了这些，他还会存储有模板中指令，如assign、macro、local、global创建的变量，它不会尝试修改传递给process的数据模型对象，也不会创建或替换存储在配置中的共享变量。FreeMarker查找变量的优先级如下:
