@@ -62,7 +62,33 @@ fmt.Println(*p) // 输出“2"
 ## 赋值
 赋值语句用来更新变量所指的值。只由简单的赋值运算符组成。
 ## 类型声明
+变量或者表达式的类型定义值应有的特性。大小、内部表示、具有的操作/方法。type声明定义新的命名类型。`type name underlying-type`，通常出现在包级别中。
+```go
+package tempconv
 
+import (
+	"fmt"
+)
+
+type Celsius float64
+type Fahrenheit float64
+
+const (
+	AbsoluteZeroC Celsius = -273.15
+	FreezingC     Celsius = 0
+	BoilingC      Celsius = 100
+)
+
+func CToF(c Celsius) Fahrenheit {
+	return Fahrenheit(c*9/5 + 32)
+}
+func FToC(f Fahrenheit) Celsius {
+	return Celsius((f - 32) * 5 / 9)
+}
+```
+对于每个类型T，都有一个对应的类型转换操作T(x)将值x转换为类型T。如果类型具有相同的底层类型，则2者可以相互转换。类型转换不改变值的表达方式，只改变类型。命名类型的底层类型决定结构与表达方式海域支持的操作/方法。命名类型主要为结构体类型提供便利。
+## 包和文件
+在Go语言中，包与其他语言中的库/模块类似。支持模块化、疯转、编译隔离和重用。包声明了独立的命名空间。导出的标识符已大写字母开头。文件的开头用package声明定义包的名称，
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
 ## 引言
