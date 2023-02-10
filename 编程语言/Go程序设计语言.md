@@ -125,6 +125,58 @@ complex64/complex128，complex函数根据给定的实部与虚部创建复数�
 - 结构体
 数组合结构体都是聚合类型，他们的值由内存中的一组变量构成，数组的元素具有相同的类型，结构体中的元素数据类型可以不同。数组合结构体的长度固定，slice/map事动态数据结构。
 ## 数组
+数组是具有固定长度且拥有0+个相同数据类型元素的序列。一般使用slice（ArrayList）比较多。数组中的元素通过索引访问。
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func main() {
+	var a [3]int             // 声明3个整数的数组
+	fmt.Println(a[0])        // 输出数组的第一个元素
+	fmt.Println(a[len(a)-1]) // 输出数组的最后一个元素
+	for i, v := range a {
+		fmt.Printf("%d, %d\n", i, v)
+	}
+
+	for _, v := range a {
+		fmt.Printf("%d\n", v)
+	}
+
+	var q = [3]int{1, 2, 3}// 通过字面量初始化数组
+	fmt.Println(q[2])
+	t := [...]int{1, 2, 3} // ...这种方式通过初始化的值决定数组的长度
+	fmt.Println(t)
+	fmt.Println(symbol)
+}
+```
+数组的长度是数组类型的一部分。也可以像map/结构体那样初始化
+```go
+type Currency int
+const (
+	USD Currency = iota
+	EUR
+	GBP
+	RMB
+)
+var symbol = [...]string{USD: "$", EUR: "e", GBP: "r", RMB: "¥"}
+```
+数组是可以比较的。数组是传值的，可以通过指针传地址。
+```go
+func zero(ptr *[32]byte) {
+	for i := range ptr {
+		ptr[i] = 0
+	}
+}
+```
+## slice
+可变长度的序列。[]T像是没有长度的数组。数组与slice相关，是一种轻量级的数据结构，可以用来访问数组的部分/全部的元素。这个数组是slice的底层数组。有3个属性:
+- 指针,指针指向数组中slice第一个访问的元素。
+- 长度,slice元素个数`len()`返回个数
+- 容量,容量,`cap()`返回容量
+s[i:j]返回范围内的一个slice，
 
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
