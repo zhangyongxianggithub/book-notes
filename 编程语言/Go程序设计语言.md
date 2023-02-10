@@ -176,7 +176,15 @@ func zero(ptr *[32]byte) {
 - 指针,指针指向数组中slice第一个访问的元素。
 - 长度,slice元素个数`len()`返回个数
 - 容量,容量,`cap()`返回容量
-s[i:j]返回范围内的一个slice，
+s[i:j]返回范围内的一个slice，slice是一个指针。
+```go
+func reverse(s []int) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+```
+slice就是没有长度的数组，本身看定义类型也是这样的。slice不能做比较。
 
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
