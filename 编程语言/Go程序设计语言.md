@@ -184,8 +184,31 @@ func reverse(s []int) {
 	}
 }
 ```
-slice就是没有长度的数组，本身看定义类型也是这样的。slice不能做比较。
+slice就是没有长度的数组，本身看定义类型也是这样的。slice不能做比较。内置函数make可以创建具有指定元素类型、长度、容量的slice。
+```go
+make([]T,len)
+make([]T,len,cap)
+```
+内置函数append用于追加元素。
+```go
+func appendInt(x []int, y int) []int {
+	var z []int
+	zlen := len(x) + 1
+	if zlen <= cap(x) {
+		z = x[:zlen]
+	} else {
+		zcap := zlen
+		if zcap < 2*len(x) {
+			zcap = 2 * len(x)
+		}
+		z = make([]int, zlen, zcap)
+		copy(z, x)
+	}
+	z[len(x)] = y
+	return z
 
+}
+```
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
 ## 引言
