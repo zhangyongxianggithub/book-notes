@@ -240,6 +240,10 @@ employeeOfTheMonth.Position += "(proactive team player)"
 type Point struct{X, Y int}
 p:=Point{1, 2}
 ```
+也可以指定部分或者全部成员变量的名称和值的方式来初始化结构体变量。
+```go
+anim:=gif.GIF{LoopCount: nframes}
+```
 
 ## 结构体
 结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。下面定义一个结构体:
