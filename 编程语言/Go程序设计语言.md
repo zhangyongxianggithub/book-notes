@@ -225,7 +225,23 @@ ages:=map[string]int{
 	"charlie": 34,
 }
 ```
-delete用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。可以获取成员变量的地址，通过指针来访问:
+delete用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。
+
+## 结构体
+结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。下面定义一个结构体:
+```go
+type Employee struct {
+	ID int
+	Name string
+	Address string
+	DoB time.Time
+	Position string
+	salary int
+	ManagerID   int
+}
+var dilbert Employee
+```
+成员都通过.号来访问。可以获取成员变量的地址。可以获取成员变量的地址，通过指针来访问:
 ```go
 position:=&dilbert.Position
 *position="Senior "+*position 
@@ -244,22 +260,6 @@ p:=Point{1, 2}
 ```go
 anim:=gif.GIF{LoopCount: nframes}
 ```
-
-## 结构体
-结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。下面定义一个结构体:
-```go
-type Employee struct {
-	ID int
-	Name string
-	Address string
-	DoB time.Time
-	Position string
-	salary int
-	ManagerID   int
-}
-var dilbert Employee
-```
-成员都通过.号来访问。可以获取成员变量的地址。
 
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
