@@ -260,7 +260,33 @@ p:=Point{1, 2}
 ```go
 anim:=gif.GIF{LoopCount: nframes}
 ```
-
+不可导出变量无法在其他包中使用。
+```go
+package p
+type T struct{a,b int }//a和b都是不可导出的
+package q
+import "p"
+var _ = p.T{a:1,b:2} //编译错误，无法引用a、b
+var _ = p.T{1, 2} //编译错误，无法引用a、b
+```
+结构体类型的值可以作为参数传递给函数或者作为函数的返回值。
+```go
+func Scale(p Point, factor int) Point{
+	return Point{p.X * factor, p.Y * factor}
+}
+fmt.Println(Scale(Point{1,2}, 5)) // {5,10}
+```
+出于效率的考虑，大型的结构体通常都是用结构体指针的方式直接传递给函数或者从函数中返回。
+```go
+func Bonus(e *Employee, percent int)int{
+	return e.Salary * percent / 100
+}
+```
+如果结构体的所有成员变量都可以比较，那么结构体也是可以比较的。结构体可以匿名嵌套。
+## JSON
+## 文本和HTML模板
+# 函数
+## 函数声明
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
 ## 引言
