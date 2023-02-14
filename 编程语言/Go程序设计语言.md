@@ -225,7 +225,22 @@ ages:=map[string]int{
 	"charlie": 34,
 }
 ```
-delete用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。
+delete用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。可以获取成员变量的地址，通过指针来访问:
+```go
+position:=&dilbert.Position
+*position="Senior "+*position 
+```
+结构体指针也使用.号来访问成员
+```go
+var employeeOfTheMonth *Employee =&dilbert
+employeeOfTheMonth.Position += "(proactive team player)"
+```
+结构体的成员变量名称首字母大些，则是可导出的。结构体不能内嵌它自己，可以内嵌它自己的指针类型。结构体的零值由成员的零值组成。结构体类型的值可以通过结构体字面量来设置:
+```go
+type Point struct{X, Y int}
+p:=Point{1, 2}
+```
+
 ## 结构体
 结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。下面定义一个结构体:
 ```go
