@@ -365,11 +365,97 @@ func (p *Point) ScaleBy(factor float64) {
 # 接口
 接口类型是对其他类型行为的概括与抽象。通过使用接口，可以写出更加灵活和通用的函数，这些函数不用绑在一个特定的类型实现上。Go的接口实现是隐式实现，对于一个具体的类型，无须声明它实现了哪些接口，只要提供接口所需要的方法。
 ## 接口既约定
-具体类型，接口类型是一种抽象类型，没有暴露所含数据肚饿布局或者内部结构，也没有那些数据的基本操作，它提供的只是一些方法而已。
+前面都是具体类型，具体类型指定了所含数据的精确布局，还暴露了基于这个精确布局的内部操作，通过定义方法还提供额外的能力。接口类型是一种抽象类型，没有暴露所含数据布局或者内部结构，也没有那些数据的基本操作，它提供的只是一些方法而已。接口类型的值不能知道具体的类型只能知道它能做什么。接口机制的一个例子`Printf`与`SprintF`.
+```go
+package fmt
+func Fprintf(w io.Writer, format string, args ...interface{})(int,error)//io.Writer是一个接口类型
+func Printf(format string, args ...interface{})(int,error){
+	return Fprintf(os.Stdout, format,args...)// os.Stdout是一个*os.File类型。
+}
+func Sprintf(format string, args ...interface{}) string {
+	var buf bytes.Buffer
+	Fprintf(&buf,format,args...)
+	return buf.String()
+}
+```
+```go
+package io
+type Writer interface{
+	// Write从p向底层数据流写入len(p)个字节的数据
+	//返回实际写入的字节数，
+	Write(p []byte)(n int, err error)
+}
+```
+可以把一种类型替换为满足同一接口的另一种类型的特性称为可取代性(substitutability)，里氏代换。
+下面是一个例子:
+```go
+type ByteCounter int
+
+func (c *ByteCounter) Write(p []byte) (int, error) {
+	*c += ByteCounter(len(p))
+	return len(p), nil
+}
+func main() {
+	var c ByteCounter
+	c.Write([]byte("hello"))
+	fmt.Println(c)
+	c = 0
+	var name = "Dolly"
+	fmt.Fprintf(&c, "hello, %s", name)
+	fmt.Println(c)
+
+}
+```
+类型可以控制如何输出自己，只需要定义String方法，这也是一个接口
+```go
+package fmt
+type Stringer interface{
+	String() string
+}
+```
 ## 接口类型
 一个接口类型定义了一套方法，实现接口需要实现接口类型定义的所有方法。
+```go
+package io
+type Reader interface{
+	Read(p []byte)(n int, err error)
+}
+type CLoser interface{
+	Close() error
+}
+```
+可以通过组合已有接口来得到新的接口
+```go
+type ReadWriter interface{
+	Reader
+	Writer
+}
+type ReadWriteCloser interface{
+	Reader
+	Writer
+	Closer
+}
+```
+这叫做嵌入式接口，与嵌入式结构类似。
 ## 实现接口
-如果一个类型实现了一个接口要求的所有方法。那么就是实现了这个接口。
+如果一个类型实现了一个接口要求的所有方法。那么就是实现了这个接口。表达式实现了一个接口时，可以赋值给接口:
+```go
+var w io.Writer
+w=os.Stdout//*os.File有Write方法
+w=new(bytes.Buffer)//*bytes.Buffer有write方法
+w=time.Second
+var rwc io.ReadWriteCloser
+rwc=os.Stdout
+rwc=new(bytes.Buffer)
+```
+右侧是接口也行。类型有某一个方法的含义: 对于每个具体类型T，部分方法的接收者就是T，而其他方法的接收者则是*T指针。对类型T的变量直接调用*T的方法也是合法的，编译器隐式的完成了取地址操作。6.5节的IntSet类型的String方法，需要一个指针接收者，无法从一个无地址的IntSet值(字面量)上调用该方法，但是可以在一个变量上调用方法。
+```go
+type IntSet struct {}
+func (*IntSet)String() string
+var _=IntSet{}.String()//编译错误
+```
+因为只有\*IntSet有String方法，所以只有*IntSet实现了fmt.Stringer接口。接口封装了对应的类型和数据，通过接口暴露的方法才可以调用。`interface{}`叫做空接口类型，不包含任何方法，可以把任何值赋给空接口类型。
+
 ## 使用flag.Value来解析参数
 
 # goroutine和通道
