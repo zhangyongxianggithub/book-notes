@@ -488,7 +488,17 @@ type Audio interface{
 只是把具体类型分组并暴露它们共性的方式。
 
 ## 使用flag.Value来解析参数
-标准接口`flag.Value`帮助定义命令行标志。下面的程序
+标准接口`flag.Value`帮助定义命令行标志。下面的程序实现了睡眠指定时间的功能
+```go
+var period = flag.Duration("period", 1*time.Second, "sleep period")
+func main(){
+	flag.Parse()
+	fmt.Printf("Sleeping for %v...", *period)
+	time.Sleep(*period)
+	fmt.Println()
+}
+```
+
 # goroutine和通道
 并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多喝计算机。有2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
