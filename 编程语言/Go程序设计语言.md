@@ -454,10 +454,41 @@ type IntSet struct {}
 func (*IntSet)String() string
 var _=IntSet{}.String()//编译错误
 ```
-因为只有\*IntSet有String方法，所以只有*IntSet实现了fmt.Stringer接口。接口封装了对应的类型和数据，通过接口暴露的方法才可以调用。`interface{}`叫做空接口类型，不包含任何方法，可以把任何值赋给空接口类型。
+因为只有\*IntSet有String方法，所以只有*IntSet实现了fmt.Stringer接口。接口封装了对应的类型和数据，通过接口暴露的方法才可以调用。`interface{}`叫做空接口类型，不包含任何方法，可以把任何值赋给空接口类型。可以使用类型断言来从空接口中还原出实际值。判断是否实现接口只需要比较具体类型和接口类型的方法。下面的声明在编译期就断言了\*byte.Buffer实现了io.Writer接口。
+```go
+// *bytes.Buffer必然实现io.Writer接口
+var w io.Writer=new(bytes.Buffer)
+```
+甚至不需要新创建变量，*bytes.Buffer的任意值都实现了这个接口，甚至nil，修改的声明如下:
+```go
+var _ io.Writer=(*bytes.Buffer)nil
+```
+非空的接口类型通常由指针类型实现，一个指向结构体的指针是最常见的方法接收者。其他引用类型也可以实现接口，比如slice、map、函数类型。一个具体类型可以实现多个不想关的接口，比如销售/管理数字文化商品，可能定义的具体类型Album、Book、Movie...。
+每一种抽象用一种接口类型来表示，一些属性是所有商品都具备的:
+```go
+type Artifact interface{
+	Title() string
+	Creators() []string
+	Created()time.Time
+}
+```
+其他属性也可以建立共同的抽象:
+```go
+type Text interface{
+	Pages() int
+	Words() int
+	PageSize() int
+}
+type Audio interface{
+	Stream()(io.ReadCloser, error)
+	RunningTime() time.Duration
+	Fomrat() string// 
+}
+```
+只是把具体类型分组并暴露它们共性的方式。
 
 ## 使用flag.Value来解析参数
-
+标准接口`flag.Value`帮助定义命令行标志。下面的程序
 # goroutine和通道
 并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多喝计算机。有2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
