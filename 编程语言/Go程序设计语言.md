@@ -498,7 +498,50 @@ func main(){
 	fmt.Println()
 }
 ```
-
+## 接口值
+接口类型的值有2个部分:
+- 具体类型，接口的动态类型
+- 该类型的一个值，接口的动态值
+这类似与面向对象语言中的多态机制。接口声明会初始化为nil，在nil调用方法执行会会导致宕机。接口值可以指向任意大的动态值。如果接口值都是nil，或者动态类型/动态值都相同，则2个接口值相等。所以可以作为map的键作为switch语句的操作数。动态值可以比较时，接口值才能比较，否则会造成程序崩溃。fmt包中的%T可以打印接口值的动态类型。空的接口值与仅仅动态值是nil的接口值是不一样的。下面的程序:
+```go
+const debug = true
+func main(){
+	var buf *bytes.Buffer
+	if debug {
+		buf=new(bytes.Buffer)//启用输出收集
+	}
+	f(buf)//微妙的错误
+}
+func f(out io.Writer){
+	if out != nil {
+		out.Write([]byte{"done\n"})
+	}
+}
+```
+当debug=false时，程序还会调用`out.Write([]byte{"done\n"})`，此时程序崩溃。此时out是一个动态类型为*bytes.Buffer类型的空值的非空接口，所以out!=nil=true。
+## error接口
+error类型是一个接口类型，包含返回错误消息的方法:
+```go
+type error interface {
+	Error() string
+}
+```
+构造error的方式errors.New。
+```go
+package errors
+func New(text string)error{
+	return &errorString{text}
+}
+type errorString struct {
+	text string
+}
+func (e *errorString)Error()string{
+	return e.text
+}
+```
+更易用的方式是`fmt.Errorf`。
+## 类型断言
+类型断言是一个作用在接口值上的操作。类似`x.(T)`，x是接口类型的表达式，T是一个类型。类型断言会检查作为操作数的动态类型是否满足指定的断言类型。如果
 # goroutine和通道
 并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多喝计算机。有2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
