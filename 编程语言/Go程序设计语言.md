@@ -1,3 +1,4 @@
+[TOC]
 # 程序结构
 Go语言中的大程序都从小的基本组件构建而来: 变量存储值，简单表达式通过加/减等操作合并成大的，基本类型通过数组和结构体进行聚合，表达式通过if/for等控制语句来决定执行顺序，语句被组织成函数用于隔离和复用，函数被组织成源文件和包。
 ## 名称
@@ -228,7 +229,7 @@ ages:=map[string]int{
 delete用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。
 
 ## 结构体
-结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。下面定义一个结构体:
+结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。结构体可以复制，传递给函数，作为函数的返回值，作为数组的元素类型。下面定义一个结构体:
 ```go
 type Employee struct {
 	ID int
@@ -241,7 +242,7 @@ type Employee struct {
 }
 var dilbert Employee
 ```
-成员都通过.号来访问。可以获取成员变量的地址。可以获取成员变量的地址，通过指针来访问:
+成员都通过.号来访问。结构体本身是变量，成员也是变量。可以获取成员变量的地址。可以获取成员变量的地址，通过指针来访问:
 ```go
 position:=&dilbert.Position
 *position="Senior "+*position 
@@ -249,7 +250,13 @@ position:=&dilbert.Position
 结构体指针也使用.号来访问成员
 ```go
 var employeeOfTheMonth *Employee =&dilbert
-employeeOfTheMonth.Position += "(proactive team player)"
+employeeOfTheMonth.Position += "(proactive team player)"// 等价于(*employeeOfTheMonth).Position += "(proactive team player)"
+```
+下面的代码:
+```go
+func EmployeeByID(id int) *Employee {}
+fmt.Println(EmployeeByID(dilbert.ManagerID).Position)
+EmployeeByID(dilbert.ID).salary=0//如果函数不是返回的指针，而是结构体，代码无法通过编译，赋值表达式的左侧无法识别出是一个变量
 ```
 结构体的成员变量名称首字母大些，则是可导出的。结构体不能内嵌它自己，可以内嵌它自己的指针类型。结构体的零值由成员的零值组成。结构体类型的值可以通过结构体字面量来设置:
 ```go
