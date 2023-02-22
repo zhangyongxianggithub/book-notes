@@ -258,7 +258,14 @@ func EmployeeByID(id int) *Employee {}
 fmt.Println(EmployeeByID(dilbert.ManagerID).Position)
 EmployeeByID(dilbert.ID).salary=0//如果函数不是返回的指针，而是结构体，代码无法通过编译，赋值表达式的左侧无法识别出是一个变量
 ```
-结构体的成员变量名称首字母大些，则是可导出的。结构体不能内嵌它自己，可以内嵌它自己的指针类型。结构体的零值由成员的零值组成。结构体类型的值可以通过结构体字面量来设置:
+结构体包括成员变量的顺序，顺序不同也是不同的结构体。结构体的成员变量名称首字母大写是可导出的，也能包括不可导出的成员变量。匿名结构体类型多次写比较复杂，定义命名结构体类型。结构体不能内嵌自己，可以内嵌自己的指针类型。
+```go
+type tree struct {
+	value int
+	left, right *tree
+}
+```
+结构体的零值由成员的零值组成。struct{}空结构体类型。结构体类型的值可以通过结构体字面量来设置:
 ```go
 type Point struct{X, Y int}
 p:=Point{1, 2}
@@ -290,6 +297,31 @@ func Bonus(e *Employee, percent int)int{
 }
 ```
 如果结构体的所有成员变量都可以比较，那么结构体也是可以比较的。结构体可以匿名嵌套。
+```go
+type Point struct {
+	X,Y int
+}
+type Circle struct {
+	Center Point
+	Radius int
+}
+type Wheel struct {
+	Center Point
+	Spokes int
+}
+```
+上面的代码，访问wheel的成员`wheel.Circle.Center.X`，需要连续的访问成员。使用匿名嵌套，也是里面指定类型不指定名称
+```go
+type Circle struct {
+    Point
+	Radius int
+}
+type Wheel struct {
+    Point
+	Spokes int
+}
+```
+可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有方法。有点类似继承。
 ## JSON
 ## 文本和HTML模板
 # 函数
@@ -578,13 +610,54 @@ if w,ok:=w.(*os.File); ok {
 }
 ```
 ## 使用类型断言来识别错误
+## 通过接口类型断言来查询特性
+## 类型分支
+## 基于标记的XML解析
+## 一些建议
 # goroutine和通道
 并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多喝计算机。有2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
 - 共享内存多线程的传统模型，与在其他主流语言中的线程类似.
 ## goroutine
-每一个并发执行的活动称为goroutine。
+每一个并发执行的活动称为goroutine。goroutine类似于线程。程序启动时主goroutine调用main函数。使用go创建新的goroutine。就是在普通的函数或者方法调用前加上go关键字前缀。go语句使函数在一个新创建的goroutine中执行，go语句本身立刻返回:
+```go
+f()//阻塞调用
+go f() // 异步调用
+```
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	go spinner(100 * time.Millisecond)
+	const n = 55
+	fibN := fib(n)
+	fmt.Printf("\rGibonacci(%d) = %d\n", n, fibN)
+
+}
+func spinner(deley time.Duration) int {
+	for {
+		for _, r := range `-\|/` {
+			fmt.Printf("\r%c", r)
+			time.Sleep(deley)
+		}
+	}
+}
+func fib(x int) int {
+	if x < 2 {
+		return x
+	}
+	return fib(x-1) + fib(x-2)
+}
+```
+main方法执行结束，goroutine退出，没有办法终止goroutine。
 ## 示例: 并发时钟服务器
+以每秒钟一次的频率向客户端发送当前时间:
+
 ## 示例: 并发回声服务器
 # 使用共享变量实现并发
 # 包和go工具
