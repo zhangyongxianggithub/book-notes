@@ -738,7 +738,48 @@ func handleConn1(c net.Conn) {
 }
 ```
 ## 通道
-通道是goroutine之间的连接。
+通道是goroutine之间的通信机制。一个通道是一个具有特定类型的管道，叫做通道的元素类型，比如`chan int`。
+```go
+ch := make(chan int) //ch的类型是chan int
+```
+通道是引用类型。可以比较。2个主要的通信操作:
+- 发送send
+- 接收receive
+- 关闭close，设置一个标志位标识值发送完毕，在关闭的通道上进行接收，将获取所有已经发送的值，直到通道为空，接收操作会立即完成，最后获取一个通道元素类型对应的零值
+```go
+ch <- x// 发送语句
+x = <- ch // 赋值语句中的接收表达式
+<-ch  // 接收语句，丢弃结果
+```
+- 无缓冲通道: `make(chan int) make(chan int, 0)`
+- 缓冲通道: `make(chan int, 3)// 容量为3的缓冲通道`
+1. 无缓冲通道
+   类似于1个容量的生产者消费者，如果没有被接收，再次发送将会阻塞，如果没有值，则接收会阻塞，直到值存在。无缓冲通道的通信使发送与接收的goroutine同步化。称为同步通道。下面的例子:
+   ```go
+	func main() {
+		conn, err := net.Dial("tcp", "localhost:8080")
+		if err != nil {
+			log.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() {
+			io.Copy(os.Stdout, conn) // 忽略错误
+			log.Println("done")
+			done <- struct{}{} // 指示主goroutine
+		}()
+		mustCopy(conn, os.Stdin)
+		conn.Close()
+		<-done
+	}
+	func mustCopy(dst io.Writer, src io.Reader) {
+		if _, err := io.Copy(dst, src); err != nil {
+			log.Fatal(err)
+		}
+	}
+   ```
+2. 管道
+3. 单向通道类型
+4. 缓冲通道
 # 使用共享变量实现并发
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
