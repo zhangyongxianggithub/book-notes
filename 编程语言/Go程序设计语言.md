@@ -779,7 +779,29 @@ x = <- ch // 赋值语句中的接收表达式
    ```
    当通道的通信本身以及通信发生的时间很重要时，消息叫做事件。 
 2. 管道
-   通道可以用来连接goroutine。这个叫管道。
+   通道可以用来连接goroutine。这个叫管道。一个2个管道的例子:
+   ```go
+	func main() {
+		naturals := make(chan int)
+		squares := make(chan int)
+		go func() {
+			for x := 0; ; x++ {
+				naturals <- x
+				time.Sleep(1 * time.Second)
+			}
+		}()
+		go func() {
+			for {
+				x := <-naturals
+				squares <- x * x
+			}
+		}()
+		for {
+			fmt.Println(<-squares)
+		}
+	}
+   ```
+   可以调用内置的`close`函数来关闭通道。关闭通道后，最后一个数据被读完，后续会直接获取通道的零值。没有直接的方式判断通道是否关闭。
 3. 单向通道类型
 4. 缓冲通道
 # 使用共享变量实现并发
