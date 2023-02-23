@@ -383,14 +383,38 @@ func (p Point) Distance(q Point) float64 {
 fmt.Println(p.Distance(q))
 ```
 ## 指针接收者的方法
-由于主调函数会复制每一个实参变量，如果函数需要更新一个变量，或者如果一个实参太大而希望避免复制整个实参，必须使用指针传递变量的地址。接收者也是这样的，需要将方法绑定到指针
+主调函数每一个实参变量，函数需要更新一个变量，或者实参太大希望避免复制整个实参，必须使用指针传递变量的地址。接收者也是这样的，需要将方法绑定到指针类型
 ```go
 func (p *Point) ScaleBy(factor float64) {
 	p.X *=factor
 	p.Y *=factor
 }
 ```
-方法的名字是`(*Point).ScaleBy`，没有圆括号，表达式会被解析成*(Point.ScaleBy)。
+方法的名字是`(*Point).ScaleBy`，没有圆括号，表达式会被解析成*(Point.ScaleBy)。本身是指针的类型不能进行方法声明。下面的用法都合法:
+```go
+r:=&Point{1, 2}
+r.ScaleBy(2)
+fmt.Println(*r)
+
+p:=Point{1, 2}
+pptr:=&p
+pptr.ScaleBy(2)
+fmt.Println(p)
+
+q:=&Point{1, 2}
+(&q).ScaleBy(2)
+fmt.Println(q)
+```
+也可以直接用变量调用，go编译器会隐式的执行&操作。不能取地址的不能调用方法，比如字面量。
+```go
+Point{1, 2}.ScaleBy(2)//编译错误，不能获得Point类型字面量的地址
+```
+通过指针可以调用变量类型的方法:
+```go
+pptr.Distance(q)// 这是合法的，因为编译器通过解引用指针隐式转换。
+(*pptr).Distance(q)
+```
+nil在类型中是有意义的零值，也是方法的接收者。
 ## 通过结构体内嵌组成类型
 结构体怎么内嵌
 ## 方法变量与表达式
@@ -657,8 +681,64 @@ func fib(x int) int {
 main方法执行结束，goroutine退出，没有办法终止goroutine。
 ## 示例: 并发时钟服务器
 以每秒钟一次的频率向客户端发送当前时间:
+```go
+package main
 
+import (
+	"io"
+	"log"
+	"net"
+	"time"
+)
+
+func main() {
+	listener, err := net.Listen("tcp", "localhost:8080")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		handleConn(conn) // 一次处理一个连接
+
+	}
+
+}
+func handleConn(c net.Conn) {
+	defer c.Close()
+	for {
+		_, err := io.WriteString(c, time.Now().Format("15:04:05\n"))
+		if err != nil {
+			return // 连接断开
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
+```
+此时服务器是顺序的，一次只能处理一个请求。支持并发，只需要`go handleConn(conn)`。现在可接收多个客户端并发执行。
 ## 示例: 并发回声服务器
+```go
+
+func echo(c net.Conn, shout string, delay time.Duration) {
+	fmt.Fprintln(c, "\t", strings.ToUpper(shout))
+	time.Sleep(delay)
+	fmt.Fprintln(c, "\t", shout)
+	time.Sleep(delay)
+	fmt.Fprintln(c, "\t", strings.ToLower(shout))
+}
+func handleConn1(c net.Conn) {
+	input := bufio.NewScanner(c)
+	for input.Scan() {
+		go echo(c, input.Text(), 1*time.Second)
+	}
+	c.Close()
+}
+```
+## 通道
+通道是goroutine之间的连接。
 # 使用共享变量实现并发
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
