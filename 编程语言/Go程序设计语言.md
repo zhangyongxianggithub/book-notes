@@ -461,7 +461,29 @@ func Lookup(key string)string{
 }
 ```
 ## 方法变量与表达式
-选择子可以赋给一个方法变量，
+选择子可以赋给一个方法变量，它是一个函数，把方法绑定到一个接收者p上。只需要提供实参而不需要提供接收者
+```go
+p:=Point{1,2}
+q:=Point{4,6}
+distanceFromP:=p.Distance // 方法变量
+fmt.Println(distanceFromP(q))
+```
+如果是回调的场景，可以将参数中的函数与方法绑定起来执行回调.
+```go
+type Rocket struct{}
+func (r *Rocket)Launch(){}
+r:=new(Rocket)
+time.AfterFunc(10 * time.Second, func(){ r.Launch()})// 传统形式
+time.AfterFunc(10 * time.Second, r.Launch)//使用方法变量的形式
+```
+方法表达式，调用方法必须提供接收者按照选择子的语法进行。方法表达式写成T.f或者(*T).f，T是类型是一种函数变量，把原来方法的接收者替换成函数的第一个参数，就可以像普通的函数一样使用
+```go
+p:=Point{1,2}
+q:=Point{4,6}
+distanceFromP:=Point.Distance // 方法表达式,直接变成了一个函数
+fmt.Println(distanceFromP(p, q))
+```
+
 ## 示例: 位向量
 ## 封装
 如果变量或者方法是不能通过对象访问到，这称作封装的变量或者方法。Go语言只有一种方式控制命名的可见性:定义的时候，首字母大写的标识符是可以从包中导出的，而首字母没有大写的则不导出。同样的机制也作用域结构体内的字段和类型中的方法。要封装一个对象，必须使用结构体。Go语言中封装的单元是包而不是类型。函数内的代码还是方法内的代码，结构体类型内的字段对于同一个包中的所有代码都是可见的。封装的优点:
