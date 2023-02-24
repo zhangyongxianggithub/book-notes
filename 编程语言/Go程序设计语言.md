@@ -979,6 +979,82 @@ for _, f := range filenames {
 	}()
 }
 ```
+返回第一个遇到的错误
+```go
+func makeThumbnails4(filenames []string) error {
+	errors := make(chan error)
+	for _, f := range filenames {
+		go func(f string) {
+			_, err := ImageFile(f)
+			errors <- err
+		}(f)
+	}
+	for range filenames {
+		if err := <-errors; err != nil {
+			return err // 不正确，goroutine泄漏
+		}
+	}
+	return nil
+}
+```
+上面的代码有一个错误，当遇到非nil的错误时，方法返回，没有goroutine继续从errors通道上接收，直至读完，其他的goroutine在发送时会被阻塞永不终止。goroutine泄漏可能导致程序卡住或者系统内存耗尽。2种方案:
+- 使用一个有足够容量的缓冲通道,这样发送的goroutine不会阻塞
+- 返回错误时，创建一个goroutine来读完通道
+
+```go
+func makeThumbnails5(filenames []string) (thumbfiles []string, err error) {
+	type item struct {
+		thumbfile string
+		err       error
+	}
+	ch := make(chan item, len(filenames))
+	for _, f := range filenames {
+		go func(f string) {
+			var it item
+			it.thumbfile, it.err = ImageFile(f)
+		}(f)
+	}
+	for range filenames {
+		it := <-ch
+		if it.err != nil {
+			return nil, it.err
+		}
+		thumbfiles = append(thumbfiles, it.thumbfile)
+	}
+	return thumbfiles, nil
+}
+```
+使用一个计数器机制来统计文件的总大小:
+```go
+func makeThumbnails6(filenames <-chan string) int64 {
+	sizes := make(chan int64)
+	var wg sync.WaitGroup // 记录工作goroutine的个数
+	for f := range filenames {
+		wg.Add(1)
+		// worker
+		go func(f string) {
+			defer wg.Done()
+			thumb, err := ImageFile(f)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			info, _ := os.Stat(thumb)
+			sizes <- info.Size()
+		}(f)
+	}
+	go func() {
+		wg.Wait()
+		close(sizes)
+	}()
+	var total int64
+	for size := range sizes {
+		total += size
+	}
+	return total
+}
+```
+## 示例: 并发的Web爬虫
 
 # 使用共享变量实现并发
 # 包和go工具
