@@ -934,6 +934,51 @@ x = <- ch // 赋值语句中的接收表达式
 4. 缓冲通道
    缓冲通道有一个元素队列。就是类似支持并发的普通队列，消费者从头消费，生产者从尾部插入。如果满了，发送者阻塞，如果空了，消费者阻塞。缓冲通道将发送者与接收者解耦，不用同步了。
 ## 并行循环
+下面的程序批量生成缩略图
+```go
+// ImageFile从infile中读取一幅图像并把它的缩略图写入同一个目录
+// 它返回生成的文件名，比如foo.thumb.jpg
+func ImageFile(infile string) (string, error) {
+	return "", nil
+}
+func makeThumbnails(filenames []string) {
+	for _, f := range filenames {
+		if _, err := ImageFile(f); err != nil {
+			log.Println(err)
+		}
+	}
+}
+```
+完全独立的子问题组成的问题称为高度并行。第一个并行的版本，这个版本没有等待所有的goroutine结束就结束了，有问题需要等待其他goroutine完成:
+```go
+func makeThumbnails2(filenames []string) {
+	for _, f := range filenames {
+		go ImageFile(f)
+	}
+}
+```
+第二个版本的
+```go
+func makeThumbnails3(filenames []string) {
+	ch := make(chan struct{})
+	for _, f := range filenames {
+		go func(f string) {
+			ImageFile(f)
+			ch <- struct{}{}
+		}(f)
+	}
+	for range filenames {
+		<-ch
+	}
+}
+```
+```go
+for _, f := range filenames {
+	go func(){
+		ImageFile(f)// 这种方式不正确，f是共享的，goroutine运行时，可能被下一次的迭代f更改了，所以不是执行时候状态的值。
+	}()
+}
+```
 
 # 使用共享变量实现并发
 # 包和go工具
