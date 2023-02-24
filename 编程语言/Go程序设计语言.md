@@ -416,9 +416,52 @@ pptr.Distance(q)// 这是合法的，因为编译器通过解引用指针隐式�
 ```
 nil在类型中是有意义的零值，也是方法的接收者。
 ## 通过结构体内嵌组成类型
-结构体怎么内嵌
+```go
+type Point struct{
+	X,Y float64
+}
+type ColoredPoint struct {
+	Point
+	Color color.RGBA
+}
+```
+前面说匿名嵌套会继承属性与方法，但是有一点特殊
+```go
+p:=...
+q:=...
+fmt.Println(p.Distance(q.Point))
+```
+方法的参数不能直接传递ColoredPoint，虽然看起来是继承，但不是is-a的关系。在Go中实际是生成了Point方法的包装代理方法，只有代理方法是属于ColoredType的，如下:
+```go
+func (p ColoredType)Distance(q Point) float64{
+	return p.Point.Distance(q)
+}
+```
+匿名嵌套也可以嵌套指针效果与命名类型是一样的。
+```go
+type ColoredPoint struct{
+	*Point
+	Color color.RGBA
+}
+p:=ColoredPoint{&Point{1,2},red}
+q:=ColoredPoint{&Point{5,4},blue}
+fmt.Println(p.Distance(*q.Point))
+```
+ColoredPoint具有Point/RGBA的所有方法，与直接定义的方法，当编译器处理选择子(p.Distance)，首先查找直接声明的方法Distance，之后再在内嵌的字段中查找方法，再在内嵌的内嵌的字段中查找。内嵌的机制可以帮助在非命名类型结构体中嵌入方法，因为方法是继承而来的。比如下面的:
+```go
+var cache =struct {
+	sync.Mutex
+	mapping map[string]string
+}{mapping: make(map[string]stirng)}
+func Lookup(key string)string{
+	cache.Lock()
+	v:=cache.mapping[key]
+	cache.Unlock()
+	return v
+}
+```
 ## 方法变量与表达式
-
+选择子可以赋给一个方法变量，
 ## 示例: 位向量
 ## 封装
 如果变量或者方法是不能通过对象访问到，这称作封装的变量或者方法。Go语言只有一种方式控制命名的可见性:定义的时候，首字母大写的标识符是可以从包中导出的，而首字母没有大写的则不导出。同样的机制也作用域结构体内的字段和类型中的方法。要封装一个对象，必须使用结构体。Go语言中封装的单元是包而不是类型。函数内的代码还是方法内的代码，结构体类型内的字段对于同一个包中的所有代码都是可见的。封装的优点:
@@ -869,6 +912,7 @@ x = <- ch // 赋值语句中的接收表达式
 4. 缓冲通道
    缓冲通道有一个元素队列。就是类似支持并发的普通队列，消费者从头消费，生产者从尾部插入。如果满了，发送者阻塞，如果空了，消费者阻塞。缓冲通道将发送者与接收者解耦，不用同步了。
 ## 并行循环
+
 # 使用共享变量实现并发
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
@@ -938,6 +982,12 @@ Go工具主要用来下载、查询、格式化、构建、测试以及安装Go�
    包的导入路径是包在本地的位置也是在互联网上的位置，go get也会下载包的关联依赖，完成下载后，构建、安装库或者相应的命令，go get创建的目录是远程仓库的真实客户端。包导入路径中的golang.org不同于Git服务器的实际域名，这是因为对于github.com这样的服务，可以使用自定义域名，只要在获取资源的地址上放上源数据，也就是真实的代码地址，go工具会识别并自动重定向，这也实现了导入路径自定义。使用-u开关更新所有关联依赖包，不开启优先优先本地。如果需要精确的控制版本，请使用vendor目录。
 3. 包的构建
    go build命令编译每一个命令行参数中的包，如果包的名字是main，go build调用链接器在当前目录中创建可执行程序，可执行程序的名字取自包的导入路径的最后一段。
+4. 包的文档化
+   有良好的API文档。`go doc time`输出文档注释，可以输出一个包、方法、成员等都可以。还有一个工具godoc。提供相互链接的HTML页面服务。
+5. 内部包
+   导入路径中含有internal关键词的包，internal目录的父目录下的所有包可以导入此内部包，其他不行。限定了包的访问范围
+6. 包的查询
+   `go list`列出包是否再工作空间中，输出导入路径。`go list ...`列出工作空间中的所有包。`go list -json hash`json格式输出包的完整记录。
 # 测试
 # 反射
 # 低级编程
