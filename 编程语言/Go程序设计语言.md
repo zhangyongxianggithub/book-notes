@@ -801,12 +801,74 @@ x = <- ch // 赋值语句中的接收表达式
 		}
 	}
    ```
-   可以调用内置的`close`函数来关闭通道。关闭通道后，最后一个数据被读完，后续会直接获取通道的零值。没有直接的方式判断通道是否关闭。
+   可以调用内置的`close`函数来关闭通道。关闭通道后，最后一个数据被读完，后续会直接获取通道的零值。没有直接的方式判断通道是否关闭。从机制上来说，通道都是发送端关闭的。接收操作有一个变种: 接收通道的元素/一个布尔值，为true表示接收成功，false表示接收的操作在一个关闭的并且读完的通道上，所以可以修带代码:
+   ```go
+   go func() {
+       for {
+		   x, ok := <-naturals
+		   if !ok {
+			   break //通道关闭并且读完
+		   }
+		   squares<-x*x
+	   }
+	   close(squares)
+   }
+   ```
+   range循环支持在通道上迭代，接收完最后一个值后关闭循环。
+   ```go
+	func main() {
+		naturals := make(chan int)
+		squares := make(chan int)
+		go func() {
+			for x := 0; x < 10; x++ {
+				naturals <- x
+				time.Sleep(1 * time.Second)
+			}
+			close(naturals)
+		}()
+		go func() {
+			for x := range naturals {
+				squares <- x * x
+			}
+			close(squares)
+		}()
+		for x := range squares {
+			fmt.Println(x)
+		}
+	}
+   ```
+   关闭已经关闭的通道会导致宕机。
 3. 单向通道类型
+   Go系统提供了单向通道接口类型，仅仅具有发送或者接收的操作。`chan<- int`是一个只能发送的通道。`<-chan int`是一个只能接收的通道。
+   ```go
+	func counter(out chan<- int) {
+		for x := 0; x < 100; x++ {
+			out <- x
+		}
+		close(out)
+	}
+	func squarer(out chan<- int, in <-chan int) {
+		for v := range in {
+			out <- v * v
+		}
+		close(out)
+	}
+	func printer(in <-chan int) {
+		for v := range in {
+			fmt.Println(v)
+		}
+	}
+	func main() {
+		naturals := make(chan int)
+		squares := make(chan int)
+		go counter(naturals)
+		go squarer(squares, naturals)
+		printer(squares)
+	}
+   ```
 4. 缓冲通道
    缓冲通道有一个元素队列。就是类似支持并发的普通队列，消费者从头消费，生产者从尾部插入。如果满了，发送者阻塞，如果空了，消费者阻塞。缓冲通道将发送者与接收者解耦，不用同步了。
 ## 并行循环
-
 # 使用共享变量实现并发
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
