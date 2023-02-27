@@ -1055,7 +1055,10 @@ func makeThumbnails6(filenames <-chan string) int64 {
 }
 ```
 ## 示例: 并发的Web爬虫
-
+## 使用select多路复用
+## 示例: 并发目录遍历
+## 取消
+## 示例: 聊天服务器
 # 使用共享变量实现并发
 # 包和go工具
 通过包来复用函数，Go自带100多个基础包，配套的Go工具功能强大。
