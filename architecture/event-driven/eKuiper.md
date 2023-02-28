@@ -1,10 +1,100 @@
+[TOC]
 ekuiper，超轻量物联网的边缘数据分析软件。它是一款可以运行在各类资源受限硬件上的轻量级物联网边缘分析、流式处理开源软件。ekuiper的一个主要目标在边缘端提供一个实时流式计算框架，与Flink类似，eKuiper的规则引擎允许用户使用基于SQL方式，或者Graph方式的规则，快速创建边缘端的分析应用。
+功能:
+- 超轻量，核心服务安装包4.5M，首次运行内存使用10MB
+- 跨平台，各种CPU架构，各种Linux，各种容器，这个边缘设备
+- 完整的数据分析，数据抽取转换过滤，聚合分组各种函数，各种窗口
+- 高可扩展性，通过Golang/Python开发自定义的Source/Sink/SQL函数
+- 管理能力，免费的可视化管理，通过CLI、REST API等管理
+- 与KubeEdge、OpenYurt、K3s、Baetyl等基于边缘Kubernetes框架的继承能力
+- EMQX集成
 ```shell
 docker run -p 9082:9082 -d --name ekuiper-manager -e DEFAULT_EKUIPER_ENDPOINT="http://172.25.104.177:9081" emqx/ekuiper-manager:latest
 ```
 ```shell
 docker run -p 9081:9081 -d --name kuiper -e MQTT_SOURCE__DEFAULT__SERVER="tcp://broker.emqx.io:1883" lfedge/ekuiper:1.8-alpine
 ```
+# 安装与部署
+- Docker方式，可以使用`docker compose`来部署eKuiper/eKuiper manager
+  ```yaml
+   version: '3.4'
+
+   services:
+   manager:
+      image: emqx/ekuiper-manager:x.x.x
+      container_name: ekuiper-manager
+      ports:
+      - "9082:9082"
+      restart: unless-stopped
+      environment: 
+      # setting default eKuiper service, works since 1.8.0
+      DEFAULT_EKUIPER_ENDPOINT: "http://ekuiper:9081"
+   ekuiper:
+      image: lfedge/ekuiper:x.x.x
+      ports:
+      - "9081:9081"
+      - "127.0.0.1:20498:20498"
+      container_name: ekuiper
+      hostname: ekuiper
+      restart: unless-stopped
+      user: root
+      volumes:
+      - /tmp/data:/kuiper/data
+      - /tmp/log:/kuiper/log
+      - /tmp/plugins:/kuiper/plugins
+      environment:
+      MQTT_SOURCE__DEFAULT__SERVER: "tcp://broker.emqx.io:1883"
+      KUIPER__BASIC__CONSOLELOG: "true"
+      KUIPER__BASIC__IGNORECASE: "false"
+  ```
+- 裸机软件包安装
+- Helm/K8s/K3s
+  ```shell
+   $ helm repo add emqx https://repos.emqx.io/charts # 添加仓库
+   $ helm repo update
+   $ helm search repo emqx # 搜索仓库内容
+   $ helm install my-ekuiper emqx/ekuiper #安装
+  ```
+# 开发方式
+2种方式创建/管理规则（流处理作业），其实还有REST API方式，Web UI本质就是这种方式。
+eKuiper规则由SQL和多个动作组成。eKuiper SQL是一种类SQL语言，指定规则的逻辑，是标准SQL的子集。
+1. Web UI
+   - 创建订阅的流与数据结构
+   - 编写规则`SELECT count(*), avg(temperature) AS avg_temp, max(hum) AS max_hum FROM demo GROUP BY TUMBLINGWINDOW(ss, 5) HAVING avg_temp > 30`，记住这里的规则的名字
+   - 添加动作，可以由多个
+   - 管理规则，有运行状态与指标
+2. CLI
+   - 指定MQTT服务器地址
+   ```yaml
+   default:
+      qos: 1
+      sharedsubscription: true
+      server: "tcp://127.0.0.1:1883"
+   ```
+   - 创建流`$ bin/kuiper create stream demo '(temperature float, humidity bigint) WITH (FORMAT="JSON", DATASOURCE="demo")'`
+   - `bin/kuiper query`
+   - `select count(*), avg(humidity) as avg_hum, max(humidity) as max_hum from demo where temperature > 30 group by TUMBLINGWINDOW(ss, 5);`SQL语句验证
+   - 编写规则:
+     - 规则名称: 规则ID必须是唯一的
+     - sql: 针对规则运行的查询
+     - 动作: 规则的输出动作
+   ```shell
+   bin/kuiper create rule myRule -f myRule
+   ```
+   文件内的内容
+   ```json
+   {
+      "sql": "SELECT count(*), avg(temperature) as avg_temp, max(humidity) as max_hum from demo group by TUMBLINGWINDOW(ss, 5) HAVING avg_temp > 30;",
+      "actions": [{
+         "mqtt":  {
+            "server": "tcp://127.0.0.1:1883",
+            "topic": "result/myRule",
+            "sendSingle": true
+         }
+      }]
+   }
+   ```
+   这个命令也可以管理规则`bin/kuiper stop rule myRule`
 # 机构设计
 LF Edge eKuiper是物联网数据分析和流式计算引擎。是一个通用的边缘计算服务或中间件，为资源有限的边缘网关或者设备而设计。采用Go语言编写。架构如下:
 ![eKuiper架构设计](./arch.png)
