@@ -179,18 +179,34 @@ func zero(ptr *[32]byte) {
 - 容量,容量,`cap()`返回容量，是slice在数组的起始位置到数组终点的元素个数。
 s[i:j]返回范围内的一个slice，s是可以是数组、数组指针或者是slice。其中i或者j都可以忽略，有默认值。slice不能超过被引用对象的容量，但是可以超过长度，也就是不能超多底层数组的长度。
 ```go
-func reverse(s []int) {
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
+func main() {
+	months := [...]string{1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July",
+		8: "August",
+		9: "September", 10: "October", 11: "November", 12: "December",
+	}
+	fmt.Println(months[1:])
+	summer := months[6:9]
+	Q2 := months[4:7]
+	for _, s := range summer {
+		for _, q := range Q2 {
+			if s == q {
+				fmt.Printf("%s appears in both\n", s)
+			}
+		}
 	}
 }
 ```
-slice是指针，传递可以直接修改底层数组元素。slice不能做比较。内置函数make可以创建具有指定元素类型、长度、容量的slice。
+slice是指针，传递可以直接修改底层数组元素。数组与slice字面量的区别
 ```go
-make([]T,len)
+a := [...]int{1,2,3,4,5}
+s := []int{1,2,3,4,5}
+```
+slice不能做比较,bytes.Equal可以用于比较字节slice，其他的需要自己写函数比较，但是可以与nil比较，任何类型，如果值可以是nil，则可以使用转换表达式`[]int(nil)`。内置函数make可以创建具有指定元素类型、长度、容量的slice。
+```go
+make([]T,len) // 容量与长度相同
 make([]T,len,cap)
 ```
-内置函数append用于追加元素。
+内置函数append用于追加元素。内置copy函数可以复制2个slice的元素。
 ```go
 func appendInt(x []int, y int) []int {
 	var z []int
