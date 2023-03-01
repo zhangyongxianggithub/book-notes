@@ -29,7 +29,21 @@ helm status mysql-1612624192  # 发布的信息
   - helm search repo, 从你添加（使用helm repo add）到本地helm客户端中的仓库中进行查找。该命令基于本地数据进行搜索，无需连接互联网。比如`helm repo add brigade https://brigadecore.github.io/charts`,`helm search repo brigade`.
 - helm install: 安装一个helm包，比如`helm install happy-panda bitnami/wordpress`，前面是Release的名字，也可以自动生成名字会按照资源的一个 固定的顺序安装。这个看官网。
 - helm status: `helm status happy-panda`
-- helm show values: 查看chart的可配置选项`helm show values bitnami/wordpress`,`helm install -f values.yaml bitnami/wordpress --generate-name`覆盖默认的配置项
+- helm show values: 查看chart的可配置选项`helm show values bitnami/wordpress`,`helm install -f（--values） values.yaml bitnami/wordpress --generate-name`覆盖默认的配置项，也可以使用--set的命令行方式（会被保存到configmap中），优先级更高。`helm upgrade --reset-values`清楚set设置的值`--set name=value``--set outer.inner=value``--set name={a, b, c}``--set name=[],a=null``--set servers[0].port=80``--set servers[0].port=80,servers[0].host=example``--set name=value1\,value2`特殊字符需要转义。`--set nodeSelector."kubernetes\.io/role"=master`嵌套的层级尽可能少，因为set使用不方便。helm install支持的安装方式
+  - chart包
+  - chart目录
+  - chart仓库
+  - chart url地址
+- helm upgrade: 升级版本，修改release配置，`helm upgrade -f panda.yaml happy-panda bitnami/wordpress`,只会执行自上次以来发生变更的内容，`helm get values happy-panda`查看values内容，`helm get`是一个查看Release非常有帮助的命令。
+- helm rollback: `helm rollback [RELEASE] [REVISION]`回滚之前的版本，`helm history [RELEASE]`查看历史版本号
+- helm uninstall: `helm uninstall happy-panda`，删除Release的所有记录，`helm uninstall --keep-history`保留历史记录，`helm list --uninstalled`会列出保留历史记录的Release。
+- helm list: 列出所有的Release
+- helm repo: `helm repo list`,`helm repo update`
+- helm create deis-workflow: 快速创建chart
+- helm lint: 验证格式
+- helm package deis-workflow: 打包
 - 
-  
 
+一些安装、升级、回滚时重要的命令参数:
+- --timeout, 等待k8s命令执行的超时时间
+- --wait，表示必须要等到所有的Pods都处于ready状态
