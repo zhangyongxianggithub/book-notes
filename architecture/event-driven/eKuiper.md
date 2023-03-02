@@ -207,3 +207,268 @@ basic:
   # Whether to ignore case in SQL processing. Note that, the name of customized function by plugins are case-sensitive.
   ignoreCase: true
 ```
+# 用户指南
+## 流: 无界的事件序列
+流是eKuiper中数据源连接器的运行形式，他必须指定一个源类型来定义如何连接到外部资源。当作为一个流使用时，源必须是无界的，流的作用就像规则的触发器，每个事件都会触发规则中的计算。eKuiper不需要一个预先建立的模式。
+```sql
+CREATE STREAM   
+    stream_name   
+    ( column_name <data_type> [ ,...n ] )
+    WITH ( property_name = expression [, ...] );
+```
+由2部分组成:
+- 流的模式定义，模式是可选的;
+- WITH子句中定义连接器类型和行为的属性，如序列化格式
+流可以设置为共享的
+## 表: 事件序列的快照
+### 表
+Table用于表示流的当前状态。它可以被认为是流的快照。用户可以使用 table 来保留一批数据进行处理。
+- 扫描表(Scan Table): 内存中积累数据，适用于较小的数据集，表的内容不需要再规则之间共享
+- 查询表(Lookup Table): 绑定外部表并按需查询，适用于较大的数据集，规则之间共享表的内容
+与创建流的语法一样。
+```sql
+CREATE TABLE   
+    table_name   
+    ( column_name <data_type> [ ,...n ] )
+    WITH ( property_name = expression [, ...] );
+```
+表支持与流相同的数据类型。表还支持所有流的属性。因此，表中也支持所有源类型。许多源不是批处理的，它们在任何给定时间点都有一个事件，这意味着表将始终只有一个事件。一个附加属性RETAIN_SIZE来指定表快照的大小，以便表可以保存任意数量的历史数据。
+查询表的创建:
+```sql
+CREATE TABLE alertTable() WITH (DATASOURCE="0", TYPE="redis", KIND="lookup")
+```
+memory/redis/sql3种方式可以创建查询表
+表是保留较为大量的状态的方法。扫描表将状态保存在内存中，而查找表将它们保存在外部，并可能是持久化的。扫描表更容易设置，而查找表可以很容易地连接到存在的持久化的状态。这两种类型都适用于流式批量综合计算。
+### 扫描表
+通常，表将流连接。与流连接时，表数据不会影响下游更新数据，它被视为静态引用数据，尽管它可能会在内部更新。2种使用场景:
+- 数据补全
+- 按历史状态过滤
+典型用法是查找表:
+```sql
+CREATE TABLE table1 (
+		id BIGINT,
+		name STRING
+	) WITH (DATASOURCE="lookup.json", FORMAT="JSON", TYPE="file");
+
+SELECT * FROM demo INNER JOIN table1 on demo.id = table1.id
+```
+```sql
+CREATE TABLE stateTable (
+		id BIGINT,
+		triggered bool
+	) WITH (DATASOURCE="myTopic", FORMAT="JSON", TYPE="mqtt");
+
+SELECT * FROM demo LEFT JOIN stateTable on demo.id = stateTable.id WHERE triggered=true
+```
+在此示例中，创建了一个表 stateTable 来记录来自 mqtt 主题 myTopic 的触发器状态。在规则中，会根据当前触发状态来过滤 demo 流的数据。
+### 查询表
+并非所有的数据都会经常变化，即使在实时计算中也是如此。在某些情况下，你可能需要用外部存储的静态数据来补全流数据。例如，用户元数据可能存储在一个关系数据库中，流数据中只有实时变化的数据，需要连接流数据与数据库中的批量数据才能补全出完整的数据。在早期的版本中，eKuiper支持了Table概念，用于在内存中保存较少数量的流数据，作为数据的快照供其他的流进行连接查询。这种 Table 适用于状态较少，状态实时性要求很高的场景。在 1.7.0及之后的版本中，eKuiper添加了新的查询表（Lookup Table）的概念，用于绑定外部静态数据，可以处理大量的批数据连接的需求。
+#### 动态预警场景
+预警功能是边缘计算中最常见的场景之一。当告警标准固定时，我们通常可以通过简单的 WHERE 语句进行告警条件的匹配并触发动作。然而在更复杂的场景中，告警条件可能是动态可配置的，并且根据不同的数据维度，例如设备类型会有有不同的预警值。接下来，我们将讲解如何针对这个场景创建规则。当采集到数据后，规则需要根据动态预警值进行过滤警告。场景输入
+本场景中，我们有两个输入:
+- 采集数据流，其中包含多种设备的实时采集数据;
+- 预警值数据，每一类设备有对应的预警值，且预警值可更新
+针对这两种输入，我们分别创建流和查询表进行建模。
+创建数据流。假设数据流写入MQTT Topic scene1/data 中，则我们可通过以下REST API创建名为demoStream的数据流:
+```json
+ {"sql":"CREATE STREAM demoStream() WITH (DATASOURCE=\"scene1/data\", FORMAT=\"json\", TYPE=\"mqtt\")"}
+```
+创建查询表。假设预警值数据存储于Redis数据库0中，创建名为 alertTable的查询表。此处，若使用其他存储方式，可将type替换为对应的source类型，例如sql。
+```json
+{"sql":"CREATE TABLE alertTable() WITH (DATASOURCE=\"0\", TYPE=\"redis\", KIND=\"lookup\")"}
+```
+##### 预警值动态更新
+动态预警值存储在Redis或者Sqlite等外部存储中。用户可通过应用程序对其进行更新也可通过eKuiper提供的Updatable Sink功能通过规则进行自动更新。本教程将使用规则，通过Redis sink对上文的Redis查询表进行动态更新。预警值规则与常规规则无异，用户可接入任意的数据源，做任意数据计算，只需要确保输出结果中包含更新指令字段action，例如`{"action":"upsert","id":1,"alarm":50}`。本教程中，我们使用 MQTT输入预警值更新指令通过规则更新Redis数据。创建MQTT流，绑定预警值更新指令数据流。假设更新指令通过MQTT topic scene1/alert发布。`{"sql":"CREATE STREAM alertStream() WITH (DATASOURCE=\"scene1/alert\", FORMAT=\"json\", TYPE=\"mqtt\")"}`
+创建预警值更新规则。其中，规则接入了上一步创建的指令流，规则SQL只是简单的获取所有指令，然后在action中使用支持动态更新的redis sink。配置了redis的地址，存储数据类型；key使用的字段名设置为id，更新类型使用的字段名设置为action。这样，只需要保证指令流中包含id和 action字段就可以对Redis进行更新了。
+```json
+{
+  "id": "ruleUpdateAlert",
+  "sql":"SELECT * FROM alertStream",
+  "actions":[
+   {
+     "redis": {
+       "addr": "127.0.0.1:6379",
+       "dataType": "string",
+       "field": "id",
+       "rowkindField": "action",
+       "sendSingle": true
+     }
+  }]
+}
+```
+接下来，我们可以向发送MQTT主题scene1/alert发送指令，更新预警值。例如：
+```json
+{"action":"upsert","id":1,"alarm":50}
+{"action":"upsert","id":2,"alarm":80}
+{"action":"upsert","id":3,"alarm":20}
+{"action":"upsert","id":4,"alarm":50}
+{"action":"delete","id":4}
+{"action":"upsert","id":1,"alarm":55}
+``` 
+查看Redis数据库，应当可以看到数据被写入和更新。该规则为流式计算规则，后续也会根据订阅的数据进行持续的更新。
+##### 根据设备类型动态预警
+前文中，我们已经创建了采集数据流，并且创建了可动态更新的预警条件查询表。接下来，我们可以创建规则，连接采集数据流与查询表以获取当前设备类型的预警值，然后判断是否需要预警。
+```json
+{
+  "id": "ruleAlert",
+  "sql":"SELECT device, value FROM demoStream INNER JOIN alertTable ON demoStream.deviceKind = alertTable.id WHERE demoStream.value > alertTable.alarm",
+  "actions":[
+    {
+      "mqtt": {
+        "server": "tcp://myhost:1883",
+        "topic": "rule/alert",
+        "sendSingle": true
+      }
+    }
+  ]
+}
+```
+在规则中，我们根据采集数据流中的deviceKind字段与查询表中的id字段（此处为Redis中的key）进行连接，获得查询表中对应设备类型的预警值 alarm。接下来在WHERE语句中过滤出采集的数值超过预警值的数据，并将其发送到MQTT的rule/alert主题中进行告警。发送MQTT指令到采集数据流的主题scene1/data，模拟采集数据采集，观察规则告警结果。例如下列数据，虽然采集值相同，但因为不同的设备类型告警阈值不同，它们的告警情况可能有所区别。
+```json
+{"device":"device1","deviceKind":1,"value":54}
+{"device":"device12","deviceKind":2,"value":54}
+{"device":"device22","deviceKind":3,"value":54}
+{"device":"device2","deviceKind":1,"value":54}
+```
+#### 数据补全场景
+流数据变化频繁，数据量大，通常只包含需要经常变化的数据；而不变或者变化较少的数据通常存储于数据库等外部存储中。在应用处理时，通常需要将流数据中缺少的静态数据补全。例如，流数据中包含了设备的ID，但设备的具体名称，型号的描述数据存储于数据库中。本场景中，我们将介绍如何将流数据与批数据结合，进行自动数据补全。
+
+##### SQL插件安装和配置
+本场景将使用MySQL作为外部表数据存储位置。eKuiper提供了预编译的 SQL source插件，可访问MySQL数据并将其作为查询表。因此，在开始教程之前，我们需要先安装SQL source插件。使用eKuiper manager管理控制台，可直接在插件管理中，点击创建插件，如下图选择SQL source插件进行安装。本场景将以MySQL为例，介绍如何与关系数据库进行连接。用户需要启动MySQL实例。在MySQL中创建表devices, 其中包含id, name, deviceKind等字段并提前写入内容。在管理控制台中，创建SQL source 配置，指向创建的MySQL实例。由于SQL数据库IO延迟较大，用户可配置是否启用查询缓存及缓存过期时间等。
+```yaml
+lookup:
+   cache: true # 启用缓存
+   cacheTtl: 600 # 缓存过期时间
+   cacheMissingKey: true # 是否缓存未命中的情况
+```
+##### 场景输入
+本场景中，我们有两个输入:
+- 采集数据流，与场景1相同，包含多种设备的实时采集数据。本教程中，采集的数据流通过 MQTT 协议进行实时发送。
+- 设备信息表，每一类设备对应的名字，型号等元数据。本教程中，设备信息数据存储于 MySQL 中。
+针对这两种输入，我们分别创建流和查询表进行建模。
+创建数据流。假设数据流写入MQTT Topic scene2/data中，则我们可通过以下REST API创建名为demoStream2的数据流。
+```json
+{"sql":"CREATE STREAM demoStream2() WITH (DATASOURCE=\"scene2/data\", FORMAT=\"json\", TYPE=\"mqtt\")"}
+```
+创建查询表。假设设备数据存储于MySQL数据库devices中，创建名为 deviceTable的查询表。CONF_KEY设置为上一节中创建的SQL source配置。
+```json
+{"sql":"CREATE TABLE deviceTable() WITH (DATASOURCE=\"devices\", CONF_KEY=\"mysql\",TYPE=\"sql\", KIND=\"lookup\")"}
+``` 
+##### 数据补全规则
+流和表都创建完成后，我们就可以创建补全规则了。
+```json
+{
+  "id": "ruleLookup",
+  "sql": "SELECT * FROM demoStream2 INNER JOIN deviceTable ON demoStream.deviceId = deviceTable.id",
+  "actions": [{
+    "mqtt": {
+      "server": "tcp://myhost:1883",
+      "topic": "rule/lookup",
+      "sendSingle": true
+    }
+  }]
+}
+``` 
+在这个规则中，通过流数据中的deviceId字段与设备数据库中的id进行匹配连接，并输出完整的数据。用户可以根据需要，在select语句中选择所需的字段。
+#### 总结
+本教程以两个场景为例，介绍了如何使用查询表进行流批结合的计算。我们分别使用了Redis和MySQL作为外部查询表的类型并展示了如何通过规则动态更新外部存储的数据。用户可以使用查询表工具探索更多的流批结合运算的场景。
+## 规则: 查询和动作
+### 规则
+规则由JSON定义
+```json
+{
+  "id": "rule1",
+  "sql": "SELECT demo.temperature, demo1.temp FROM demo left join demo1 on demo.timestamp = demo1.timestamp where demo.temperature > demo1.temp GROUP BY demo.temperature, HOPPINGWINDOW(ss, 20, 10)",
+  "actions": [
+    {
+      "log": {}
+    },
+    {
+      "mqtt": {
+        "server": "tcp://47.52.67.87:1883",
+        "topic": "demoSink"
+      }
+    }
+  ]
+}
+```
+| **参数名** | **是否可选**              | **说明**                           |
+|---------|-----------------------|----------------------------------|
+| id      | 否                     | 规则 id, 规则 id 在同一 eKuiper 实例中必须唯一 |
+| name    | 是                     | 规则显示的名字或者描述                      |
+| sql     | 如果 graph 未定义，则该属性必须定义 | 为规则运行的 sql 查询                    |
+| actions | 如果 graph 未定义，则该属性必须定义 | Sink 动作数组                        |
+| graph   | 如果 sql 未定义，则该属性必须定义   | 规则有向无环图的 JSON 表示                 |
+| options | 是                     | 选项列表                             |
+
+一个规则代表了一个流处理流程，定义了从将数据输入流的数据源到各种处理逻辑，再到将数据输入到外部系统的动作。有两种方法来定义规则的业务逻辑。要么使用SQL/动作组合，要么使用新增加的图API。选项支持:
+
+| **选项名**            | **类型和默认值** | **说明 **                                                                                         |
+|--------------------|------------|-------------------------------------------------------------------------------------------------|
+| isEventTime        | bool:false | 使用事件时间还是将时间用作事件的时间戳。 如果使用事件时间，则将从有效负载中提取时间戳。 必须通过 stream 定义指定时间戳记。                              |
+| lateTolerance      | int64:0    | 在使用事件时间窗口时，可能会出现元素延迟到达的情况。 LateTolerance 可以指定在删除元素之前可以延迟多少时间（单位为 ms）。 默认情况下，该值为0，表示后期元素将被删除。    |
+| concurrency        | int: 1     | 一条规则运行时会根据 sql 语句分解成多个 plan 运行。该参数设置每个 plan 运行的线程数。该参数值大于1时，消息处理顺序可能无法保证。                       |
+| bufferLength       | int: 1024  | 指定每个 plan 可缓存消息数。若缓存消息数超过此限制，plan 将阻塞消息接收，直到缓存消息被消费使得缓存消息数目小于限制为止。此选项值越大，则消息吞吐能力越强，但是内存占用也会越多。  |
+| sendMetaToSink     | bool:false | 指定是否将事件的元数据发送到目标。 如果为 true，则目标可以获取元数据信息。                                                        |
+| sendError          | bool: true | 指定是否将运行时错误发送到目标。如果为 true，则错误会在整个流中传递直到目标。否则，错误会被忽略，仅打印到日志中。                                     |
+| qos                | int:0      | 指定流的 qos。 值为0对应最多一次； 1对应至少一次，2对应恰好一次。 如果 qos 大于0，将激活检查点机制以定期保存状态，以便可以从错误中恢复规则。                  |
+| checkpointInterval | int:300000 | 指定触发检查点的时间间隔（单位为 ms）。 仅当 qos 大于0时才有效。                                                           |
+| restartStrategy    | 结构         | 指定规则运行失败后自动重新启动规则的策略。这可以帮助从可恢复的故障中回复，而无需手动操作。请查看规则重启策略了解详细的配置项目。                                |
+
+### 规则管道
+我们可以通过将先前规则的结果导入后续规则来形成规则管道。这可以通过使用中间存储或MQ（例如mqtt消息服务器）来实现。通过同时使用内存源和目标，我们可以创建没有外部依赖的规则管道。规则管道将是隐式的。每个规则都可以使用一个内存目标/源。这意味着每个步骤将使用现有的api单独创建（示例如下所示）。
+```json
+# 1 创建源流
+{"sql" : "create stream demo () WITH (DATASOURCE=\"demo\", FORMAT=\"JSON\")"}
+# 2 创建规则和内存目标
+{
+  "id": "rule1",
+  "sql": "SELECT * FROM demo WHERE isNull(temperature)=false",
+  "actions": [{
+    "log": {
+    },
+    "memory": {
+      "topic": "home/ch1/sensor1"
+    }
+  }]
+}
+#3 从内存主题创建一个流
+{"sql" : "create stream sensor1 () WITH (DATASOURCE=\"home/+/sensor1\", FORMAT=\"JSON\", TYPE=\"memory\")"}
+#4 从内存主题创建另一个要使用的规则
+{
+  "id": "rule2-1",
+  "sql": "SELECT avg(temperature) FROM sensor1 GROUP BY CountWindow(10)",
+  "actions": [{
+    "log": {
+    },
+    "memory": {
+      "topic": "analytic/sensors"
+    }
+  }]
+}
+{
+  "id": "rule2-2",
+  "sql": "SELECT temperature + 273.15 as k FROM sensor1",
+  "actions": [{
+    "log": {
+    }
+  }]
+}
+```
+通过使用内存主题作为桥梁，我们现在创建一个规则管道:rule1->{rule2-1, rule2-2}。管道可以是多对多的，而且非常灵活。请注意，内存目标可以与其他目标一起使用，为一个规则创建多个规则动作。并且内存源主题可以使用通配符订阅过滤后的主题列表。
+### 状态与容错
+eKuiper支持有状态的规则流，有2种状态:
+- 窗口操作和可回溯源的内部状态
+- 对流上下文扩展公开的用户状态，可以参考状态存储。
+
+默认情况下，所有状态仅驻留在内存中，这意味着如果流异常退出，则状态将消失。为了使状态容错，Kuipler需要将状态检查点放入永久性存储中，以便在发生错误后恢复。将规则选项qos设置为1或2将启用检查点。通过设置checkpointInterval选项配置检查点间隔时间。当在流处理应用程序中出现问题时，可能会造成结果丢失或重复。对于qos的3个选项，其对应行为将是：
+- 最多一次（0）: eKuiper 不会采取任何行动从问题中恢复
+- 至少一次（1）: 没有任何结果丢失，但是您可能会遇到重复的结果
+- 恰好一次（2）: 没有丢失或重复任何结果
+
+考虑到eKuiper通过回溯和重播源数据流从错误中恢复，将理想情况描述为恰好一次时，并不意味着每个事件都会被恰好处理一次。相反，这意味着每个事件将只会对由eKuiper管理的状态造成一次影响。如果您不需要恰好一次，则可以通过使用AT_LEAST_ONCE配置eKuiper，进而获得一些更好的效果。
+## 数据源
+
+## 数据汇
+## 序列化
+## AI/ML
