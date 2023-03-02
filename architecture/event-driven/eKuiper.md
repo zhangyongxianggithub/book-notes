@@ -468,7 +468,99 @@ eKuiper支持有状态的规则流，有2种状态:
 
 考虑到eKuiper通过回溯和重播源数据流从错误中恢复，将理想情况描述为恰好一次时，并不意味着每个事件都会被恰好处理一次。相反，这意味着每个事件将只会对由eKuiper管理的状态造成一次影响。如果您不需要恰好一次，则可以通过使用AT_LEAST_ONCE配置eKuiper，进而获得一些更好的效果。
 ## 数据源
+有内置源和扩展源。源连接器提供了与外部系统的连接，以便将数据加载进来。有2种数据加载机制:
+- 扫描: 像一个由事件驱动的流一样，一个一个地加载数据事件。这种模式的源可以用在流或者扫描表中。
+- 查找: 在需要时引用外部内容，只用于查找表。
 
+每个源将支持一种或者2种模式。
+1. 内置源
+   - [MQTT](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/mqtt.html)
+   - [Neuron](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/neuron.html)
+   - [EdgeX](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/edgex.html)
+   - [HTTP PULL](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/http_pull.html)
+   - [HTTP PUSH](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/http_push.html)
+   - [Memory](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/memory.html)
+   - [File](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/file.html)
+   - [Redis](https://ekuiper.org/docs/zh/latest/guide/sources/builtin/redis.html)
+2. 预定义的源插件
+   还有一些额外的源插件，可以使用，托管在https://packages.emqx.net/kuiper-plugins/$version/$os/sources/$type_$arch.zip，预定义的有:
+   - [Zero MQ](https://ekuiper.org/docs/zh/latest/guide/sources/plugin/zmq.html)
+   - [Random](https://ekuiper.org/docs/zh/latest/guide/sources/plugin/random.html)
+   - [SQL](https://ekuiper.org/docs/zh/latest/guide/sources/plugin/sql.html)
+
+用户通过流或者表的方式使用源。
 ## 数据汇
+在eKuiper中叫做动作，有内置的和扩展的。
+1. 内置动作
+   - [MQTT](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/mqtt.html)
+   - [Neuron](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/neuron.html)
+   - [EdgeX](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/edgex.html)
+   - [Rest](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/rest.html)
+   - [Memory](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/memory.html)
+   - [Log](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/log.html)
+   - [Nop](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/nop.html)
+   - [Redis](https://ekuiper.org/docs/zh/latest/guide/sinks/builtin/redis.html)
+2. 预定义动作插件
+   - [Zero MQ](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/zmq.html)
+   - [File](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/file.html)
+   - [InfluxDB](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/influx.html)
+   - [InfluxDBV2](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/influx2.html)
+   - [Tdengine](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/tdengine.html)
+   - [Image](https://ekuiper.org/docs/zh/latest/guide/sinks/plugin/image.html)
+### 更新
+默认情况下，Sink将数据附加到外部系统中。一些外部系统，如SQL DB本身是可更新的，允许更新或删除数据。与查找源类似，只有少数Sink是天然"可更新"的。可更新的 Sink必须支持插入、更新和删除。产品自带的Sink种，可更新的包括:
+- Memory Sink
+- Redis Sink
+- SQL Sink
+为了激活更新功能，Sink必须设置rowkindField 属性，以指定数据中的哪个字段代表要采取的动作。在下面的例子中，rowkindField被设置为`action`:
+```json
+{"redis": {
+  "addr": "127.0.0.1:6379",
+  "dataType": "string",
+  "field": "id",
+  "rowkindField": "action",
+  "sendSingle": true
+}}
+```
+流入的数据必须有一个字段来表示更新的动作，`action`字段是要执行的动作。动作可以是插入、更新、upset和删除。
+```sql
+{"action":"update", "id":5, "name":"abc"}
+```
+### 公共属性
+每个sink都有基于共同的属性的属性集。每个动作可以定义自己的属性。当前有以下的公共属性:
+
+| **属性名**              | **类型和默认值**                       | **描述**                                                                                                                                                                                                                                   |
+|----------------------|----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| concurrency          | int: 1                           | 设置运行的线程数。该参数值大于1时，消息发出的顺序可能无法保证。                                                                                                                                                                                                         |
+| bufferLength         | int: 1024                        | 设置可缓存消息数目。若缓存消息数超过此限制，sink将阻塞消息接收，直到缓存消息被消费使得缓存消息数目小于限制为止。                                                                                                                                                                               |
+| runAsync             | bool:false                       | 设置是否异步运行输出操作以提升性能。请注意，异步运行的情况下，输出结果顺序不能保证。                                                                                                                                                                                               |
+| omitIfEmpty          | bool: false                      | 如果配置项设置为 true，则当 SELECT 结果为空时，该结果将不提供给目标运算符。                                                                                                                                                                                             |
+| sendSingle           | bool: false                      | 输出消息以数组形式接收，该属性意味着是否将结果一一发送。 如果为false，则输出消息将为{"result":"${the string of received message}"}。 例如，{"result":"[{\"count\":30},"\"count\":20}]"}。否则，结果消息将与实际字段名称一一对应发送。 对于与上述相同的示例，它将发送 {"count":30}，然后发送{"count":20}到 RESTful 端点。默认为 false。 |
+| dataTemplate         | string: ""                       | golang 模板 (opens new window)格式字符串，用于指定输出数据格式。 模板的输入是目标消息，该消息始终是映射数组。 如果未指定数据模板，则将数据作为原始输入。                                                                                                                                               |
+| format               | string: "json"                   | 编码格式，支持 "json" 和 "protobuf"。若使用 "protobuf", 需通过 "schemaId" 参数设置模式，并确保模式已注册。                                                                                                                                                              |
+| schemaId             | string: ""                       | 编码使用的模式。                                                                                                                                                                                                                                 |
+| delimiter            | string: ","                      | 仅在使用 delimited 格式时生效，用于指定分隔符，默认为逗号。                                                                                                                                                                                                      |
+| enableCache          | bool: 默认值为etc/kuiper.yaml 中的全局配置 | 是否启用sink cache。缓存存储配置遵循 etc/kuiper.yaml 中定义的元数据存储的配置。                                                                                                                                                                                    |
+| memoryCacheThreshold | int: 默认值为全局配置                    | 要缓存在内存中的消息数量。出于性能方面的考虑，最早的缓存信息被存储在内存中，以便在故障恢复时立即重新发送。这里的数据会因为断电等故障而丢失。                                                                                                                                                                   |
+| maxDiskCache         | int: 默认值为全局配置                    | 缓存在磁盘中的信息的最大数量。磁盘缓存是先进先出的。如果磁盘缓存满了，最早的一页信息将被加载到内存缓存中，取代旧的内存缓存。                                                                                                                                                                           |
+| bufferPageSize       | int: 默认值为全局配置                    | 缓冲页是批量读/写到磁盘的单位，以防止频繁的IO。如果页面未满，eKuiper 因硬件或软件错误而崩溃，最后未写入磁盘的页面将被丢失。                                                                                                                                                                      |
+| resendInterval       | int: 默认值为全局配置                    | 故障恢复后重新发送信息的时间间隔，防止信息风暴。                                                                                                                                                                                                                 |
+| cleanCacheAtStop     | bool: 默认值为全局配置                   | 是否在规则停止时清理所有缓存，以防止规则重新启动时对过期消息进行大量重发。如果不设置为true，一旦规则停止，内存缓存将被存储到磁盘中。否则，内存和磁盘规则会被清理掉                                                                                                                                                      |
+
+有些情况下，用户需要按照数据把结果发送到不同的目标中。例如，根据收到的数据，把计算结果发到不同的mqtt主题中。使用基于数据模板格式的动态属性，可以实现这样的功能。在以下的例子中，目标的topic属性是一个数据模板格式的字符串从而在运行时会将消息发送到动态的主题中。
+```json
+{
+  "id": "rule1",
+  "sql": "SELECT topic FROM demo",
+  "actions": [{
+    "mqtt": {
+      "sendSingle": true,
+      "topic": "prefix/{{.topic}}"
+    }
+  }]
+}
+```
+### 缓存
+
 ## 序列化
 ## AI/ML
