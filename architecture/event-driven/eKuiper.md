@@ -174,3 +174,36 @@ ekuiper2种时间概念都支持。一个支持事件时间的流处理器需要
 - 多流的连接: 必须在一个窗口中进行
 - 流和表的连接: 流将是连接操作的触发器。
 支持的连接类型包括LEFT、RIGHT、FULL、CROSS。
+# 配置
+配置是基于yaml文件的，允许通过更新文件、环境变量和REST API进行配置。
+## 配置范围
+- etc/kuiper.yaml: 全局配置文件，对其修改需要重新启动eKuiper实例;
+- etc/sources/${source_name}.yaml: 每个源的配置文件，用于定义默认属性，mqtt_source.yaml除外，它直接在etc目录下;
+- etc/connections/connection.yaml: 共享连接配置文件。
+## 配置方法
+yaml 文件通常被用来设置默认配置。在裸机上部署时，用户可以很容易地访问文件系统，因此通常通过配置修改配置文件来更改配置。当在docker或k8s中部署时，操作文件就不容易了，少量的配置可以通过环境变量来设置或覆盖。而在运行时，终端用户将使用管理控制台来动态地改变配置。eKuiper 管理控制台中的"配置"页面可以帮助用户直观地修改配置。
+## 环境变量的语法
+从环境变量到配置yaml文件之间有一个映射。当通过环境变量修改配置时，环境变量需要按照规定的格式来设置，例如: 
+>KUIPER__BASIC__DEBUG => basic.debug in etc/kuiper.yaml
+>MQTT_SOURCE__DEMO_CONF__QOS => demo_conf.qos in etc/mqtt_source.yaml
+>EDGEX__DEFAULT__PORT => default.port in etc/sources/edgex.yaml
+>CONNECTION__EDGEX__REDISMSGBUS__PORT => edgex.redismsgbus.port int etc/connections/connection.yaml
+
+环境变量用__分隔2个下划线，分隔后的第一部分内容与配置文件的文件名匹配，其余内容与不同级别的配置项匹配。文件名可以是etc文件夹中的KUIPER和MQTT_SOURCE；或etc/connection文件夹中的CONNECTION。其余情况，映射文件应在etc/sources文件夹下。
+## 全局配置文件
+eKuiper的配置文件位于$eKuiper/etc/kuiper.yaml中。配置文件为yaml格式。应用程序可以通过环境变量进行配置。环境变量优先于yaml文件中的对应项。
+```yaml
+basic:
+  # true|false, with debug level, it prints more debug info
+  debug: false
+  # true|false, if it's set to true, then the log will be print to console
+  consoleLog: false
+  # true|false, if it's set to true, then the log will be print to log file
+  fileLog: true
+  # How many hours to split the file
+  rotateTime: 24
+  # Maximum file storage hours
+  maxAge: 72
+  # Whether to ignore case in SQL processing. Note that, the name of customized function by plugins are case-sensitive.
+  ignoreCase: true
+```
