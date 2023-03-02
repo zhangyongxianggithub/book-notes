@@ -561,6 +561,117 @@ eKuiper支持有状态的规则流，有2种状态:
 }
 ```
 ### 缓存
+动作用于将处理结果发送到外部系统中，存在外部系统不可用的情况，特别是在从边到云的场景中。例如，在弱网情况下，边到云的网络连接可能会不时断开和重连。因此，动作提供了缓存功能，用于在发送错误的情况下暂存数据，并在错误恢复之后自动重发缓存数据。动作的缓存可分为内存和磁盘的两级存储。用户可配置内存缓存条数，超过上限后，新的缓存将离线存储到磁盘中。缓存将同时保存在内存和磁盘中，这样缓存的容量就变得更大了；它还将持续检测故障恢复状态，并在不重新启动规则的情况下重新发送。离线缓存的保存位置根据etc/kuiper.yaml里的store配置决定，默认为sqlite 。如果磁盘存储是sqlite，所有的缓存将被保存到data/cache.db文件。每个sink将有一个唯一的sqlite表来保存缓存。缓存的计数添加到sink的指标中的 buffer length部分。
+每个sink都可以配置自己的缓存机制。每个sink的缓存流程是相同的。如果启用了缓存，所有sink的事件都会经过两个阶段：首先是将所有内容保存到缓存中；然后在收到ack后删除缓存:
+- 错误检测：发送失败后，sink应该通过返回特定的错误类型来识别可恢复的失败（网络等），这将返回一个失败的ack，这样缓存就可以被保留下来。对于成功的发送或不可恢复的错误，将发送一个成功的 ack 来删除缓存。
+- 缓存机制：缓存将首先被保存在内存中。如果超过了内存的阈值，后面的缓存将被保存到磁盘中。一旦磁盘缓存超过磁盘存储阈值，缓存将开始rotate，即内存中最早的缓存将被丢弃，并加载磁盘中最早的缓存来代替。
+- 重发策略：目前缓存机制仅可运行在默认的同步模式中，如果有一条消息正在发送中，则会等待发送的结果以继续发送下个缓存数据。否则，当有新的数据到来时，发送缓存中的第一个数据以检测网络状况。如果发送成功，将按顺序链式发送所有内存和磁盘中的所有缓存。链式发送可定义一个发送间隔，防止形成消息风暴.
 
+Sink缓存的配置有两个层次。etc/kuiper.yaml中的全局配置，定义所有规则的默认行为。还有一个规则sink层的定义，用来覆盖默认行为A: 
+- enableCache：是否启用sink cache。缓存存储配置遵循etc/kuiper.yaml中定义的元数据存储的配置;
+- memoryCacheThreshold：要缓存在内存中的消息数量。出于性能方面的考虑，最早的缓存信息被存储在内存中，以便在故障恢复时立即重新发送。这里的数据会因为断电等故障而丢失;
+- maxDiskCache: 缓存在磁盘中的信息的最大数量。磁盘缓存是先进先出的。如果磁盘缓存满了，最早的一页信息将被加载到内存缓存中，取代旧的内存缓存;
+- bufferPageSize。缓冲页是批量读/写到磁盘的单位，以防止频繁的IO。如果页面未满，eKuiper 因硬件或软件错误而崩溃，最后未写入磁盘的页面将被丢失;
+- resendInterval: 故障恢复后重新发送信息的时间间隔，防止信息风暴;
+- cleanCacheAtStop：是否在规则停止时清理所有缓存，以防止规则重新启动时对过期消息进行大量重发。如果不设置为true，一旦规则停止，内存缓存将被存储到磁盘中。否则，内存和磁盘规则会被清理掉.
+
+在以下规则的示例配置中，log sink没有配置缓存相关选项，因此将会采用全局默认配置；而mqtt sink进行了自身缓存策略的配置.
+```json
+{
+  "id": "rule1",
+  "sql": "SELECT * FROM demo",
+  "actions": [{
+    "log": {},
+    "mqtt": {
+      "server": "tcp://127.0.0.1:1883",
+      "topic": "result/cache",
+      "qos": 0,
+      "enableCache": true,
+      "memoryCacheThreshold": 2048,
+      "maxDiskCache": 204800,
+      "bufferPageSize": 512,
+      "resendInterval": 10
+    }
+  }]
+}
+```
+### 资源引用
+动作支持配置复用。用户只需要在sinks文件夹中创建与目标动作同名的yaml文件并按照源一样的形式写入配置。例如，针对MQTT动作场景， 用户可以在sinks目录下创建mqtt.yaml文件，并写入如下内容:
+```yaml
+test:
+  qos: 1
+  server: "tcp://broker.emqx.io:1883"
+```
+```yaml
+ {
+      "mqtt": {
+        "resourceId": "test",
+        "topic": "devices/demo_001/messages/events/",
+        "protocolVersion": "3.1.1",
+        "clientId": "demo_001",
+        "username": "xyz.azure-devices.net/demo_001/?api-version=2018-06-30",
+        "password": "SharedAccessSignature sr=*******************",
+        "retained": false
+      }
+}
+```
 ## 序列化
+eKuiper计算过程中使用的是基于Map的数据结构，因此source/sink连接外部系统的过程中，通常需要进行编解码以转换格式。在source/sink中，都可以通过配置参数format和schemaId来指定使用的编解码方案。编解码的格式分为2种:
+- 有模式
+- 无模式
+当前支持的格式有json\binary\delimiter\protobuf\custom，protobuf是有模式的格式。有模式的格式需要先注册模式，然后再设置格式的同时，设置引用的模式，例如，在使用MQTT sink时，可以配置格式和模式
+```json
+{
+  "mqtt": {
+    "server": "tcp://127.0.0.1:1883",
+    "topic": "sample",
+    "format": "protobuf",
+    "schemaId": "proto1.Book"
+  }
+}
+```
+所有的格式都提供了编解码的能力，也可选的提供了数据结构的定义，及模式。编解码的计算可内置，如JSON解析，可动态解析模式进行编解码，如Protobuf解析*ptotobuf.也可以使用用户自定义的静态插件(*.so)进行解析。静态解析的性能最好。动态解析使用更为灵活。
+
+| **格式**    | **编解码**              | **自定义编解码** | **模式** |
+|-----------|----------------------|------------|--------|
+| json      | 内置                   | 不支持        | 不支持    |
+| binary    | 内置                   | 不支持        | 不支持    |
+| delimiter | 内置，必须配置 delimiter 属性 | 不支持        | 不支持    |
+| protobuf  | 内置                   | 支持         | 支持且必需  |
+| custom    | 无内置                  | 支持且必需      | 支持且可选  |
+
+当用户使用custom/protobuf格式时，可采用go语言插件的形式自定义格式的编解码和模式。其中protobuf仅支持自定义编解码，模式需要通过*.proto文件定义，自定义格式的步骤如下:
+- 实现编解码相关接口: 其中Encode是编码函数，将传入的数据(当前总是为`map[string]interface{}`)编码为字节数组。而Decode解码函数则相反，将字节数组解码为`map[string]interface{}`。解码函数在source中被调用，编码函数在sink中被调用。
+  ```go
+  // Converter converts bytes & map or []map according to the schema
+  type Converter interface {
+      Encode(d interface{}) ([]byte, error)
+      Decode(b []byte) (interface{}, error)
+  }
+  ```
+- 实现数据结构描述接口(格式为custom时可选): 若自定义的格式为强类型，可实现该接口。接口返回一个类JSON schema的字符串，供source使用。返回的数据结构将作为一个物理schema使用，帮助eKuiper实现编译解析阶段的SQL验证和优化等能力
+  ```go
+  type SchemaProvider interface {
+      GetSchemaJson() string
+  }
+  ```
+- 编译为插件so文件: 通常格式的扩展无需依赖eKuiper的主项目。由于Go语言插件系统的限制，插件的编译仍然需要在eKuiper主程序相同的编译环境中进行，包括操作相同，Go语言版本等。若需要部署到官方docker中，则可使用对应的docker镜像进行编译。
+  ```shell
+  go build -trimpath --buildmode=plugin -o data/test/myFormat.so internal/converter/custom/test/*.go
+  ```
+- 通过REST API进行模式注册: 
+  ```shell
+  ###
+  POST http://{{host}}/schemas/custom
+  Content-Type: application/json
+
+  {
+    "name": "custom1",
+    "soFile": "file:///tmp/custom1.so"
+  }
+  ```
+- 在source/sink中，通过format/schemaId参数使用自定义格式。
+### 模式
+模式是一套元数据，用于定义数据结构。例如, Protobuf格式中使用.proto文件作为模式定义传输的数据格式，eKuiper仅支持protobuf/custom2种模式。模式采用文件的形式存储，用户可以通过配置文件或者API进行模式的注册。模式的存储位置位于data/schemas/${type},protobuf格式的模式文件，位于data/schemas/protobuf.eKuiper启动时，将会扫描该配置文件夹并自动注册里面的模式。若需要再运行中注册和管理模式。可以通过模式注册表API来完成。API的操作会作用到文件系统中。用户可以使用模式注册表API再运行时对模式进行增删改查。
 ## AI/ML
+### 使用原生插件实现AI函数
