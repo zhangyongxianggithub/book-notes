@@ -1072,6 +1072,19 @@ func makeThumbnails6(filenames <-chan string) int64 {
 ## 示例: 并发的Web爬虫
 
 ## 使用select多路复用
+```go
+func main() {
+	fmt.Println("Commencing countdown")
+	tick:=time.Tick(1*time.Second)
+	for countdown:=10;countdown>0;countdown--{
+		fmt.Println(countdown)
+		<-tick
+	}
+	launch()
+}
+func launch()  {
+}
+```
 ## 示例: 并发目录遍历
 ## 取消
 ## 示例: 聊天服务器
