@@ -38,18 +38,17 @@ var f, err = os.Open(name) // os.open 返回一个文件和一个错误
 变量时存储值的地方，指针是一个变量的地址。可以间接读取或者更新变量的值。&是取地址运算符，*是取值运算符。指针是可以比较的。
 ```go
 × := 1
-p : =&x
-11 p 是整型指针，指向x
-fmt.Printin(*p) 1/ "1"
-*p= 2
-1/ 等于x = 2
-fmt.Println(x)// 结果“2"
+p := &x // p是整型指针，指向x
+fmt.Printin(*p) //  "1"
+*p = 2 // 等于x = 2
+fmt.Println(x) // 结果“2"
 ```
 函数返回局部变量的地址是不安全的:
 ```go
-var p=f()
-func f() *int { V=: 1
-return &v 
+var p = f()
+func f() *int {
+	v := 1
+    return &v 
 }
 ```
 使用new函数创建变量，new(T)创建一个未命名的T类型变量。初始化为T类型的0值返回其地址。
