@@ -735,8 +735,84 @@ if w,ok:=w.(*os.File); ok {
 ## 使用类型断言来识别错误
 ## 通过接口类型断言来查询特性
 ## 类型分支
-## 基于标记的XML解析
+## 示例: 基于标记的XML解析
+go标准库提供`encoding/xml`包用于解析XML文件，API中的相关的类型如下:
+```go
+package xml
+type Name struct {
+	Local string
+}
+type Attr struct {
+	Name Name
+	Value string
+}
+type Token interface{}
+type StartElement struct {
+	Name Name
+	Attr []Attr
+}
+type EndElement struct {
+	Name Name
+}
+type CharData []byte
+type Comment []byte
+type Decoder struct{
+
+}
+func NewDecoder(io.Reader) *Decoder
+func (*Decoder) Token()(Token,error)
+```
+Token接口没有任何方法，是一种可识别联合接口，它的实现类型是固定而暴露的，使用类型switch来决定对每种具体类型的处理。
+```go
+package main
+
+import (
+	"encoding/xml"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+func main() {
+	dec := xml.NewDecoder(os.Stdin)
+	var stack []string
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "xmlselect: %v\n", err)
+			os.Exit(1)
+		}
+		switch tok := tok.(type) {
+		case xml.StartElement:
+			stack = append(stack, tok.Name.Local)
+		case xml.EndElement:
+			stack = stack[:len(stack)-1]
+		case xml.CharData:
+			if containsAll(stack, os.Args[1:]) {
+				fmt.Printf("%s:%s\n", strings.Join(stack, " "), tok)
+			}
+		}
+	}
+}
+func containsAll(x, y []string) bool {
+	for len(y) <= len(x) {
+		if len(y) == 0 {
+			return true
+		}
+		if x[0] == y[0] {
+			y = y[1:]
+		}
+		x = x[1:]
+	}
+	return false
+}
+
+```
 ## 一些建议
+不要上来就创建一系列接口，每个接口只有一个具体类型，这是不必要的抽象，使用导出机制来限制类型的方法/字段的可访问性，如果有多个具体类型需要按统一的方式处理才需要接口。接口抽象掉实现细节。接口设计的原则是仅要求你需要的。不是所有东西都必须是一个对象。
 # goroutine和通道
 并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多核计算机。有2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
