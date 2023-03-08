@@ -740,7 +740,7 @@ if w,ok:=w.(*os.File); ok {
 - 标记接口，强调接口作为一个标记，往往没有任何方法，通过具体类型固定，使用类型断言来分别处理
 Go提供了类型分支switch语句简化类型断言相关的逻辑
 ```go
-switch x:=x.(type) {// 这是重用变量名，这里的x只是switch词法块的，隐藏了外部的x变量可见性
+switch x:=x.(type) {// 这是重用变量名，这里的x只是switch词法块的，隐藏了外部的x变量可见性	
 	case nil:
 	case int,unit:
 	......
