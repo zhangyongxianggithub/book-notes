@@ -733,7 +733,27 @@ if w,ok:=w.(*os.File); ok {
 }
 ```
 ## 使用类型断言来识别错误
+os包返回的文件错误集合，提供3个帮助函数
+```go
+package os
+func IsExist(err error) bool
+func IsNotExist(err error) bool
+func IsPermission(err error) bool
+```
+可以根据某个err的字符串检测是某种错误，但是这种方法不健壮。有专门的类型表示错误值，PathError保留了错误所有的底层信息，所以可以通过类型断言来检查错误的特性类型。
 ## 通过接口类型断言来查询特性
+```go
+func writeString(w io.Writer, s string) (n int, err error) {
+	type stringWriter interface {
+		WriteString(string) (int, error)
+	}
+	if sw, ok := w.(stringWriter); ok {//使用类型断言推断w的动态类型是否满足新的接口
+		return sw.WriteString(s)
+	}
+	return w.Write([]byte(s))
+}
+```
+使用类型断言来将父类型转换为子类型，因为子类型更专用，而父类型的方法更通用。
 ## 类型分支
 接口有2种类型:
 - 方法风格，强调突出接口中的方法
