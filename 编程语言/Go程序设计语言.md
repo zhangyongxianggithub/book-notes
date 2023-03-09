@@ -398,6 +398,33 @@ defer机制，defer语句就是一个普通的函数或者方法调用，类似�
 ## 宕机
 运行时发生错误，就会宕机，比如数组越界或者解引用空指针。
 ## 恢复
+推出程序是正确处理宕机的方式，也可以在推出前做清理工作。内置的`recover()`函数用于恢复，在延迟函数内部调用，并且包含defer的函数发生宕机，recover会终止当前的宕机状态并且返回宕机的值，函数不会从之前宕机的地方继续运行而是正常返回，recover在其他情况下运行没有任何效果且返回nil，类似线程中断。比如下面的代码:
+```go
+func Parse(input string)(s *Syntax, err error){
+	defer func(){
+		if p:=recover(); p!=nil{
+			err=fmt.ErrorF("internal error: %v", p)
+		}
+	}()
+}
+```
+Parse函数中的延迟函数会从宕机状态恢复，并使用宕机值组成一条错误消息，理想的写法是使用runtime.Stack将整个调用栈包含进来，延迟函数将错误赋给err结果变量从而返回给调用者。随意恢复可能会有问题，因为变量的值可能是一种中间状态。一般是不要恢复另一个包的宕机，自己包的宕机可以恢复，通常的做法是使用一个明确的，非导出类型作为宕机值，然后检测recover的返回值是否是这个类型，如果是处理宕机，不是则使用panic继续触发宕机。
+```go
+func soleTitle(doc *html.Node) (title string, err error) {
+	type bailout struct{}
+	defer func() {
+		switch p := recover(); p {
+		case nil://没有宕机
+		case bailout{}:
+			err := fmt.Errorf("multiple title emlements")
+		default:
+			panic(p)// 其他类型的宕机，继续宕机
+		}
+	}()
+	// ......
+	return "", err
+}
+```
 # 方法
 对象在Go的理解: 对象就是拥有方法的简单的一个值或者变量。而方法是某种特定类型的函数。面向对象编程就是使用方法来描述每个数据结构的属性和操作，使用者不需要了解对象本身的实现。基于面向对象的编程思想，定义和使用方法，2个原则就是封装和组合。
 ## 方法声明
