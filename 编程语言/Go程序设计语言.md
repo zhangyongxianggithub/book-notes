@@ -1362,4 +1362,31 @@ Go工具主要用来下载、查询、格式化、构建、测试以及安装Go�
    `go list`列出包是否再工作空间中，输出导入路径。`go list ...`列出工作空间中的所有包。`go list -json hash`json格式输出包的完整记录。
 # 测试
 # 反射
+再不知道类型的情况下更新变量、查看值调用方法的机制，称为反射，就是再不知道类型的情况操作值。
+## 为什么使用反射
+编写一个统一处理各种值类型的函数，面临3个问题
+- 这些类型没有统一的接口
+- 布局未知
+- 设计时还不存在
+一个例子是`fmt.Printf()`，我们自定义的实现如下:
+```go
+func Sprint(x interface{}) string {
+	type stringer interface {
+		String() string
+	}
+	switch x := x.(type) {
+	case stringer:
+		return x.String()
+	case string:
+		return x
+	case int:
+		return strconv.Itoa(x)
+	case bool:
+		return "true"
+	default:
+		return "???"
+	}
+}
+```
+没办法处理各种引用类型或者自定义类型，分支不能无限加，这时候就需要反射。
 # 低级编程
