@@ -3,12 +3,12 @@ kind: Deployment
 metadata:
   name: ubuntu-cluster
   labels:
-    app: hello-deploy
+    app: ubuntu-cluster
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: hello-world
+      app: ubuntu-pc
   minReadySeconds: 10
   strategy:
     type: RollingUpdate
@@ -18,10 +18,10 @@ spec:
   template:
     metadata:
       labels:
-        app: hello-world
+        app: ubuntu-pc
     spec:
       containers:
-        - name: hello-pod
-          image: nigelpoulton/k8sbook:edge
+        - name: ubuntu-pc
+          image: zyxrepo/ubuntu-cluster:22.04
           ports:
             - containerPort: 8080
