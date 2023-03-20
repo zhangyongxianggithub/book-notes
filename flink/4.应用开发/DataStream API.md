@@ -20,3 +20,25 @@ createRemoteEnvironment(String host, int port, String... jarFiles);
 final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 DataStream<String> text = env.readTextFile("file:///path/to/file");
 ```
+这将生成一个DataStream，然后你可以在上面应用转换（transformation）来创建新的派生DataStream。你可以调用 DataStream上具有转换功能的方法来应用转换。例如，一个map的转换如下所示:
+```java
+DataStream<String> input = ...;
+DataStream<Integer> parsed = input.map(new MapFunction<String, Integer>() {
+    @Override
+    public Integer map(String value) {
+        return Integer.parseInt(value);
+    }
+});
+```
+这将通过把原始集合中的每一个字符串转换为一个整数来创建一个新的 DataStream。一旦你有了包含最终结果的DataStream，你就可以通过创建sink把它写到外部系统。下面是一些用于创建sink的示例方法:
+```java
+writeAsText(String path);
+print();
+```
+一旦指定了完整的程序，需要调用`StreamExecutionEnvironment.execute()`方法来触发程序执行，根据`ExecutionEnvironment`的类型，执行会在你的本地机器上触发或者将你的程序提交到某个集群上执行。`execute()`将等待作业完成，返回一个`JobExecutionResult`，其中包含执行时间和累加器结果。如果不想等待作业完成，可以通过调用`StreamExecutionEnvironment.executeAsync()`方法来触发作业异步执行，它会返回一个JobClient，你可以通过它与刚刚提交的作业进行通信，如下是例子:
+```java
+final JobClient jobClient = env.executeAsync();
+final JobExecutionResult jobExecutionResult = jobClient.getJobExecutionResult().get();
+```
+程序如何执行最后一部分对于理解何时执行以及如何执行Flink算子是至关重要的。所有Flink程序都是延迟执行的: 当程序的main方法执行时，数据加载和转换不会直接发生，相反，每个算子都被创建并添加到dataflow形成的有向图。当执行被执行环境的execute()方法显示的触发时，这些算子才会真正的执行。程序是在本地执行还是在集群上执行取决于执行环境的类型。延迟计算允许你构建复杂的程序，Flink会将其作为一个整体的计划单元来执行。
+## 示例程序
