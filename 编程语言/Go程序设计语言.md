@@ -358,6 +358,7 @@ type Wheel struct {
 ```
 可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有方法。有点类似继承。
 ## JSON
+JSON发送与接收格式化信息的标准，Go内置了对JSON、XML等格式化信息的编解码支持。
 ## 文本和HTML模板
 # 函数
 函数包含连续的执行语句，可以在代码中通过调用函数来执行它们。函数可以将一个复杂的工作切分成多个更小的模块。函数对使用者隐藏了实现细节。
@@ -1462,5 +1463,11 @@ func display(path string, v reflect.Value) {
 	}
 }
 ```
+- slice与数组: Len()方法与Index方法可以获取元素，获取的元素类型是`reflect.Value`，`reflect.Value`中的方法只对特定的值可以调用
+- struct: NumField与Field方法
+- map: MapKeys,
+- 指针: Elem返回指针指向的变量，
+- 接口: 
+## 访问结构体字段标签
 
 # 低级编程
