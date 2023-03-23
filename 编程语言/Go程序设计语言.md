@@ -358,7 +358,36 @@ type Wheel struct {
 ```
 可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有方法。有点类似继承。
 ## JSON
-JSON发送与接收格式化信息的标准，Go内置了对JSON、XML等格式化信息的编解码支持。
+JSON发送与接收格式化信息的标准，Go内置了对JSON、XML等格式化信息的编解码支持。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。把Go的数据结构转换为JSON叫做marshal，通过`json.marshal`实现
+```go
+type Movie struct {
+	Title  string
+	Year   int  `json:"released"`
+	Color  bool `json:"color,omitempty"`
+	Actors []string
+}
+
+var movies = []Movie{
+	{"Casablanca", 1942, false, []string{"Humphrey Bogart", "Ingrid Bergman"}},
+}
+
+func main() {
+	data, err := json.Marshal(movies)
+	if err != nil {
+		log.Fatalf("JSON marshaling failed: %s", err)
+	}
+	fmt.Printf("%s\n", data)
+	
+}
+```
+使用成员名作为json字段名，只有可导出的成员可以转换为json字段，成员标签是结构体成员在编译期间关联的元信息。可以是任意字符串。将JSON解码为Go数据结构叫做unmarshal，unmarshal操作忽略大小写，但是go数据必须是大写开头的。代码如下:
+```go
+	var titles []struct{ Title string }
+	if err := json.Unmarshal(data, &titles); err != nil {
+		log.Fatalf("JSON unmarshaling failed: %s", err)
+	}
+	fmt.Println(titles)
+```
 ## 文本和HTML模板
 # 函数
 函数包含连续的执行语句，可以在代码中通过调用函数来执行它们。函数可以将一个复杂的工作切分成多个更小的模块。函数对使用者隐藏了实现细节。
@@ -373,7 +402,26 @@ func name(parameter-list)(result-list){
 ## 递归
 函数可以递归调用，函数可以直接或者间接的调用自己，可以处理许多带有递归特性的数据结构。
 ## 多返回值
-函数可以返回多个结果。
+函数可以返回多个结果。返回结果通常是(result, error|ok?),一个错误值或者是一个布尔值都可以。
+```go
+func findLinks(url string) ([]string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("getting %s:%s", url, resp.Status)
+	}
+	doc, err := html.Parse(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s as HTML: %v", url, err)
+	}
+	return visit(nil, doc), nil
+}
+```
+多返回值可以赋给变量或者直接赋给多参的函数，也可以给返回值命名，此时可以不用写return的操作数这个叫做裸返回。
 ## 错误
 如果函数调用了发生错误时返回一个附加的结果做为错误值，习惯上将错误值作为最后一个结果返回。如果错误只有一种情况，结果通常设置为布尔类型，对于错误原因很多种的情况，调用者需要一些详细的信息，此时，错误的结果类型是error。error是内置的接口类型。一般一个函数返回一个非空错误时，它其他的结果都是未定义的而且应该忽略，有时候可能会返回部分有用的结果。
 ## 函数变量
