@@ -143,26 +143,25 @@ complex64/complex128，complex函数根据给定的实部与虚部创建复数�
 - slice
 - map
 - 结构体
-数组合结构体都是聚合类型，他们的值由内存中的一组变量构成，数组的元素具有相同的类型，结构体中的元素数据类型可以不同。数组合结构体的长度固定，slice/map是动态数据结构。
+
+数组合结构体是聚合类型，他们的值由内存中的一组值构成，数组的元素具有相同的类型，结构体中的元素数据类型可以不同。数组与结构体的长度固定，slice/map是动态数据结构。
 ## 数组
-数组是具有固定长度且拥有0+个相同数据类型元素的序列。一般使用slice(类似于Java中的ArrayList，更多的是类似vavr中的List数据结构)比较多。数组中的元素通过索引访问。
+数组是固定长度且拥有0+相同数据类型元素的序列。一般使用slice(类似于Java中的ArrayList，更多的是类似vavr中的List数据结构)比较多。数组中的元素通过索引访问。
 ```go
 package main
-
 import (
 	"fmt"
 )
-
 func main() {
 	var a [3]int             // 声明3个整数的数组
 	fmt.Println(a[0])        // 输出数组的第一个元素
 	fmt.Println(a[len(a)-1]) // 输出数组的最后一个元素
 	for i, v := range a {
-		fmt.Printf("%d, %d\n", i, v)
+		fmt.Printf("%d, %d\n", i, v)//遍历数组
 	}
 
 	for _, v := range a {
-		fmt.Printf("%d\n", v)
+		fmt.Printf("%d\n", v)//遍历数组
 	}
 
 	var q = [3]int{1, 2, 3}// 通过字面量初始化数组
@@ -192,11 +191,12 @@ func zero(ptr *[32]byte) {
 }
 ```
 ## slice
-可变长度的序列。定义为[]T像是没有长度的数组。数组与slice相关，slice是一种轻量级的数据结构，底层是数组。有3个属性:
-- 指针,指针指向数组中slice第一个访问的元素。
-- 长度,slice元素个数`len()`返回个数，小于容量
-- 容量,`cap()`返回容量，是slice在数组的起始位置到数组终点的元素个数。
-`s[i:j]`返回范围内的一个slice，s是可以是数组、数组指针或者是slice。其中$i$或者$j$都可以忽略，有默认值。slice不能超过被引用对象的容量，但是可以超过长度，也就是不能超多底层数组的长度。
+可变长度的序列。定义为`[]T`像是没有长度的数组。数组与slice相关，slice是一种轻量级的数据结构，底层是数组。有3个属性:
+- 指针, 指针指向数组中slice第一个访问的元素的地址;
+- 长度, slice元素个数`len()`返回个数，小于容量;
+- 容量, `cap()`返回容量，是slice在数组的起始位置到数组终点的元素个数。
+
+`s[i:j]`返回范围内的一个slice，s是可以是数组、数组指针或者是slice。其中$i$或者$j$都可以忽略，有默认值。slice不能超过被引用对象的容量，但是可以超过长度，也就是不能超过底层数组的长度。
 ```go
 func main() {
 	months := [...]string{1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July",
@@ -217,13 +217,13 @@ func main() {
 ```
 slice是指针，传递可以直接修改底层数组元素。数组与slice字面量的区别
 ```go
-a := [...]int{1,2,3,4,5}
-s := []int{1,2,3,4,5}
+a := [...]int{1,2,3,4,5}//有...
+s := []int{1,2,3,4,5}//没有....
 ```
 slice不能做比较,bytes.Equal可以用于比较字节slice，其他的需要自己写函数比较，但是可以与nil比较，任何类型，如果值可以是nil，则可以使用转换表达式`[]int(nil)`。内置函数make可以创建具有指定元素类型、长度、容量的slice。
 ```go
 make([]T,len) // 容量与长度相同
-make([]T,len,cap)
+make([]T,len,cap) //容量与长度不同
 ```
 内置函数append用于追加元素。内置copy函数可以复制2个slice的元素。
 ```go
@@ -261,10 +261,9 @@ ages:=map[string]int{
 	"charlie": 34,
 }
 ```
-`delete()`用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在`map=nil`的时候安全的执行。
-
+`delete()`用于删除键。可以使用range来遍历map，这种遍历是无序的。map操作可以在map=nil的时候安全的执行。
 ## 结构体
-结构体是将0个或者多个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。结构体可以复制，传递给函数，作为函数的返回值，作为数组的元素类型。下面定义一个结构体:
+结构体是将0+个任意类型的命名变量组合在一起的聚合数据类型。每个变量都叫做结构体的成员。结构体可以复制，传递给函数，作为函数的返回值，作为数组的元素类型，相当于一个独立的类型。下面定义一个结构体:
 ```go
 type Employee struct {
 	ID int
@@ -277,7 +276,7 @@ type Employee struct {
 }
 var dilbert Employee
 ```
-成员都通过.号来访问。结构体本身是变量，成员也是变量。可以获取成员变量的地址。可以获取成员变量的地址，通过指针来访问:
+成员都通过.号来访问。结构体本身是变量，成员也是变量。可以获取成员变量的地址。通过指针来访问:
 ```go
 position:=&dilbert.Position
 *position="Senior "+*position 
@@ -296,14 +295,14 @@ EmployeeByID(dilbert.ID).salary=0//如果函数不是返回的指针，而是结
 结构体包括成员变量的顺序，顺序不同也是不同的结构体。结构体的成员变量名称首字母大写是可导出的，也能包括不可导出的成员变量。匿名结构体类型多次写比较复杂，定义命名结构体类型。结构体不能内嵌自己，可以内嵌自己的指针类型。
 ```go
 type tree struct {
-	value int
-	left, right *tree
+    value int
+    left, right *tree
 }
 ```
-结构体的零值由成员的零值组成。struct{}空结构体类型。结构体类型的值可以通过结构体字面量来设置:
+结构体的零值由成员的零值组成。struct{}空结构体类型也就是结构体的零值。结构体类型的值可以通过结构体字面量来设置:
 ```go
 type Point struct{X, Y int}
-p:=Point{1, 2}
+p:=Point{1, 2}// 结构体字面量
 ```
 也可以指定部分或者全部成员变量的名称和值的方式来初始化结构体变量。
 ```go
@@ -325,7 +324,7 @@ func Scale(p Point, factor int) Point{
 }
 fmt.Println(Scale(Point{1,2}, 5)) // {5,10}
 ```
-出于效率的考虑，大型的结构体通常都是用结构体指针的方式直接传递给函数或者从函数中返回。
+出于效率的考虑，**大型的结构体通常都是用结构体指针的方式直接传递给函数或者从函数中返回**。
 ```go
 func Bonus(e *Employee, percent int)int{
 	return e.Salary * percent / 100
@@ -341,7 +340,7 @@ type Circle struct {
 	Radius int
 }
 type Wheel struct {
-	Center Point
+	Circle Circle
 	Spokes int
 }
 ```
@@ -356,7 +355,7 @@ type Wheel struct {
 	Spokes int
 }
 ```
-可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有方法。有点类似继承。
+可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有它的方法(生成的是代理方法)。有点类似继承。
 ## JSON
 JSON发送与接收格式化信息的标准，Go内置了对JSON、XML等格式化信息的编解码支持。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。把Go的数据结构转换为JSON叫做marshal，通过`json.marshal`实现
 ```go
@@ -389,6 +388,7 @@ func main() {
 	fmt.Println(titles)
 ```
 ## 文本和HTML模板
+TODO
 # 函数
 函数包含连续的执行语句，可以在代码中通过调用函数来执行它们。函数可以将一个复杂的工作切分成多个更小的模块。函数对使用者隐藏了实现细节。
 ## 函数声明
