@@ -42,3 +42,23 @@ final JobExecutionResult jobExecutionResult = jobClient.getJobExecutionResult().
 ```
 程序如何执行最后一部分对于理解何时执行以及如何执行Flink算子是至关重要的。所有Flink程序都是延迟执行的: 当程序的main方法执行时，数据加载和转换不会直接发生，相反，每个算子都被创建并添加到dataflow形成的有向图。当执行被执行环境的execute()方法显示的触发时，这些算子才会真正的执行。程序是在本地执行还是在集群上执行取决于执行环境的类型。延迟计算允许你构建复杂的程序，Flink会将其作为一个整体的计划单元来执行。
 ## 示例程序
+下面是一个可运行的程序例子，基于流窗口的单词统计应用程序，计算5秒内来自Web套接字的单词数。
+```java
+public class WindowWordCount {
+    
+    public static void main(String[] args) throws Exception {
+        // Sets up the execution environment, which is the main entry point
+        // to building Flink applications.
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment
+                .getExecutionEnvironment();
+        DataStream<Tuple2<String, Integer>> dataStream = env
+                .socketTextStream("localhost", 9999).flatMap(new Splitter())
+                .keyBy(value -> value.f0)
+                .window(TumblingProcessingTimeWindows.of(Time.seconds(5)))
+                .sum(1);
+		dataStream.print();
+        env.execute("WindowWordCount");
+    }
+}
+```
+通过`nc -lk 9999`启动输入流，按回车键可以穿入新的单词，这些将作为单词统计程序的输入。如果想查看大于1的计数，在5秒内重复输入相同的单词即可（如果无法快速输入，则可以将窗口大小从5秒增加）。
