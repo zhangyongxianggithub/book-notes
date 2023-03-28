@@ -141,4 +141,42 @@ DataStream<Long> lessThanZero = minusOne.filter(new FilterFunction<Long>() {
 ### 容错
 [State & Checkpointing](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/dev/datastream/fault-tolerance/checkpointing/)描述了如何启用和配置Flink的checkpointing机制。
 ### 控制延迟
-默认情况下，元素不会在网络上一一传输，而是被缓冲。缓冲区的大小(实际在机器之间传输)可以在Flink配置文件中设置。
+默认情况下，元素不会在网络上一一传输，而是被缓冲。缓冲区的大小(实际在机器之间传输)可以在Flink配置文件中设置。虽然此方法有利于优化吞吐量，但是当输入流不够快时，它可能导致延迟问题。要控制吞吐量和延迟，你可以调用执行环境的`env.setBufferTimeout(timeoutMillis)`方法来设置缓冲区填满的最长等待时间。超过此时间后，即使缓冲区没有满，也会被自动发送。超时时间的默认值是100ms。
+```java
+LocalStreamEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+env.setBufferTimeout(timeoutMillis);
+env.generateSequence(1,10).map(new MyMapper()).setBufferTimeout(timeoutMillis);
+```
+为了最大限度的提高吞吐量，设置`setBufferTimeout(-1)`来删除超时，这样缓冲区仅在它们已满时才会被刷新。要最小化延迟，请将超时设置为接近0的值(5/10ms)，应避免超时为0的缓冲区，因为会导致严重的性能下降。
+## 调试
+在分布式集群中运行流程序之前，最好确保实现的算法能按预期工作。因此，实现数据分析程序通常是一个检查结果、调试和改进的增量过程。Flink通过提供IDE内本地调试、注入测试数据和收集结果数据的特性大大简化了数据分析程序的开发过程，下面给出了一些如何简化Flink程序开发的提示。
+### 本地执行环境
+`LocalStreamEnvironment`在创建它的同一个JVM进程中启动Flink系统。如果你从IDE启动LocalEnvironment，则可以在代码中设置断点并轻松调试程序。一个`LocalEnvironment`的创建和使用如下:
+```java
+final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+DataStream<String> lines = env.addSource(/* some source */);
+// 构建你的程序
+env.execute();
+```
+### 集合Data Sources
+Flink提供了由Java集合支持的特殊data sources以简化测试。一旦程序通过测试，sources/sinks可以很容易的被从外部系统读取/写入到外部系统的sources/sinks替换。使用集合的Data Sources的方式如下:
+```java
+final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+// 从元素列表创建一个 DataStream
+DataStream<Integer> myInts = env.fromElements(1, 2, 3, 4, 5);
+// 从任何 Java 集合创建一个 DataStream
+List<Tuple2<String, Integer>> data = ...
+DataStream<Tuple2<String, Integer>> myTuples = env.fromCollection(data);
+// 从迭代器创建一个 DataStream
+Iterator<Long> longIt = ...
+DataStream<Long> myLongs = env.fromCollection(longIt, Long.class);
+```
+目前，集合data sources要求数据类型和迭代器实现`Serializable`，此外集合data sources不能并行执行。
+### 迭代器Data Sink
+Flink还提供了一个sink来收集DataStream的结果，它用于测试和调试目的。可以按以下方式使用。
+```java
+DataStream<Tuple2<String, Integer>> myResult = ...
+Iterator<Tuple2<String, Integer>> myOutput = myResult.collectAsync();
+```
+# 执行模式(流/批)
+
