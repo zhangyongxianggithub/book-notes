@@ -62,3 +62,38 @@ public class WindowWordCount {
 }
 ```
 通过`nc -lk 9999`启动输入流，按回车键可以穿入新的单词，这些将作为单词统计程序的输入。如果想查看大于1的计数，在5秒内重复输入相同的单词即可（如果无法快速输入，则可以将窗口大小从5秒增加）。
+## Data Sources
+Source是你的程序从中读取其输入的地方。 你可以用`StreamExecutionEnvironment.addSource(sourceFunction)`将一个source关联到你的程序。Flink自带了很多预先实现的source functions。不过你仍然可以通过实现`SourceFunction`接口编写自定义的非并行source，也可以实现`ParallelSourceFunction`接口或者继承`RichParallelSourceFunction`类编写自定义的并行sources。通过`StreamExecutionEnvironment`可以访问多种预定义的stream source:
+- 基于文件:
+  - readTextFile(path)，读取文本文件，例如遵守`TextInputFormat`规范的文件，逐行读取并将它们作为字符串返回;
+  - readFile(fileInputFormat,path)，按照指定的文件输入格式读取（一次）文件;
+  - readFile(fileInputFormat, path, watchType, interval, pathFilter, typeInfo)，这是前两个方法内部调用的方法。它基于给定的fileInputFormat读取路径path上的文件。根据提供的watchType的不同，source可能定期（每interval毫秒）监控路径上的新数据（watchType为FileProcessingMode.PROCESS_CONTINUOUSLY），或者处理一次当前路径中的数据然后退出（watchType为FileProcessingMode.PROCESS_ONCE）。使用pathFilter，用户可以进一步排除正在处理的文件;
+
+  在底层，Flink将文件读取过程拆分为2个子任务，即目录监控与数据读取。每个子任务都由一个单独的实体实现。监控由单个非并行任务实现，而读取由多个并行运行的任务执行。后者的并行度和作业的并行度相等。单个监控任务的作用是扫描目录(定期或者仅扫描一次，取决于watchType),找到要处理的文件，将它们划分为片，并将这些分片分配给下游的reader。Reader是实际获取数据的角色，每一个分片只能被一个reader读取，一个reader可以一个一个的读取多个分片。如果watchType设置为 FileProcessingMode.PROCESS_CONTINUOUSLY，当一个文件被修改时，它的内容会被完全重新处理。这可能会打破"精确一次"的语义，因为在文件末尾追加数据将导致重新处理文件的所有内容。如果watchType设置为FileProcessingMode.PROCESS_ONCE，source扫描一次路径然后退出，无需等待reader读完文件内容。当然，reader会继续读取数据，直到所有文件内容都读完。关闭source会导致在那之后不再有检查点。这可能会导致节点故障后恢复速度变慢，因为作业将从最后一个检查点恢复读取。
+- 基于套接字
+  - socketTextStream，从套接字读取，元素可以由分隔符分隔
+- 基于集合
+  - fromCollection(Collection)，从Java Java.util.Collection创建数据流。集合中的所有元素必须属于同一类型;
+  - fromCollection(Iterator, Class)，从迭代器创建数据流。class参数指定迭代器返回元素的数据类型;
+  - fromElements(T ...)，从给定的对象序列中创建数据流。所有的对象必须属于同一类型;
+  - fromParallelCollection(SplittableIterator, Class)，从迭代器并行创建数据流。class参数指定迭代器返回元素的数据类型;
+  - generateSequence(from, to)，基于给定间隔内的数字序列并行生成数据流;
+- 自定义
+  - addSource(), 关联一个新的source function。例如，你可以使用`addSource(new FlinkKafkaConsumer<>(...))`来从Apache Kafka获取数据。更多详细信息见[连接器](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/connectors/datastream/overview/)。
+## DataStream Transformations
+有关可用stream转换(transformation)的概述，参阅[算子](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/dev/datastream/operators/overview/)
+## Data Sinks
+Data Links使用DataStream并将它们转发到文件、套接字、外部系统或打印它们。Flink自带了多种内置的输出格式，这些格式相关的实现封装在DataStreans的算子里:
+- writeAsText()//TextOutputFormat,将元素按行写成字符串。通过调用每个元素的toString()方法获得字符串;
+- writeAsCsv(...)// CsvOutputFormat,将元组写成逗号分隔值文件。行和字段的分隔符是可配置的。每个字段的值来自对象的toString()方法;
+- print()/printToErr() // 在标准输出/标准错误流上打印每个元素的toString()值。可选地，可以提供一个前缀（msg）附加到输出。这有助于区分不同的print调用。如果并行度大于1，输出结果将附带输出任务标识符的前缀;
+- writeUsingOutputFormat()//FileOutputFormat,自定义文件输出的方法和基类。支持自定义object到byte的转换;
+- writeToSocket(), 根据SerializationSchema将元素写入套接字;
+- addSink() 调用自定义sink function。Flink捆绑了连接到其他系统（例如 Apache Kafka）的连接器，这些连接器被实现为sink functions。
+
+DataStream的write*()方法主要用于调试目的，它们不参与Flink的checkpointing，这意味着这些函数通常具有至少一次语义。刷新到目标系统的数据取决于OutputFromat的实现。这意味着并非所有发送到OutputFormat的元素都会立即显示在目标系统中。此外，在失败的情况下，这些记录可能会丢失。为了将流可靠地、精准一次地传输到文件系统中，请使用FileSink。此外，通过.addSink(...)方法调用的自定义实现也可以参与Flink的checkpointing，以实现精准一次的语义。
+## Iterations
+Iterative Streaming程序实现了step function并将其嵌入到IterativeStream。
+
+
+
