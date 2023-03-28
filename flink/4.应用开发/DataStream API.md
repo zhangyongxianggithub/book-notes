@@ -93,7 +93,52 @@ Data Links使用DataStream并将它们转发到文件、套接字、外部系统
 
 DataStream的write*()方法主要用于调试目的，它们不参与Flink的checkpointing，这意味着这些函数通常具有至少一次语义。刷新到目标系统的数据取决于OutputFromat的实现。这意味着并非所有发送到OutputFormat的元素都会立即显示在目标系统中。此外，在失败的情况下，这些记录可能会丢失。为了将流可靠地、精准一次地传输到文件系统中，请使用FileSink。此外，通过.addSink(...)方法调用的自定义实现也可以参与Flink的checkpointing，以实现精准一次的语义。
 ## Iterations
-Iterative Streaming程序实现了step function并将其嵌入到IterativeStream。
+Iterative Streaming程序实现了step function并将其嵌入到IterativeStream。由于DataStream程序可能永远不会完成，因此没有最大迭代次数。相反，你需要指定流的哪一部分反馈给迭代，哪一部分使用旁路输出或过滤器转发到下游。这里，我们展示了一个使用过滤器的示例。首先，我们定义一个IterativeStream:
+```java
+IterativeStream<Integer> iteration = input.iterate();
+```
+然后，我们使用一系列转换（这里是一个简单的map转换）指定将在循环内执行的逻辑:
+```java
+DataStream<Integer> iterationBody = iteration.map(/* this is executed many times */);
+```
+要关闭迭代并定义迭代尾部，请调用`IterativeStream`的`closeWith(feedbackStream)`方法。提供给`closeWith`函数的DataStream将反馈给迭代头。一种常见的模式是使用过滤器将反馈的流部分和向前传播的流部分分开。例如，这些过滤器可以定义"终止"逻辑，其中允许元素向下游传播而不是被反馈。
+```java
+iteration.closeWith(iterationBody.filter(/* one part of the stream */));
+DataStream<Integer> output = iterationBody.filter(/* some other part of the stream */);
+```
+例如，下面的程序从一系列整数中连续减去1，直到它们达到零:
+```java
+DataStream<Long> someIntegers = env.generateSequence(0, 1000);
 
+IterativeStream<Long> iteration = someIntegers.iterate();
 
+DataStream<Long> minusOne = iteration.map(new MapFunction<Long, Long>() {
+  @Override
+  public Long map(Long value) throws Exception {
+    return value - 1 ;
+  }
+});
 
+DataStream<Long> stillGreaterThanZero = minusOne.filter(new FilterFunction<Long>() {
+  @Override
+  public boolean filter(Long value) throws Exception {
+    return (value > 0);
+  }
+});
+
+iteration.closeWith(stillGreaterThanZero);
+
+DataStream<Long> lessThanZero = minusOne.filter(new FilterFunction<Long>() {
+  @Override
+  public boolean filter(Long value) throws Exception {
+    return (value <= 0);
+  }
+});
+```
+## 执行参数
+`StreamExecutionEnvironment`包含了`ExecutionConfig`，它允许在运行时设置作业特定的配置值。大多数参数的说明可参考[执行配置](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/deployment/config/)。这些参数特别适用于DataStream API:
+- `setAutoWatermarkInterval(long milliseconds)`：设置自动发送watermark的时间间隔。你可以使用`long getAutoWatermarkInterval()`获取当前配置值。
+### 容错
+[State & Checkpointing](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/dev/datastream/fault-tolerance/checkpointing/)描述了如何启用和配置Flink的checkpointing机制。
+### 控制延迟
+默认情况下，元素不会在网络上一一传输，而是被缓冲。缓冲区的大小(实际在机器之间传输)可以在Flink配置文件中设置。
