@@ -1333,7 +1333,69 @@ func Balance() int {
 多读单写锁。一般情况下比较少用。
 ## 内存同步
 ## 延迟初始化: sync.Once
+延迟一个昂贵的初始化步骤到有实际需求的时刻是好的实践预先初始化会增加程序的启动延迟，下面的例子:
+```go
+import (
+	"image"
+)
 
+var icons map[string]image.Image
+
+func loadIcons() {
+	icons = map[string]image.Image{
+		"spades.png": loadIcon("spades.png"),
+	}
+}
+
+// 并发不安全
+func Icon(name string) image.Image {
+	if icons == nil {
+		loadIcons()
+	}
+	return icons[name]
+}
+func loadIcon(name string) image.Image {
+	return nil
+}
+```
+多个goroutine使用icons变量时，可能多次初始化。最好就是使用互斥锁:
+```go
+// 并发不安全
+func Icon(name string) image.Image {
+	mu.Lock()
+	defer mu.Unlock()
+	if icons == nil {
+		loadIcons()
+	}
+	return icons[name]
+}
+```
+但是这样写在初始化完成后，锁操作就是无用了，而且会造成额外的代价。使用读写锁可以改善
+```go
+func Icon2(name string) image.Image {
+	mu2.RLock()
+	if icons != nil {
+		icon := icons[name]
+		mu2.RUnlock()
+		return icon
+	}
+	mu2.RUnlock()
+	mu2.Lock()
+	defer mu2.Unlock()
+	if icons == nil {
+		loadIcons()
+	}
+	return icons[name]
+}
+```
+go提供了`sync.Once`机制来解决这个问题，类似读写锁，包含一个布尔变量与一个互斥量，布尔变量记录初始化是否已经完成，互斥量负责保护这个布尔变量和客户端的数据结构，Once的唯一方法Do的参数是初始化的函数，简化后的代码:
+```go
+var loadIconsOnce sync.Once
+func Icon3(name string) image.Image {
+	loadIconsOnce.Do(loadIcons)
+	return icons[name]
+}
+```
 ## 竟态检测器
 Go运行时为了避免犯并发上的错误，提供竟态检测器。使用-race参数就开启检测，它会修改应用加上对共享变量的统计等记录信息。还会记录同步事件包括go语句、通道、锁等调用。它只能检测实际运行涉及到的竟态，所以测试时保证用例全面，开启竟态检测器的性能与内存消耗可以忽略不记，可以帮助节省额外的调试时间。
 ## 示例: 并发非阻塞缓存
@@ -1526,3 +1588,6 @@ func display(path string, v reflect.Value) {
 ## 访问结构体字段标签
 
 # 低级编程
+# go Context
+# gin
+# gorm
