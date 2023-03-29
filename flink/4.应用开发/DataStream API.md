@@ -182,3 +182,45 @@ Iterator<Tuple2<String, Integer>> myOutput = myResult.collectAsync();
 DataStream API支持不同的运行时执行模式，你可以根据你的用例需要和作业特点进行选择。DataStream API有一种经典的执行行为，称为流执行模式，这种模式适用于需要连续增量处理。而且预计无限期保持在线的无边界作业。此外，还有一种批执行模式，称为batch模式，更类似批处理框架。比如MapReduce，这种执行模式适用于有一个已知的固定输入，而且会回连续运行的有边界作业。Flink对流处理/批处理统一方法，意味着无论配置何种执行模式，在有界输入上执行的DataStream应用都会产生相同的最终结果。最终在这里的意思: 一个在流模式执行的作业可能会产生增量更新，而批处理作业只在最后产生一个最终结果，尽管计算方法不同，只要呈现方式得当，最终结果会是相同的。通过启用批执行，我们允许flink应用只在我们知道输入是有边界的时候才会使用到的额外的优化。例如，可以使用不同的join/aggregation策略，允许实现更高效的任务调度和故障恢复行为的不同shuffle。
 ## 什么时候可以/应该使用批执行模式
 批执行模式只能用于有边界的作业/flink程序，边界是数据源的一个属性，告诉我们在执行前，来自该数据源的所有输入是否都是已知的，如果有新的数据出现，就是无限的。而对一个作业来说，如果它的所有源都是有边界的，则它就是有边界的，否则是无边界的。流执行模式，既可以用于有边界任务，也可以用于无边界任务。一般来说，在你的程序是有边界的时候，你应该使用批执行模式，因为这样做会更高效。当你的程序是无边界的时候，你必须使用流执行模式，因为只有这种模式足够通用，能够处理连续的数据流。一个明显的例外是当你想使用一个有边界作业去自展一些作业状态，并将状态使用在之后的无边界作业的时候。例如，通过流模式运行一个有边界作业，取一个savepoint，然后在一个无边界作业上恢复这个savepoint。这是一个非常特殊的用例，当我们允许将savepoint作为批执行作业的附加输出时，这个用例可能很快就会过时。另一个你可能会使用流模式运行有边界作业的情况是当你为最终会在无边界数据源写测试代码的时候。对于测试来说，在这些情况下使用有边界数据源可能更自然。
+## 配置批执行模式
+执行模式可以通过`execute.runtime-mode`设置来配置。有3种可选的值:
+- STREAMING: 经典DataStream执行模式(默认);
+- BATCH: 在DataStream API上进行批量式执行;
+- AUTOMATIC: 让系统根据数据源的边界性来决定。
+这可以通过bin/flink run ...的命令行参数进行配置或者在创建/配置StreamExecutionEnvironment时写进程序。下面是通过命令行配置执行模式:
+```shell
+bin/flink run -Dexecution.runtime-mode=BATCH <jarFile>
+```
+下面时如何在代码中配置执行模式:
+```java
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+env.setRuntimeMode(RuntimeExecutionMode.BATCH);
+```
+我们不建议用户在程序中设置运行模式，而是在提交应用程序时使用命令行进行设置。保持应用程序代码的免配置可以让程序更加灵活，因为同一个应用程序可能在任何执行模式下执行。
+## 执行行为
+### 任务调度于网路Shuffle
+Flink作业由不同的操作组成，这些操作在数据流图中连接在一起。系统决定如何在不同的进程/机器(TaskManager)上调度这些操作的执行，以及如何在它们之间shuffle(发送，重新洗牌)数据。将多个操作/算子链接在一起的功能称为链。Flink成一个调度单位的一组或者多个(链接在一起)算子为一个任务。通常，子任务用来指代在多个TaskManager上并行运行的单个任务实例，当我们在这里只使用任务一词。任务调度于网络shuffle对于流/批执行模式的执行方式不同，在批执行模式中，因为知道输入数据是有界的Flink可以使用更高效的数据结构与算法。下面是一个例子:
+```java
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+DataStreamSource<String> source = env.fromElements(...);
+source.name("source")
+	.map(...).name("map1")
+	.map(...).name("map2")
+	.rebalance()
+	.map(...).name("map3")
+	.map(...).name("map4")
+	.keyBy((value) -> value)
+	.map(...).name("map5")
+	.map(...).name("map6")
+	.sinkTo(...).name("sink");
+```
+包含1-to-1连接模式的操作，比如`map()`、`flatMap()`或者`filter()`，可以直接将数据转发到下一个操作，这使得这些操作可以被链接在一起。这意味着flink一般不会在它们之间插入网络shuffle。而像`keyBy()`或者`rebalance()`这样需要在不同的任务并行实例之间进行数据shuffle的操作，就会引起网络shuffle。对于上面的例子，Flink会将操作分组为这些任务:
+- 任务1: source、map1和map2
+- 任务2: map3、map4
+- 任务3: map5、map6、sink
+我们在任务1到任务2、任务2到任务3之间各有一次网络shuffle。这是该作业的可视化表示:
+![作业的可视化表示](datastream-example-job-graph.svg)
+#### 流执行模式
+在流执行模式下，所有任务需要一直在线运行，这使得Flink可以通过整个管道立即处理新的记录，以达到我们需要的连续和低延迟的流处理。这同样意味着分配给某个作业的TaskManagers需要有足够的资源来同时运行所有的任务。网络shuffle是流水线式的，这意味着记录会立即发送给下游任务，在网络层上进行一些缓冲。同样，这也是必须的，因为当处理连续的数据流时，在任务（或任务管道）之间没有可以实体化的自然数据点（时间点）也就是中间不能存储。这与批执行模式形成了鲜明的对比，在批执行模式下，中间的结果可以被实体化，如下所述。
+#### 批执行模式
+
