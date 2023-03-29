@@ -78,8 +78,21 @@ fmt.Println(*p) // 输出“2"
     ①先对表达式 init 赋初值；
     ②判别赋值表达式 init 是否满足给定 condition 条件，若其值为真，满足循环条件，则执行循环体内语句，然后执行 post，进入第二次循环，再判别 condition；否则判断 condition 的值为假，不满足条件，就终止for循环，执行循环体外语句。
 ```
-
 ### range
+类似迭代器操作，返回(索引,值)或者(键,值)。for循环的range格式可以对slice、map、数组、字符串进行迭代循环
+```go
+for key, value := range oldMap {
+    newMap[key] = value
+}
+```
+| ****        | **1st value** | **2nd value** | **元素类型**     |
+|-------------|---------------|---------------|--------------|
+| string      | index         | s[index]      | unicode,rune |
+| array/slice | index         | s[index]      |              |
+| map         | key           | map[key]      |              |
+| channel     | element       |               |              |
+
+
 ### goto/break/continue
 ## 类型声明
 变量或者表达式的类型定义值应有的特性。大小、内部表示、具有的操作/方法。type声明定义新的命名类型。`type name underlying-type`，通常出现在包级别中。
