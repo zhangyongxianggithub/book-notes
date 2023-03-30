@@ -241,7 +241,26 @@ source.name("source")
 ### 事件时间/水印
 在支持事件时间方面，Flink的流运行时间建立在一个事件可能是乱序到来的悲观假设上的，即一个时间戳t的事件可能会在一个时间戳t+1的事件之后出现。因为如此，系统永远无法确定在给定的时间戳$T$下，未来不会再有时间戳$t<T$的元素出现。为了摊平这种失序性对最终结果的影响，同时使系统实用，在流模式下，Flink使用了一种名为Watermarks的启发式方法。一个带有时间戳T的水印标志着再没有时间戳t < T的元素跟进。在批模式下，输入的数据集是事先已知的，不需要这样的启发式方法，因为至少可以按照时间戳对元素进行排序，从而按照时间顺序进行处理。对于熟悉流的读者来说，在批中，我们可以假设"完美的Watermark"。综上所述，在批模式下，我们只需要在输入的末尾有一个与每个键相关的MAX_WATERMARK，如果输入流没有键，则在输入的末尾需要一个MAX_WATERMARK。基于这个方案，所有注册的定时器都会在时间结束时触发，用户定义的WatermarkAssigners或WatermarkStrategies会被忽略。但细化一个 WatermarkStrategy仍然是重要的，因为它的TimestampAssigner仍然会被用来给记录分配时间戳。
 ### 处理时间
-处理时间是指在处理记录的具体实例上，处理记录的机器上的时间。根据这个定义，我们知道基于处理时间的计算结果是不可重复的。因为同一条记录被处理2次，会有2个不同的时间戳。尽管如此，在流模式下处理时间还是很有用的，
+处理时间是指在处理记录的具体实例上，处理记录的机器上的时间。根据这个定义，我们知道基于处理时间的计算结果是不可重复的。因为同一条记录被处理2次，会有2个不同的时间戳。尽管如此，在流模式下处理时间还是很有用的。原因在于因为流式管道从真实时间摄取无边界输入，所以事件时间和处理时间之间存在相关性。此外，由于上述原因，在流模式下事件时间的1小时也往往可以几乎是处理时间，所以使用处理时间可以用于早期（不完全）触发，给出预期结果的提示。在批处理世界中，这种相关性并不存在，因为在批处理世界中，输入的数据集是静态的，是预先知道的。鉴于此，在批模式中，我们允许用户请求当前的处理时间，并注册处理时间计时器，但与事件时间的情况一样，所有的计时器都要在输入结束时触发。在概念上，我们可以想象，在作业执行过程中，处理时间不会提前，当整个输入处理完毕后，我们会快进到时间结束。
+### 故障恢复
+在流执行模式下，Flink使用checkpoints进行故障恢复。请参看[checkpointing文档](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/dev/datastream/fault-tolerance/checkpointing/)，了解关于如何实践和配置它。关于[通过状态快照进行容错](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/learn-flink/fault_tolerance/)也有一个比较入门的章节，从更高的层面解释了这些概念。Checkpointing用于故障恢复的特点之一是在发生故障时，Flink会从checkpoint重新启动所有正在运行的任务。这可能比我们在批模式下所要做的事情代价更高，这也是如果你的任务允许的话应该使用批执行模式的原因之一。在批执行模式下，Flink会尝试并回溯到之前的中间结果仍可获取的处理阶段。只有失败的任务才可能需要重新启动。这与从checkpoint重新启动所有任务相比，可以提高作业的处理效率和整体处理时间。
+## 重要的考虑因素
+与经典的流执行模式相比，在批模式下，有些东西可能无法按照预期工作。一些功能功能的工作方式会略有不同而其他功能会不支持。批模式下的行为变化:
+- 滚动操作，如`reduce()`或`sum()`，会对流模式下每一条新纪录发出增量更新。在批模式下，这些操作不是滚动，它们只发出最终结果。
+
+批模式不支持的:
+- [checkpointing](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/concepts/stateful-stream-processing/#checkpointing)和任何依赖于checkpointing的操作都不支持;
+- [迭代(Iterations)](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/dev/datastream/operators/overview/#iterate)
+
+自定义算子应谨慎执行，否则可能会有不恰当的行为。
+### Checkpointing
+如上文所述，批处理程序的故障恢复不使用检查点。重要的是要记住，因为没有checkpoints，某些功能如([CheckpointListener](https://nightlies.apache.org/flink/flink-docs-release-1.17/api/java//org/apache/flink/api/common/state/CheckpointListener.html))，以及因此，Kafka的精确一次([EXACTLY_ONCE](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/connectors/datastream/kafka/#kafka-producers-and-fault-tolerance))模式或File Sink的[OnCheckpointRollingPolicy](https://nightlies.apache.org/flink/flink-docs-release-1.17/zh/docs/connectors/datastream/filesystem/#rolling-policy)将无法工作。如果你需要一个在批模式下工作的事务型sink，请确保它使用FLIP-143中提出的统一Sink API。你仍然可以使用所有的状态原语（state primitives），只是用于故障恢复的机制会有所不同。
+### 编写自定义算子
+自定义算子是Apache Flink的一种高级使用模式。对于大多数的使用情况，可以考虑使用（keyed-）处理函数来代替。在编写自定义算子时，记住批执行模式的假设是很重要的。否则，一个在流模式下运行良好的操作符可能会在批模式下产生错误的结果。算子永远不会被限定在一个特定的键上，这意味着他们看到了Flink试图利用的批处理的一些属性。首先你不应该在一个算子内缓存最后看到的 Watermark。在批模式下，我们会逐个键处理记录。因此，Watermark会在每个键之间从MAX_VALUE切换到MIN_VALUE。你不应该认为 Watermark在一个算子中总是递增的。出于同样的原因，定时器将首先按键的顺序触发，然后按每个键内的时间戳顺序触发。此外，不支持手动更改键的操作。
+# 事件时间
+## 生成watermark
+
+
 
 
 
