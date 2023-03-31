@@ -259,7 +259,32 @@ source.name("source")
 自定义算子是Apache Flink的一种高级使用模式。对于大多数的使用情况，可以考虑使用（keyed-）处理函数来代替。在编写自定义算子时，记住批执行模式的假设是很重要的。否则，一个在流模式下运行良好的操作符可能会在批模式下产生错误的结果。算子永远不会被限定在一个特定的键上，这意味着他们看到了Flink试图利用的批处理的一些属性。首先你不应该在一个算子内缓存最后看到的 Watermark。在批模式下，我们会逐个键处理记录。因此，Watermark会在每个键之间从MAX_VALUE切换到MIN_VALUE。你不应该认为 Watermark在一个算子中总是递增的。出于同样的原因，定时器将首先按键的顺序触发，然后按每个键内的时间戳顺序触发。此外，不支持手动更改键的操作。
 # 事件时间
 ## 生成watermark
-
+主要介绍处理事件时间的时间戳和watermark相关的API。
+### Watermark策略简介
+为了使用事件时间语义，Flink需要知道事件时间戳对应的字段。意味着数据流中的每个元素都需要拥有可分配的事件时间戳。其通常通过使用`TimestampAssigner`从元素中的某个字段去访问/提取时间戳。时间戳的分配与watermark的生成是齐头并进的，其可以告诉Flink应用程序事件时间的进度。其可以通过指定`WatermarkGenerator`来配置watermark的生成方式。使用FlinkAPI时需要设置一个同时包含`TimestampAssigner`和`WatermarkGenerator`的`WatermarkStrategy`。`WatermarkStrategy`工具类中也提供了许多常用的watermark策略并且用户也可以在某些必要的场景下构建自己的watermark策略。`WatermarkStrategy`接口如下:
+```java
+public interface WatermarkStrategy<T> 
+    extends TimestampAssignerSupplier<T>, WatermarkGeneratorSupplier<T>{
+    /**
+     * 根据策略实例化一个可分配时间戳的 {@link TimestampAssigner}。
+     */
+    @Override
+    TimestampAssigner<T> createTimestampAssigner(TimestampAssignerSupplier.Context context);
+    /**
+     * 根据策略实例化一个 watermark 生成器。
+     */
+    @Override
+    WatermarkGenerator<T> createWatermarkGenerator(WatermarkGeneratorSupplier.Context context);
+}
+```
+通常情况下，你不用实现此接口，而是可以用`WatermarkStrategy`工具类中通用的watermark策略，或者可以使用这个工具类将自定义的`TimestampAssigner`与`WatermarkGenerator`进行绑定。例如，你想要使用有界无序watermark生成器和一个lambda表达式作为时间戳分配器，那么可以按照下面的方式实现:
+```java
+WatermarkStrategy
+        .<Tuple2<Long, String>>forBoundedOutOfOrderness(Duration.ofSeconds(20))
+        .withTimestampAssigner((event, timestamp) -> event.f0);
+```
+`TimestampAssigner`设置与否是可选的，大多数情况下，可以不用去指定。例如，当使用Kafka或Kinesis数据源时，你可以直接从 Kafka/Kinesis数据源记录中获取到时间戳。**时间戳和watermark都是从1970-01-01T00:00:00Z起的Java纪元开始，并以毫秒为单位**
+## 使用Watermark策略
 
 
 
