@@ -285,7 +285,7 @@ WatermarkStrategy
 ```
 `TimestampAssigner`设置与否是可选的，大多数情况下，可以不用去指定。例如，当使用Kafka或Kinesis数据源时，你可以直接从 Kafka/Kinesis数据源记录中获取到时间戳。**时间戳和watermark都是从1970-01-01T00:00:00Z起的Java纪元开始，并以毫秒为单位**
 ## 使用Watermark策略
-
+WatermarkStrategy可以在Flink应用程序中的2处使用，第一种是直接在数据源是使用，第二种是直接在非数据源的操作之后使用。第一种方式会更好，因为数据源可以利用watermark生成逻辑中有关分片/分区(shards/partitions/splits)的信息。使用这种方式，数据源通常可以更精确地跟踪watermark，
 
 
 
