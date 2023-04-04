@@ -5,4 +5,6 @@
 # 这是一个注释
 **/*.pdf
 **/.fleet
-
+/database/tsdb/influxdb/engine
+/database/tsdb/influxdb/influxd.bolt
+/database/tsdb/influxdb/influxd.sqlite

@@ -1,0 +1,67 @@
+http:
+  enabled: true
+  address: 0.0.0.0:4195
+  root_path: /benthos
+  debug_endpoints: false
+  cert_file: ""
+  key_file: ""
+  cors:
+    enabled: false
+    allowed_origins: []
+  basic_auth:
+    enabled: false
+    realm: restricted
+    username: ""
+    password_hash: ""
+    algorithm: sha256
+    salt: ""
+input:
+  label: ""
+  stdin:
+    codec: lines
+    max_buffer: 1000000
+buffer:
+  none: {}
+pipeline:
+  threads: -1
+  processors: 
+#    - mapping: root = content().uppercase()
+    - mapping: |
+        root.doc = this
+        root.first_name = this.names.index(0).uppercase()
+        root.last_name = this.names.index(-1).hash("sha256").encode("base64")
+output:
+  label: ""
+  stdout:
+    codec: lines
+logger:
+  level: INFO
+  format: logfmt
+  add_timestamp: false
+  timestamp_name: time
+  message_name: msg
+  static_fields:
+    '@service': benthos
+  file:
+    path: ""
+    rotate: false
+    rotate_max_age_days: 0
+metrics:
+  prometheus:
+    use_histogram_timing: false
+    histogram_buckets: []
+    add_process_metrics: false
+    add_go_metrics: false
+    push_url: ""
+    push_interval: ""
+    push_job_name: benthos_push
+    push_basic_auth:
+      username: ""
+      password: ""
+    file_output_path: ""
+  mapping: ""
+tracer:
+  none: {}
+shutdown_delay: ""
+shutdown_timeout: 20s
+
