@@ -1,0 +1,6 @@
+apiVersion: v2
+appVersion: 0.9.0
+description: A lightweight IoT edge analytic software
+name: kuiper
+type: application
+version: 0.9.0

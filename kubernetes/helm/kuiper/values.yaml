@@ -1,0 +1,72 @@
+affinity: {}
+image:
+  pullPolicy: IfNotPresent
+  repository: emqx/kuiper
+kuiperConfig:
+  client.yaml:
+    basic:
+      host: 127.0.0.1
+      port: 20498
+  kuiper.yaml:
+    basic:
+      consoleLog: false
+      debug: false
+      fileLog: true
+      port: 20498
+      prometheus: false
+      prometheusPort: 20499
+      restPort: 9081
+  mqtt_source.yaml:
+    default:
+      concurrency: 1
+      qos: 1
+      servers:
+      - tcp://127.0.0.1:1883
+      sharedSubscription: true
+    demo_conf:
+      qos: 0
+      servers:
+      - tcp://10.211.55.6:1883
+      - tcp://127.0.0.1
+  sources/edgex.yaml:
+    application_conf:
+      port: 5571
+      protocol: tcp
+      server: localhost
+      topic: application
+    default:
+      port: 5563
+      protocol: tcp
+      server: localhost
+      serviceServer: http://localhost:48080
+      topic: events
+  sources/random.yaml:
+    default:
+      interval: 1000
+      pattern:
+        count: 50
+    ext:
+      interval: 300
+      pattern:
+        count: 50
+      seed: 1
+  sources/zmq.yaml:
+    default:
+      server: tcp://127.0.0.1:5563
+nodeSelector: {}
+persistence:
+  accessMode: ReadWriteOnce
+  enabled: false
+  size: 20Mi
+replicaCount: 1
+resources: {}
+service:
+  annotations: {}
+  kuiper: 20498
+  loadBalancerSourceRanges: []
+  nodePorts:
+    kuiper: null
+    restapi: null
+  restapi: 9081
+  type: ClusterIP
+tolerations: []
