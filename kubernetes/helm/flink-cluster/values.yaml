@@ -1,0 +1,60 @@
+# if create namespace or use namespace that already exists
+namespace: 
+  name: flink
+  create: true
+# if create a service account or use account that arelady exists
+# if binding account and role in cluster, and specify which role to bind, default admin role
+serviceAccount:
+  create: true
+  name: flink-service-account
+  bindNamespace: true
+  bindCluster: true
+  clusterRole: admin
+# if creating a flink conf configmap or it already exists or has been created manually
+# ytou can create a configmap named {.Chart.Name}-conf or set the property flinkConf.name
+flinkConf:
+  create: true
+# jobmanager settings, jvm memory, container image, reset port and so on.
+jobmanager:
+  autoscaling:
+    minReadySeconds: 10
+  name: flink-jobmanager
+  serviceName: flink-jobmanager
+  memoryProcessSize: 4096m
+  parallelism: 1
+  replicas: 1
+  container:
+    name: jobmanager
+    image: iregistry.baidu-int.com/acg-iidp/flink:1.13.1-scala_2.12-java8
+    imagePullPolicy: Always
+  restPort: 8151
+# jobmanager settings, slots, jvm memory, container image, reset port, kafka mount and so on.
+taskmanager:
+  name: flink-taskmanager
+  numberOfTaskSlots: 16
+  memoryProcessSize: 2048m
+  autoscaling:
+    minReadySeconds: 10
+  replicas: 9
+  container:
+    name: taskmanager
+    image: iregistry.baidu-int.com/acg-iidp/flink:1.13.1-scala_2.12-java8
+    imagePullPolicy: Always
+  stateRest:
+    enable: true
+    nodePort: 8152
+  kafka:
+    enable: true
+    jksPath: /opt/flink/kafka/jks
+    truststoreName: client_client.truststore.jks
+    keystoreName: client_client.keystore.jks
+# kubenetes ha setting
+ha:
+  enable: true
+  clusterId: iidp-flink-cluster
+# ha storage and checkpoint stoage setting, usually it must be specified a backend that support s3 protocol
+s3:
+  enable: true
+  endpoint: http://seaweedfs-service.iidp.svc.cluster.local:8333
+  accessKey: admin
+  secretKey: admin

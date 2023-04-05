@@ -1,0 +1,7 @@
+{{ if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "flink.namespace" . }}
+  annotations: {}
+{{ end }}

@@ -1,0 +1,13 @@
+{{ if .Values.taskmanager.kafka.enable }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "flink.taskmanager.kafka" . }}
+  namespace: {{ include "flink.namespace" . }}
+  labels:
+    {{- include "flink.labels" . | indent 4 }}
+type: Opaque
+data:
+{{ (.Files.Glob "kafka/*").AsSecrets | indent 2 }}
+{{ end }}
+

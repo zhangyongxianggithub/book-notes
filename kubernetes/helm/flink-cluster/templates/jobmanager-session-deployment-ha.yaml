@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flink.jobmanager" . }}
+  namespace: {{ include "flink.namespace" . }}
+  labels:
+    {{- include "flink.labels" . | indent 4 }}
+    app.kubernetes.io/component: {{ include "flink.jobmanager" . }}
+spec:
+  replicas: {{ .Values.jobmanager.replicas }} # Set the value to greater than 1 to start standby JobManagers
+  selector:
+    matchLabels:
+      {{- include "flink.selectorLabels" . | indent 6 }}
+      app.kubernetes.io/component: {{ include "flink.jobmanager" . }}
+  minReadySeconds: {{ .Values.jobmanager.autoscaling.minReadySeconds }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: 
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        {{- include "flink.labels" . | indent 8 }}
+        app.kubernetes.io/component: {{ include "flink.jobmanager" . }}
+    spec:
+      containers:
+      - name: {{ .Values.jobmanager.container.name }}
+        image: {{ .Values.jobmanager.container.image }}
+        imagePullPolicy: {{ .Values.jobmanager.container.imagePullPolicy }}
+        env:
+        - name: FLINK_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        # The following args overwrite the value of jobmanager.rpc.address configured in the configuration config map to POD_IP.
+        args: ["jobmanager", "$(POD_IP)"]
+        ports:
+        - containerPort: 6123
+          name: rpc
+        - containerPort: 6124
+          name: blob-server
+        - containerPort: 8081
+          name: webui
+        livenessProbe:
+          tcpSocket:
+            port: 6123
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        volumeMounts:
+        - name: flink-config-volume
+          mountPath: /opt/flink/conf
+        securityContext:
+          runAsUser: 9999  # refers to user _flink_ from official flink image, change if necessary
+      serviceAccountName: {{ include "flink.serviceAccount" . }} # Service account which has the permissions to create, edit, delete ConfigMaps
+      volumes:
+      - name: flink-config-volume
+        configMap:
+          name: {{ include "flink.configmap" . }}
+          items:
+          - key: flink-conf.yaml
+            path: flink-conf.yaml
+          - key: log4j-console.properties
+            path: log4j-console.properties

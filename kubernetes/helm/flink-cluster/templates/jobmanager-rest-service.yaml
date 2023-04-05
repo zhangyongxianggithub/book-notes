@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flink.jobmanager" . -}}-rest
+  namespace: {{ include "flink.namespace" . }}
+  labels:
+    {{- include "flink.labels" . | indent 4 }}
+    app.kubernetes.io/component: {{ include "flink.jobmanager" . }}
+spec:
+  type: NodePort
+  ports:
+  - name: rest
+    port: 8081
+    targetPort: 8081
+    nodePort: {{ .Values.jobmanager.restPort }}
+  selector:
+    {{- include "flink.selectorLabels" . | indent 4 }}
+    app.kubernetes.io/component: {{ include "flink.jobmanager" . }}
