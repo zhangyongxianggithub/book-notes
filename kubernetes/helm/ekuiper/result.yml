@@ -1,0 +1,193 @@
+---
+# Source: ekuiper/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ekuiper
+  labels:
+    helm.sh/chart: ekuiper-1.3.3
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: ekuiper/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ekuiper
+  namespace: default
+  labels:
+    helm.sh/chart: ekuiper-1.3.3
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/managed-by: Helm
+data:
+  "kuiper.yaml": |
+
+      basic:
+        authentication: false
+        consoleLog: false
+        debug: false
+        fileLog: true
+        ignoreCase: true
+        ip: 0.0.0.0
+        maxAge: 72
+        pluginHosts: https://packages.emqx.net
+        port: 20498
+        prometheus: false
+        prometheusPort: 20499
+        restIp: 0.0.0.0
+        restPort: 9081
+        rotateTime: 24
+      portable:
+        pythonBin: python
+      rule:
+        checkpointInterval: 300000
+        qos: 0
+        sendError: true
+      sink:
+        bufferPageSize: 256
+        cleanCacheAtStop: false
+        enableCache: false
+        maxDiskCache: 1024000
+        memoryCacheThreshold: 1024
+        resendInterval: 0
+      store:
+        redis:
+          host: localhost
+          password: kuiper
+          port: 6379
+          timeout: 1000
+        sqlite:
+          name: null
+        type: sqlite
+---
+# Source: ekuiper/templates/manager-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ekuiper-manager
+  namespace: default
+  labels:
+    helm.sh/chart: ekuiper-1.3.3
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: NodePort
+  ports:
+  - name: ekuiper-manager
+    port: 9082
+    protocol: TCP
+    targetPort:  managerport
+    nodePort: 30000
+  selector:
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+---
+# Source: ekuiper/templates/svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ekuiper
+  namespace: default
+  labels:
+    helm.sh/chart: ekuiper-1.3.3
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+  - name: restapi
+    port:  9081
+    protocol: TCP
+    targetPort:  restapi
+    nodePort: null
+  - name: ekuiper
+    port: 20498
+    protocol: TCP
+    targetPort: ekuiper
+    nodePort: null
+  selector:
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+---
+# Source: ekuiper/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ekuiper
+  namespace: default
+  labels:
+    helm.sh/chart: ekuiper-1.3.3
+    app.kubernetes.io/name: ekuiper
+    app.kubernetes.io/instance: ekuiper
+    app.kubernetes.io/version: "1.8.1"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ekuiper
+      app.kubernetes.io/instance: ekuiper
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ekuiper
+        app.kubernetes.io/instance: ekuiper
+    spec:
+      serviceAccountName: ekuiper
+      volumes:
+      - name: ekuiper-data
+        emptyDir: {}
+      - name: kuiper-config
+        configMap:
+          name: ekuiper
+          items:
+          - key: kuiper.yaml
+            path: kuiper.yaml
+      containers:
+        - name: ekuiper
+          image: "lfedge/ekuiper:1.8.1"
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: MQTT_SOURCE__DEFAULT__SERVER
+            value: tcp://broker.emqx.io:1883
+          command: ["./bin/kuiperd"]
+          readinessProbe:
+            httpGet:
+              port: 9081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          ports:
+            - name: restapi
+              containerPort: 9081
+            - name: ekuiper
+              containerPort: 20498
+          volumeMounts:
+          - name: ekuiper-data
+            mountPath: "/kuiper/data"
+          - name: kuiper-config
+            mountPath: "/kuiper/etc/kuiper.yaml"
+            subPath: "kuiper.yaml"
+          resources:
+            {}
+        - name: ekuiper-manager
+          image: "emqx/ekuiper-manager:latest"
+          imagePullPolicy: Always
+          env:
+          - name: DEFAULT_EKUIPER_ENDPOINT
+            value: http://localhost:9081
+          readinessProbe:
+            httpGet:
+              port: 9082
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          ports:
+            - name: managerport
+              containerPort: 9082
