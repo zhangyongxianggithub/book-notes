@@ -1,4 +1,3 @@
-[TOC]
 - [安装与部署](#安装与部署)
 - [开发方式](#开发方式)
 - [机构设计](#机构设计)
@@ -18,6 +17,14 @@
   - [配置方法](#配置方法)
   - [环境变量的语法](#环境变量的语法)
   - [全局配置文件](#全局配置文件)
+    - [authentication](#authentication)
+    - [Pluginhosts 配置](#pluginhosts-配置)
+    - [sink配置](#sink配置)
+    - [存储配置](#存储配置)
+- [](#)
+- [](#-1)
+    - [Portable插件配置](#portable插件配置)
+    - [初始化规则集](#初始化规则集)
 - [用户指南](#用户指南)
   - [流: 无界的事件序列](#流-无界的事件序列)
   - [表: 事件序列的快照](#表-事件序列的快照)
@@ -229,7 +236,12 @@ ekuiper2种时间概念都支持。一个支持事件时间的流处理器需要
 - etc/sources/${source_name}.yaml: 每个源的配置文件，用于定义默认属性，mqtt_source.yaml除外，它直接在etc目录下;
 - etc/connections/connection.yaml: 共享连接配置文件。
 ## 配置方法
-yaml 文件通常被用来设置默认配置。在裸机上部署时，用户可以很容易地访问文件系统，因此通常通过配置修改配置文件来更改配置。当在docker或k8s中部署时，操作文件就不容易了，少量的配置可以通过环境变量来设置或覆盖。而在运行时，终端用户将使用管理控制台来动态地改变配置。eKuiper 管理控制台中的"配置"页面可以帮助用户直观地修改配置。
+3种方式
+- 管理控制台/REST API
+- 环境变量
+- etc文件夹中的Yaml文件
+
+yaml 文件通常被用来设置默认配置。在裸机上部署时，用户可以很容易地访问文件系统，因此通常通过修改配置文件来更改配置。当在docker或k8s中部署时，操作文件就不容易了，少量的配置可以通过环境变量来设置或覆盖。而在运行时，终端用户将使用管理控制台来动态地改变配置。eKuiper 管理控制台中的"配置"页面可以帮助用户直观地修改配置。
 ## 环境变量的语法
 从环境变量到配置yaml文件之间有一个映射。当通过环境变量修改配置时，环境变量需要按照规定的格式来设置，例如: 
 >KUIPER__BASIC__DEBUG => basic.debug in etc/kuiper.yaml
@@ -255,6 +267,87 @@ basic:
   # Whether to ignore case in SQL processing. Note that, the name of customized function by plugins are case-sensitive.
   ignoreCase: true
 ```
+### authentication
+当authentication=true时，ekuiper将为rest api请求检查Token，请参考[更多信息](https://ekuiper.org/docs/zh/latest/api/restapi/authentication.html)
+```yaml
+basic:
+  authentication: false
+```
+### Pluginhosts 配置
+默认在packages.emqx.net托管所有预构建native插件。所有插件列表如下:
+- source: random zmq
+- sink: file image influx redis tdengine zmq
+- function: accumulateWordCount countPlusOne echo geohash image labelImage
+用户可以通过以下Rest-API获取所有预构建插件的名称和地址：
+```
+GET http://localhost:9081/plugins/sources/prebuild
+GET http://localhost:9081/plugins/sinks/prebuild
+GET http://localhost:9081/plugins/functions/prebuild
+```
+获取插件信息后，用户可以尝试这些插件，更多信息
+注意：只有官方发布的基于 debian 的 docker 镜像支持以上操作
+### sink配置
+配置sink的默认属性，目前主要用于配置缓存策略。在规则层有同样的配置选项，可以覆盖这些默认配置。
+```yaml
+# 是否开启缓存
+  enableCache: false
+  
+  # 内存缓存的最大存储条数
+  memoryCacheThreshold: 1024
+
+  # 磁盘缓存的最大存储条数
+  maxDiskCache: 1024000
+
+  # 读写磁盘的缓存页条数，作为磁盘读写的基本单位
+  bufferPageSize: 256
+
+  # 重发的间隔时间，单位为毫秒
+  resendInterval: 0
+
+  # 规则停止后是否清除缓存
+  cleanCacheAtStop: false
+```
+### 存储配置
+可通过配置修改创建的流和规则等状态的存储方式。默认情况下，程序状态存储在sqlite数据库中。把存储类型改成redis，可使用redis作为存储方式。
+- Sqlite，可配置如下属性:
+  - name - 数据库文件名。若为空，则设置为默认名字sqliteKV.db.
+- Redis，可配置如下属性: 
+  - host - redis 服务器地址。
+  - port - redis 服务器端口。
+  - password - redis 服务器密码。若 redis 未配置认证系统，则可不设置密码。
+  - timeout - 连接超时时间。
+  - connectionSelector - 重用 etc/connections/connection.yaml 中定义的连接信息, 主要用在 edgex redis 配置了认证系统时
+    - 只适用于 edgex redis 的连接信息
+    - 连接信息中的 server， port 和 password 会覆盖以上定义的 host， port 和 password
+    - 具体信息可参考
+```yaml
+    store:
+      #Type of store that will be used for keeping state of the application
+      type: sqlite
+      redis:
+        host: localhost
+        port: 6379
+        password: kuiper
+        #Timeout in ms
+        timeout: 1000
+      sqlite:
+        #Sqlite file name, if left empty name of db will be sqliteKV.db
+        name:
+```
+#
+#
+### Portable插件配置
+配置 portable 插件的运行时属性。
+```yaml
+portable:
+      # 配置 python 可执行文件的位置或命令。
+      # 若系统中有多个 python 版本，可通过此配置指定具体的 python 地址。
+      pythonBin: python
+      # 控制插件初始化超时时间，单位为毫秒。eKuiper portable 插件运行时会等待插件初始化以完成握手，若超时则终止插件进程
+      initTimeout: 5000
+```
+### 初始化规则集
+支持基于文件的流和规则的启动时配置。用户可以将名为init.json 的规则集文件放入data目录，以初始化规则集。该规则集只在eKuiper第一次启动时被导入。
 # 用户指南
 ## 流: 无界的事件序列
 流是eKuiper中数据源连接器的运行形式，他必须指定一个源类型来定义如何连接到外部资源。当作为一个流使用时，源必须是无界的，流的作用就像规则的触发器，每个事件都会触发规则中的计算。eKuiper不需要一个预先建立的模式。
