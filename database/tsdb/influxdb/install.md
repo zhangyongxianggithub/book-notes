@@ -7,8 +7,12 @@ docker run -d -p 8086:8086 \
   influxdb:2.6.1
 ```docker
 ```shell
-# non-interacvtive方式,需要有-f --force
+# non-interacvtive方式,需要有-f --force会生成一个operator token
 influx setup -u zyx -p zhang163766 -t zhang163766 -o zyx -b test -f
+```
+设置完成后
+```shell
+influx config --json,可以看到operator token
 ```
 ```shell
 # Set up a configuration profile
