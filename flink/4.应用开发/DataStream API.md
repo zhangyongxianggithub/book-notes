@@ -285,7 +285,27 @@ WatermarkStrategy
 ```
 `TimestampAssigner`设置与否是可选的，大多数情况下，可以不用去指定。例如，当使用Kafka或Kinesis数据源时，你可以直接从 Kafka/Kinesis数据源记录中获取到时间戳。**时间戳和watermark都是从1970-01-01T00:00:00Z起的Java纪元开始，并以毫秒为单位**
 ## 使用Watermark策略
-WatermarkStrategy可以在Flink应用程序中的2处使用，第一种是直接在数据源是使用，第二种是直接在非数据源的操作之后使用。第一种方式会更好，因为数据源可以利用watermark生成逻辑中有关分片/分区(shards/partitions/splits)的信息。使用这种方式，数据源通常可以更精确地跟踪watermark，
+WatermarkStrategy可以在Flink应用程序中的2处使用，第一种是直接在数据源是使用，第二种是直接在非数据源的操作之后使用。第一种方式会更好，因为数据源可以利用watermark生成逻辑中有关分片/分区(shards/partitions/splits)的信息。使用这种方式，数据源通常可以更精确地跟踪watermark，整体watermark生成会更精确，直接在源上指定WatermarkStrategy意味着必须使用特定数据源接口，参阅[Watermark策略与kafka连接器](https://nightlies.apache.org/flink/flink-docs-release-1.16/zh/docs/dev/datastream/event-time/generating_watermarks/#watermark-%e7%ad%96%e7%95%a5%e4%b8%8e-kafka-%e8%bf%9e%e6%8e%a5%e5%99%a8)以了解如何使用Kafka Connector，以及有关每个分区的watermark是如何生成以及工作的。仅当无法直接在数据源上设置策略时，才应该使用第二种方式(在任意转换之后设置`WatermarkStrategy`):
+```java
+final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+DataStream<MyEvent> stream = env.readFile(
+        myFormat, myFilePath, FileProcessingMode.PROCESS_CONTINUOUSLY, 100,
+        FilePathFilter.createDefaultFilter(), typeInfo);
+
+DataStream<MyEvent> withTimestampsAndWatermarks = stream
+        .filter( event -> event.severity() == WARNING )
+        .assignTimestampsAndWatermarks(<watermark strategy>);
+
+withTimestampsAndWatermarks
+        .keyBy( (event) -> event.getGroup() )
+        .window(TumblingEventTimeWindows.of(Time.seconds(10)))
+        .reduce( (a, b) -> a.add(b) )
+        .addSink(...);
+```
+使用`WatermarkStrategy`去获取流并生成带有时间戳的元素watermark的新流时，如果原始流已经具有时间戳或watermark，则指定的时间戳的分配器将覆盖原有的时间戳和watermark。
+## 处理空闲数据源
+如果数据源中的某一个分区/分片在一段时间内未发送
 
 
 
