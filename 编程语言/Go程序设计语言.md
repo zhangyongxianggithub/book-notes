@@ -90,6 +90,7 @@
 - [测试](#测试)
 	- [go test工具](#go-test工具)
 	- [Test函数](#test函数)
+	- [Example函数](#example函数)
 - [反射](#反射)
 	- [为什么使用反射](#为什么使用反射)
 	- [reflect.Type和reflect.Value](#reflecttype和reflectvalue)
@@ -1616,6 +1617,12 @@ func TestIsPalindrome(t *testing.T) {
 go test在不指定包参数的情况下，以当前目录所在的包为参数，可以cd到要运行的测试文件所在的目录执行go test。
 - -v 输出测试名称测试时间
 - -run 只运行匹配的测试用例，也就是特定的函数
+## Example函数
+示例函数，既没有参数也没有结果。3个目的:
+- 作为文档中的例子;
+- Example函数将和包关联在一起，后面如果是函数，就与函数关联在一起，godoc时文档显示在一起;
+- 通过`go test`运行的可执行测试
+- 提供手动实验代码，godoc文档服务器提供的Go Playground可以在web上编辑与运行每个示例函数
 
 # 反射
 再不知道类型的情况下更新变量、查看值调用方法的机制，称为反射，就是再不知道类型的情况操作值。
