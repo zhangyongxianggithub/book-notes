@@ -26,4 +26,64 @@ public class ArrayListVSLinkedList {
     }
 }
 ```
-这种测试不精确一个是StopWatch会影响还有JVM的优化以及其运行时的内存状态都有影响。严谨的测试需要使用JMH。
+这种测试不精确一个是StopWatch会影响还有JVM的优化以及其运行时的内存状态都有影响。严谨的测试需要使用JMH。使用JMH的方式
+```java
+@BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@State(Scope.Thread)
+public class ArrayListVSLinkedListWithJMH {
+    public static final String DUMMY_DATA = "DUMMY DATA";
+    private List<String> array;
+    private List<String> linked;
+    @Setup(Level.Iteration)
+    public void setup() {
+        this.array = new ArrayList<>();
+        this.linked = new LinkedList<>();
+    }
+    @Benchmark
+    public List<String> addArray() {
+        this.array.add(DUMMY_DATA);
+        return array;
+    }
+    @Benchmark
+    public List<String> addLinked() {
+        this.linked.add(DUMMY_DATA);
+        return this.linked;
+    }
+    public static void main(String[] args) throws RunnerException {
+        final Options options = new OptionsBuilder()
+                .include(ArrayListVSLinkedListWithJMH.class.getSimpleName())
+                .forks(1).measurementIterations(10).warmupIterations(10)
+                .build();
+        new Runner(options).run();
+    }
+}
+```
+## JMH的基本用法
+- `@Benchmark`标记基准测试方法，类似Junit的`@Test`注解作用，如果没有任何方法被标注，则运行异常.
+    ```java
+    @BenchmarkMode(Mode.AverageTime)
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
+    @State(Scope.Thread)
+    public class JMHExample02 {
+        
+        public void normalMethod() {
+            
+        }
+        
+        public static void main(String[] args) throws RunnerException {
+            final Options opts = new OptionsBuilder()
+                    .include(JMHExample02.class.getSimpleName()).forks(1)
+                    .measurementIterations(10).warmupIterations(10).build();
+            new Runner(opts).run();
+        }
+    }
+    ```
+  上面的类将会运行异常。
+- warmup以及measurement，
+
+
+
+
+
+
