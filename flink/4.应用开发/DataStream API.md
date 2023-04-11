@@ -305,7 +305,14 @@ withTimestampsAndWatermarks
 ```
 使用`WatermarkStrategy`去获取流并生成带有时间戳的元素watermark的新流时，如果原始流已经具有时间戳或watermark，则指定的时间戳的分配器将覆盖原有的时间戳和watermark。
 ## 处理空闲数据源
-如果数据源中的某一个分区/分片在一段时间内未发送
+如果数据源中的某一个分区/分片在一段时间内未发送事件数据，则意味着`WatermarkGenerator`也不会获得任何新数据去生成watermark。我们称这类数据源为空闲输入或者空闲源。在这种情况下，当某些其他分区仍然发送事件数据的时候就会出现问题。由于下游算子watermark的计算方式是取所有不同的上游并行数据源watermark的最小值，则其watermark将不会发生变化。为了解决这个问题，你可以使用`watermarkstrategy`来检测空闲输入并将其标记为空闲状态。`WatermarkStrategy`为此提供了一个工具接口:
+```java
+WatermarkStrategy
+        .<Tuple2<Long, String>>forBoundedOutOfOrderness(Duration.ofSeconds(20))
+        .withIdleness(Duration.ofMinutes(1));
+```
+## Watermark alignment
+在前面的章节中，我们讨论了当splits/partitions/shards或者sources空闲导致watermark无法增长的问题的解决方案。另一方面，splits/partitions/shards或者sources处理事件是非常快的，它们之前生成watermark的速度也是不同的。
 
 
 
