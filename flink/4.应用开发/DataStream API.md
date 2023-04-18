@@ -312,7 +312,14 @@ WatermarkStrategy
         .withIdleness(Duration.ofMinutes(1));
 ```
 ## Watermark alignment
-在前面的章节中，我们讨论了当splits/partitions/shards或者sources空闲导致watermark无法增长的问题的解决方案。另一方面，splits/partitions/shards或者sources处理事件是非常快的，它们之前生成watermark的速度也是不同的。
+在前面的章节中，我们讨论了当splits/partitions/shards或者sources空闲导致watermark无法增长的问题的解决方案。另一方面，splits/partitions/shards或者sources处理事件是非常快的，它们之间生成watermark的速度也是不同的。这个速度的不同对于它们自己来说没有影响，但是对于下游的算子来说就会成为一个问题。在这种场景中，与idle源相反的是，下游的算子的watermark仍然会前进，但是，算子可能需要较大的buffer来存储从较快的输入过来的大量的数据，因为所有输入的最小watermark来自于滞后的输入的watermark。因此较快输入的所有输入都将会缓冲在算子状态中。会导致算子状态不受控制的增长。为了解决这个问题，你可以开启watermark alignment机制，这个机制会保证没有sources/splits/shards/partitions的watermark增长会超过其他的sources/splits/shards/partitions，你可以为每个source单独的开启watermark alignment机制
+```java
+WatermarkStrategy
+        .<Tuple2<Long, String>>forBoundedOutOfOrderness(Duration.ofSeconds(20))
+        .withWatermarkAlignment("alignment-group-1", Duration.ofSeconds(20), Duration.ofSeconds(1));
+```
+You can enable watermark alignment only for FLIP-27 sources. It does not work for legacy or if applied after the source via DataStream#assignTimestampsAndWatermarks.
+当开启了对齐机制，你需要高速flink，source属于哪一个组。
 
 
 
