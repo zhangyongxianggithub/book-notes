@@ -67,8 +67,14 @@ Received a total of 5 rows
 
 这几种结果模式在SQL查询的**原型设计**过程中都非常有用。这些模式的结果都存储在SQL客户端的Java堆内存中。为了保持CLI界面及时响应，变更日志模式仅显示最近的1000个更改。表格模式支持浏览更大的结果，这些结果仅受可用主内存和配置的最大行数（`sql-client.execution.max-table-result.rows`）的限制。在批处理环境下执行的查询只能用表格模式或者Tableau模式进行检索。定义查询语句后，可以将其作为长时间运行的独立Flink作业提交给集群。配置部分解释如何声明读取数据的table source，写入数据的sink以及配置其他表程序属性的方法。
 ## Key-strokes
+SQL CLI中的快捷键，通过HELP命令可以访问命令的文档做参考
 # Configuration
 ## SQL Client startup options
+启动时可以指定一些可选项，这个可以参考命令的help
+## SQL Client Configuration
+可以在SQL Client中设置一些很随性难过，这些属性请参考文档
+## SQL Client result modes
+
 
 
 
