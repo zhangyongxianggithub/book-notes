@@ -41,4 +41,34 @@ SELECT 'Hello World';
 ```sql
 SELECT name, COUNT(*) AS cnt FROM (VALUES ('Bob'), ('Alice'), ('Greg'), ('Bob')) AS NameTable(name) GROUP BY name;
 ```
+此查询执行一个有限字数实例，变更日志模式下，看到的结果应该类似:
+>+ Bob, 1
++ Alice, 1
++ Greg, 1
+- Bob, 1
++ Bob, 2
+
+表格模式下，可视化结果表将不断更新，直到表程序以如下内容结束:
+>Bob, 2
+Alice, 1
+Greg, 1
+
+Tableau模式下，如果这个查询以流的方式执行，那么将显示以下内容:
+>+-----+----------------------+----------------------+
+| +/- |                 name |                  cnt |
++-----+----------------------+----------------------+
+|   + |                  Bob |                    1 |
+|   + |                Alice |                    1 |
+|   + |                 Greg |                    1 |
+|   - |                  Bob |                    1 |
+|   + |                  Bob |                    2 |
++-----+----------------------+----------------------+
+Received a total of 5 rows
+
+这几种结果模式在SQL查询的**原型设计**过程中都非常有用。这些模式的结果都存储在SQL客户端的Java堆内存中。为了保持CLI界面及时响应，变更日志模式仅显示最近的1000个更改。表格模式支持浏览更大的结果，这些结果仅受可用主内存和配置的最大行数（`sql-client.execution.max-table-result.rows`）的限制。在批处理环境下执行的查询只能用表格模式或者Tableau模式进行检索。定义查询语句后，可以将其作为长时间运行的独立Flink作业提交给集群。配置部分解释如何声明读取数据的table source，写入数据的sink以及配置其他表程序属性的方法。
+## Key-strokes
+# Configuration
+## SQL Client startup options
+
+
 
