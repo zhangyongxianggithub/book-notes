@@ -195,3 +195,54 @@ catalog.functionExists("myfunc");
 // list functions in a database
 catalog.listFunctions("mydb");
 ```
+# 通过Table API和SQL Client操作Catalog
+## 注册Catalog
+用户可以访问默认创建的内存Catalog `default_catalog`，这个Catalog默认拥有一个默认数据库`default_database`。用户也可以注册其他的Catalog到现有的Flink会话中。
+```java
+tableEnv.registerCatalog(new CustomCatalog("myCatalog"));
+```
+使用YAML定义的Catalog必须提供type属性以表示指定的Catalog类型。以下几种类型可以直接使用
+```yaml
+catalogs:
+   - name: myCatalog
+     type: custom_catalog
+     hive-conf-dir: ...
+```
+## 修改当前的Catalog和数据库
+Flink始终在当前的Catalog和数据库中寻找表、视图和UDF。
+```java
+tableEnv.useCatalog("myCatalog");
+tableEnv.useDatabase("myDb");
+```
+```sql
+Flink SQL> USE CATALOG myCatalog;
+Flink SQL> USE myDB;
+```
+通过提供全限定名`catalog.database.object`来访问不在当前Catalog中的元数据信息。
+```java
+tableEnv.from("not_the_current_catalog.not_the_current_db.my_table");
+```
+```sql
+Flink SQL> SELECT * FROM not_the_current_catalog.not_the_current_db.my_table;
+```
+## 列出可用的Catalog
+```java
+tableEnv.listCatalogs();
+```
+```sql
+Flink SQL> show catalogs;
+```
+## 列出可用的数据库
+```java
+tableEnv.listDatabases();
+```
+```sql
+Flink SQL> show databases;
+```
+## 列出可用的表
+```java
+tableEnv.listTables();
+```
+```sql
+Flink SQL> show tables;
+```
