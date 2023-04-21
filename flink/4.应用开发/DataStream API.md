@@ -319,7 +319,7 @@ WatermarkStrategy
         .withWatermarkAlignment("alignment-group-1", Duration.ofSeconds(20), Duration.ofSeconds(1));
 ```
 You can enable watermark alignment only for FLIP-27 sources. It does not work for legacy or if applied after the source via DataStream#assignTimestampsAndWatermarks.
-当开启了对齐机制，你需要高速flink，source属于哪一个组。
+当开启了对齐机制，你需要告诉flink，source属于哪一个组。你可以通过标签机制将source划分到一个组，此外，您必须告诉属于该组的所有源的当前最小水印的最大漂移。第三个参数描述当前最大水印应该多久更新一次。 频繁更新的缺点是会有更多的RPC消息在TM和JM之间传输。为了实现对齐机制，Flink将可能会暂停某些生成watermark较快的source/task的消费。与此同时，它将继续从其他来源/任务读取记录，这些记录可以向前移动组合水印，并以这种方式解锁更快的水印。从1.15版本后，Flink 支持跨同源和/或不同源的任务对齐。 它不支持在同一任务中对齐拆分/分区/分片。
 
 
 
