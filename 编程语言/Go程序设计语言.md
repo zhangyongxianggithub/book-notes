@@ -1398,9 +1398,15 @@ func makeThumbnails6(filenames <-chan string) int64 {
 ## 示例: 并发的Web爬虫
 
 ## 使用select多路复用
+下面的程序是一个火箭发射程序，`time.Tick()`会返回一个channel，这个channal周期性的接收当前的时间事件。如果需要一个中断火箭的操作，因为channel是阻塞的，所以需要多路复用。
 ```go
 func main() {
 	fmt.Println("Commencing countdown")
+	abort := make(chan struct{})
+	go func() {
+    	os.Stdin.Read(make([]byte, 1)) // read a single byte
+    	abort <- struct{}{}
+	}()
 	tick:=time.Tick(1*time.Second)
 	for countdown:=10;countdown>0;countdown--{
 		fmt.Println(countdown)
@@ -1411,7 +1417,59 @@ func main() {
 func launch()  {
 }
 ```
-
+多路复用使用select语句
+```go
+select {
+case <-ch1:
+    // ...
+case x := <-ch2:
+    // ...use x...
+case ch3 <- y:
+    // ...
+default:
+    // ...
+}
+```
+每个case代表一个通信操作(在channel上发送或者接收)，如果有一个case满足就执行，没有就执行default，`select{}`会永远的阻塞下去。
+```go
+func main() {
+    // ...create abort channel...
+    fmt.Println("Commencing countdown.  Press return to abort.")
+    select {
+    case <-time.After(10 * time.Second):
+        // Do nothing.
+    case <-abort:
+        fmt.Println("Launch aborted!")
+        return
+    }
+    launch()
+}
+```
+多个case都满足条件，则随机的执行一个，最终的火箭发射程序
+```go
+func main() {
+    // ...create abort channel...
+    fmt.Println("Commencing countdown.  Press return to abort.")
+    tick := time.Tick(1 * time.Second)
+    for countdown := 10; countdown > 0; countdown-- {
+        fmt.Println(countdown)
+        select {
+        case <-tick:
+            // Do nothing.
+        case <-abort:
+            fmt.Println("Launch aborted!")
+            return
+        }
+    }
+    launch()
+}
+```
+此处`time.Tick`有点类似`time.Sleep`操作，`time.Tick`后台会创建一个goroutine，不断的向channel发送当前时间，此时函数执行完毕后，这个gotroutine还在执行，造成goroutine的泄漏。一个合适的方式是
+```go
+ticker := time.NewTicker(1 * time.Second)
+<-ticker.C    // receive from the ticker's channel
+ticker.Stop() // cause the ticker's goroutine to terminate
+```
 ## 示例: 并发目录遍历
 ## 取消
 一个goroutine无法直接终止另一个。任何时刻都难以知道工作的goroutine数量，使用通道关闭(关闭后，接口操作立即返回)特点来测试一个取消机制
