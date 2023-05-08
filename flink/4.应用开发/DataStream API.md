@@ -320,6 +320,84 @@ WatermarkStrategy
 ```
 You can enable watermark alignment only for FLIP-27 sources. It does not work for legacy or if applied after the source via DataStream#assignTimestampsAndWatermarks.
 当开启了对齐机制，你需要告诉flink，source属于哪一个组。你可以通过标签机制将source划分到一个组，此外，您必须告诉属于该组的所有源的当前最小水印的最大漂移。第三个参数描述当前最大水印应该多久更新一次。 频繁更新的缺点是会有更多的RPC消息在TM和JM之间传输。为了实现对齐机制，Flink将可能会暂停某些生成watermark较快的source/task的消费。与此同时，它将继续从其他来源/任务读取记录，这些记录可以向前移动组合水印，并以这种方式解锁更快的水印。从1.15版本后，Flink 支持跨同源和/或不同源的任务对齐。 它不支持在同一任务中对齐拆分/分区/分片。
+### 自定义WatermarkGenerator
+`TimestampAssigner`是一个可以从事件数据中提取时间戳字段的简单函数，无需向西查看其实现。但是`WatermarkGenerator`的编写相对要复杂一些，接下来介绍如何实现这个接口，这个接口的代码如下:
+```java
+/**
+ * {@code WatermarkGenerator} 可以基于事件或者周期性的生成 watermark。
+ *
+ * <p><b>注意：</b>  WatermarkGenerator 将以前互相独立的 {@code AssignerWithPunctuatedWatermarks} 
+ * 和 {@code AssignerWithPeriodicWatermarks} 一同包含了进来。
+ */
+@Public
+public interface WatermarkGenerator<T> {
+
+    /**
+     * 每来一条事件数据调用一次，可以检查或者记录事件的时间戳，或者也可以基于事件数据本身去生成 watermark。
+     */
+    void onEvent(T event, long eventTimestamp, WatermarkOutput output);
+
+    /**
+     * 周期性的调用，也许会生成新的 watermark，也许不会。
+     *
+     * <p>调用此方法生成 watermark 的间隔时间由 {@link ExecutionConfig#getAutoWatermarkInterval()} 决定。
+     */
+    void onPeriodicEmit(WatermarkOutput output);
+}
+```
+watermark的生成方式本质上有2种:
+- 周期性生成，通过`onEvent()`观察传入的事件数据，然后在框架调用`onPeriodicEmit()`时发出watermark。
+- 标记生成，查看`onEvent()`中的事件数据，并等待检查在流中携带watermark的特殊标记事件或打点数据。获取到这些事件数据时，它将立即发出watermark。通常情况下，标记生成器不会通过`onPeriodicEmit()`发出watermark。
+  
+#### 自定义周期性Watermark生成器
+周期性生成器会观察流事件数据并定期生成watermark，可能取决于流数据或者完全基于处理时间。生成watermark的时间间隔可以通过`ExecutionConfig.setAutoWatermarkInterval()`指定。每次都会调用生成器的`onPeriodicEmit()`方法，如果返回的watermark非空且大于前一个watermark，则将发出新的watermark。下面是2个例子:
+```java
+/**
+ * 该 watermark 生成器可以覆盖的场景是：数据源在一定程度上乱序。
+ * 即某个最新到达的时间戳为 t 的元素将在最早到达的时间戳为 t 的元素之后最多 n 毫秒到达。
+ */
+public class BoundedOutOfOrdernessGenerator implements WatermarkGenerator<MyEvent> {
+
+    private final long maxOutOfOrderness = 3500; // 3.5 秒
+
+    private long currentMaxTimestamp;
+
+    @Override
+    public void onEvent(MyEvent event, long eventTimestamp, WatermarkOutput output) {
+        currentMaxTimestamp = Math.max(currentMaxTimestamp, eventTimestamp);
+    }
+
+    @Override
+    public void onPeriodicEmit(WatermarkOutput output) {
+        // 发出的 watermark = 当前最大时间戳 - 最大乱序时间
+        output.emitWatermark(new Watermark(currentMaxTimestamp - maxOutOfOrderness - 1));
+    }
+
+}
+```
+```java
+/**
+ * 该生成器生成的 watermark 滞后于处理时间固定量。它假定元素会在有限延迟后到达 Flink。
+ */
+public class TimeLagWatermarkGenerator implements WatermarkGenerator<MyEvent> {
+
+    private final long maxTimeLag = 5000; // 5 秒
+
+    @Override
+    public void onEvent(MyEvent event, long eventTimestamp, WatermarkOutput output) {
+        // 处理时间场景下不需要实现
+    }
+
+    @Override
+    public void onPeriodicEmit(WatermarkOutput output) {
+        output.emitWatermark(new Watermark(System.currentTimeMillis() - maxTimeLag));
+    }
+}
+```
+#### 自定义标记Watermark生成器
+
+
+
 
 
 
