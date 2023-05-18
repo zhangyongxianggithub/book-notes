@@ -1,2 +1,2 @@
 FROM nats:latest
-COPY nats-server.conf /
+COPY nats-single-server.conf /nats-server.conf
