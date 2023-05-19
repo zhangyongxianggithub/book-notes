@@ -1,0 +1,1 @@
+Subject Mapping是NATS server非常强大的功能特性。用于金丝雀发布、A/B测试、混沌测试以及新的subject迁移等。
