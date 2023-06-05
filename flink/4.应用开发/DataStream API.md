@@ -395,7 +395,24 @@ public class TimeLagWatermarkGenerator implements WatermarkGenerator<MyEvent> {
 }
 ```
 #### 自定义标记Watermark生成器
-
+标记watermark生成器观察流事件数据并在获取到带有watermark信息的特殊事件元素时发出watermark。如下是实现标记生成器的方法，当事件带有某个指定标记时，该生成器就会发出watermark:
+```java
+public class PunctuatedAssigner implements WatermarkGenerator<MyEvent> {
+    @Override
+    public void onEvent(MyEvent event, long eventTimestamp, WatermarkOutput output) {
+        if (event.hasWatermarkMarker()) {
+            output.emitWatermark(new Watermark(event.getWatermarkTimestamp()));
+        }
+    }
+    @Override
+    public void onPeriodicEmit(WatermarkOutput output) {
+        // onEvent 中已经实现
+    }
+}
+```
+可以针对每个事件去生成watermark。但是由于每个watermark都会在下游做一些计算，因此过多的watermark会降低程序性能。
+### Water策略与Kafka连接器
+当使用Apache Kafka连接器作为数据源时，每个Kafka分区可能有一个简单的事件时间模式，递增的时间戳或有界无序。然而，当使用Kafka数据源时，多个分区常常并行使用，因此交错来自各个分区的事件数据就会破坏每个分许的事件时间模式，这是Kafka消费客户端所固有的。在这种情况下，你可以使用Flink中可识别Kafka分区的watermark生成机制。
 
 
 
