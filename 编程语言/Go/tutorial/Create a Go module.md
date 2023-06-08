@@ -1,4 +1,7 @@
 [TOC]
+在这个入门指导中，你将会创建2个模块。第一个是一个lib，可以被其他的lib或者app导入，第二个是一个caller app。这个指南包含7个主题:
+- 创建一个模块，这个模块有其他模块可以调用的函数;
+- 从其他模块中调用代码，导入并使用你的新模块;
 # Start a module that others can use
 创建一个模块，这个模块包含多个相关的包与很多有用的函数集合。Go代码被分组到包中，包被分组到模块中。开发者在调用模块中的函数时会导入包，并在上线前测试。
 - 创建一个目录
@@ -28,14 +31,14 @@
   >replace example.com/greetings => ../greetings
   >require example.com/greetings v0.0.0-00010101000000-000000000000
 
-  # Return and handler an error
+# Return and handler an error
 
-  # Return a random greeting
+# Return a random greeting
 
-  # Return greetings for multiple people
+# Return greetings for multiple people
 
-  # Add a test
+# Add a test
 
-  # Compile and install the application
+# Compile and install the application
 
-  # Conclusion
+# Conclusion
