@@ -19,8 +19,14 @@ spec:
       volumes:
       - name: ekuiper-data
         {{- if .Values.persistence.enabled }}
+        {{- if .Values.persistence.hostPath }}
+        hostPath:
+          path: {{ .Values.persistence.hostPath }}
+          type: DirectoryOrCreate
+        {{- else }}
         persistentVolumeClaim:
           claimName: {{ (tpl .Values.persistence.existingClaim $) | default (include "ekuiper.fullname" .) }}
+        {{- end }}
         {{- else }}
         emptyDir: {}
         {{- end }}
