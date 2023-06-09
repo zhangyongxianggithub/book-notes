@@ -1,5 +1,4 @@
 [TOC]
-<<<<<<< HEAD
 本指南介绍了Go中的多模块工作空间的基础知识。使用工作空间，也就是说你在同时写多个模块。在这个指南中，你将在一个共享的空间中创建2个模块，在这些模块中做出变更，并在build后看到变更后的结果。
 # Prerequisites
 - Go>=1.18
@@ -29,12 +28,3 @@ use ./hello
 ```
 go.work文件与go.mod的语法类似。use指令表示hello目录中的模块是主module。在workspace木哭瞎的任何子目录都将是active的。Go命令
 
-=======
-本指南加少了Go中的多模块工作空间的基本知识。多模块工作空间表示你正在开发多个模块。在这个指南中，你将会在一个多模块工作空间中创建2个模块。
-# Create a module for your code
-- 初始化一个模块;
-# Create the workspace
-在这个步骤中，我们会创建一个go.work文件来指定模块的工作空间。
-- 初始化workspace,`go work init ./hello`，这个命令会创建一个go.work文件，包含./hello文件夹下的所有的模块。
-- 
->>>>>>> 7137b3c (update)
