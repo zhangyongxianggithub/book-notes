@@ -197,8 +197,10 @@ ekuiperEnv:
     mqttDefaultServer: "tcp://broker.emqx.io:1883"
 
 manager:
+# select a manager image version
   image: emqx/ekuiper-manager:latest
   pullPolicy: Always
   port: 9082
+# manager node port setting
   nodePort: 30000
 
