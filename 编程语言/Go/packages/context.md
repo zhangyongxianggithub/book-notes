@@ -54,4 +54,4 @@ func DoSomething(ctx context.Context, arg Arg) error {
     }
   ```
 - func WithCancelCause: `func WithCancelCause(parent Context)(ctx Context, cancel CancelCuaseFunc)`，`CancelCuaseFunc`类似WithCancel，但是返回`CancelCauseFunc`而不是`CancelFunc`，调用时使用一个error，表示context中的错误，随后可以通过Cause(ctx)来检索这个error。
-- func WithDeadline: `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)`，
+- func WithDeadline: `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)`，这个函数返回parent context的一个副本，这个副本带有一个deadline，且这个deadline不超过时间d，如果parent的deadline早于d，那么这个函数返回的context与parent就是等价的。当deadline过期、调用了返回的取消函数或者parent的Done通道被关闭时context的Done通道关闭。取消这个context会释放与其相关的资源，
