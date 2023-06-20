@@ -54,6 +54,38 @@ if i < f()  // wrong!
 }
 ```
 # 控制结构
-
+Go的控制结构与C语言中的控制结构相关，但在某些重要的方面是完全不同的。 Go没有do或while循环，只有一个稍微概括的for循环；switch更灵活；if和switch接受一个可选的初始化语句，就像 for一样; break和continue语句采用可选标签来标识要中断或继续的内容；并且有新的控制结构，包括type switch和多路通信复用器select。语法也略有不同: 没有括号，主体必须始终用大括号分隔。Go中的if类似:
+```go
+if x > 0 {
+    return y
+}
+```
+if与switch接受一个初始化语句，通常用来设置局部变量
+```go
+if err := file.Chmod(0664); err != nil {
+    log.Print(err)
+    return err
+}
+```
+在Go的库中，您会发现当if语句没有流入下一个语句时——也就是说，主体以break、continue、goto或return结尾——不必要的else被省略。
+```go
+f, err := os.Open(name)
+if err != nil {
+    return err
+}
+codeUsing(f)
+```
+```go
+f, err := os.Open(name)
+if err != nil {
+    return err
+}
+d, err := f.Stat()
+if err != nil {
+    f.Close()
+    return err
+}
+codeUsing(f, d)
+```
 
 
