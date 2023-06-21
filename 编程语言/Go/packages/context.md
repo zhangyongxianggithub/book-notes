@@ -54,4 +54,47 @@ func DoSomething(ctx context.Context, arg Arg) error {
     }
   ```
 - func WithCancelCause: `func WithCancelCause(parent Context)(ctx Context, cancel CancelCuaseFunc)`，`CancelCuaseFunc`类似WithCancel，但是返回`CancelCauseFunc`而不是`CancelFunc`，调用时使用一个error，表示context中的错误，随后可以通过Cause(ctx)来检索这个error。
-- func WithDeadline: `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)`，这个函数返回parent context的一个副本，这个副本带有一个deadline，且这个deadline不超过时间d，如果parent的deadline早于d，那么这个函数返回的context与parent就是等价的。当deadline过期、调用了返回的取消函数或者parent的Done通道被关闭时context的Done通道关闭。取消这个context会释放与其相关的资源，
+- func WithDeadline: `func WithDeadline(parent Context, d time.Time) (Context, CancelFunc)`，这个函数返回parent context的一个副本，这个副本带有一个deadline，且这个deadline不超过时间d，如果parent的deadline早于d，那么这个函数返回的context与parent就是等价的。当deadline过期、调用了返回的取消函数或者parent的Done通道被关闭时context的Done通道关闭。取消这个context会释放与其相关的资源，例子如下:
+  ```go
+  func main() {
+	d := time.Now().Add(shortDuration)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+
+	// Even though ctx will be expired, it is good practice to call its
+	// cancellation function in any case. Failure to do so may keep the
+	// context and its parent alive longer than necessary.
+	defer cancel()
+
+	select {
+	case <-time.After(1 * time.Second):
+		fmt.Println("overslept")
+	case <-ctx.Done():
+		fmt.Println(ctx.Err())
+	}
+	}
+  ```
+- func WithTimeout: `func WithTimeout(parent Context, timeout time.Duration)(Context, CancelFunc)`，这个方法返回`WithDeadline(parent, time.Now().Add(timeout))`，取消这个Context会释放与其相关的资源，只要与这个Context相关的操作完成，就应该调用cancel方法.
+  ```go
+  func slowOperationWithTimeout(ctx context.Context) (Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()  // releases resources if slowOperation completes before timeout elapses
+	return slowOperation(ctx)
+  }
+  ```
+  下面是一个例子:
+  ```go
+  func main() {
+	// Pass a context with a timeout to tell a blocking function that it
+	// should abandon its work after the timeout elapses.
+	ctx, cancel := context.WithTimeout(context.Background(), shortDuration1)
+	defer cancel()
+
+	select {
+	case <-time.After(10 * time.Second):
+		fmt.Println("overslept")
+	case <-ctx.Done():
+		fmt.Println(ctx.Err()) // prints "context deadline exceeded"
+	}
+	}
+  ```
+  
