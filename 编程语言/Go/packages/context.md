@@ -97,5 +97,110 @@ func DoSomething(ctx context.Context, arg Arg) error {
 	}
 	}
   ```
+定义的主要的Types
+- type CancelCauseFunc，`type CancelCauseFunc func(cause error)`，`CancelCauseFunc`函数的表现类似一个`CancelFunc`但是额外设置了取消原因，这个原因可以通过调用Cause函数来获取，如果context早已经被取消，`CancelCauseFunc`没有设置原因，比如，如果childContext派生自parentContext:
+  - 如果在使用Cause2取消childContext之前使用Cause1取消ParentContext，则Cause(parentContext)==Cause(childContext)==Cause1;
+  - 如果在使用Cause1取消parentContext之前使用Cause2取消childContext，则Cause(parentContext) == Cause1且Cause(childContext) == Cause2
+- type CancelFunc，`type CancelFunc func()`，一个CancelFunc告诉一个操作放弃后续的工作，CancelFunc不会等待工作停止。CancelFunc可能会被多个携程同时调用。在第一次调用后，后续的调用什么也不做。
+- type Context
+  ```go
+  type Context interface {
+	// Deadline returns the time when work done on behalf of this context
+	// should be canceled. Deadline returns ok==false when no deadline is
+	// set. Successive calls to Deadline return the same results.
+	Deadline() (deadline time.Time, ok bool)
+
+	// Done returns a channel that's closed when work done on behalf of this
+	// context should be canceled. Done may return nil if this context can
+	// never be canceled. Successive calls to Done return the same value.
+	// The close of the Done channel may happen asynchronously,
+	// after the cancel function returns.
+	//
+	// WithCancel arranges for Done to be closed when cancel is called;
+	// WithDeadline arranges for Done to be closed when the deadline
+	// expires; WithTimeout arranges for Done to be closed when the timeout
+	// elapses.
+	//
+	// Done is provided for use in select statements:
+	//
+	//  // Stream generates values with DoSomething and sends them to out
+	//  // until DoSomething returns an error or ctx.Done is closed.
+	//  func Stream(ctx context.Context, out chan<- Value) error {
+	//  	for {
+	//  		v, err := DoSomething(ctx)
+	//  		if err != nil {
+	//  			return err
+	//  		}
+	//  		select {
+	//  		case <-ctx.Done():
+	//  			return ctx.Err()
+	//  		case out <- v:
+	//  		}
+	//  	}
+	//  }
+	//
+	// See https://blog.golang.org/pipelines for more examples of how to use
+	// a Done channel for cancellation.
+	Done() <-chan struct{}
+
+	// If Done is not yet closed, Err returns nil.
+	// If Done is closed, Err returns a non-nil error explaining why:
+	// Canceled if the context was canceled
+	// or DeadlineExceeded if the context's deadline passed.
+	// After Err returns a non-nil error, successive calls to Err return the same error.
+	Err() error
+
+	// Value returns the value associated with this context for key, or nil
+	// if no value is associated with key. Successive calls to Value with
+	// the same key returns the same result.
+	//
+	// Use context values only for request-scoped data that transits
+	// processes and API boundaries, not for passing optional parameters to
+	// functions.
+	//
+	// A key identifies a specific value in a Context. Functions that wish
+	// to store values in Context typically allocate a key in a global
+	// variable then use that key as the argument to context.WithValue and
+	// Context.Value. A key can be any type that supports equality;
+	// packages should define keys as an unexported type to avoid
+	// collisions.
+	//
+	// Packages that define a Context key should provide type-safe accessors
+	// for the values stored using that key:
+	//
+	// 	// Package user defines a User type that's stored in Contexts.
+	// 	package user
+	//
+	// 	import "context"
+	//
+	// 	// User is the type of value stored in the Contexts.
+	// 	type User struct {...}
+	//
+	// 	// key is an unexported type for keys defined in this package.
+	// 	// This prevents collisions with keys defined in other packages.
+	// 	type key int
+	//
+	// 	// userKey is the key for user.User values in Contexts. It is
+	// 	// unexported; clients use user.NewContext and user.FromContext
+	// 	// instead of using this key directly.
+	// 	var userKey key
+	//
+	// 	// NewContext returns a new Context that carries value u.
+	// 	func NewContext(ctx context.Context, u *User) context.Context {
+	// 		return context.WithValue(ctx, userKey, u)
+	// 	}
+	//
+	// 	// FromContext returns the User value stored in ctx, if any.
+	// 	func FromContext(ctx context.Context) (*User, bool) {
+	// 		u, ok := ctx.Value(userKey).(*User)
+	// 		return u, ok
+	// 	}
+	Value(key any) any
+	}
+  ```
+  一个Context携带了deadline、取消信号，还有其他值。
+- func Backgroud,`func Backgroud() Context`，返回一个non-nil的空Context，永远不会被取消，没有值也没有deadline。它通常由主函数、初始化和测试使用，并作为传入请求的顶级上下文。
+- func TODO, `func TODO() Context`，TODO 返回一个非零的空上下文。 当不清楚要使用哪个 Context 或它尚不可用时（因为周围的函数尚未扩展为接受 Context 参数），代码应使用 context.TODO。
+- func WithValue，`func WithValue(parent Context, key, val any) Context`，WithValue返回parent的副本，其中包含与key关联的val。仅将Context用于传输跨processes和API的请求范围数据，而不是用于传递可选参数给函数。提供的键必须是可比较的，并且不应是字符串类型或任何其他内置类型，以避免使用上下文的包之间发生冲突。 WithValue的用户应该定义自己的键类型。为了避免在赋值为空接口时时进行内存分配，上下文键通常具有具体类型struct{}。或者，导出的上下文键变量的静态类型应该是指针或接口。
   
   
