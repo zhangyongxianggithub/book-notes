@@ -46,3 +46,12 @@ func main() {
 	wg.Wait()
 }
 ```
+## type Cond
+```go
+type Cond struct {
+	// L is held while observing or changing the condition
+	L Locker
+	// contains filtered or unexported fields
+}
+```
+Cond实现了condition变量，等待或宣布事件发生的goroutine的集合点。每个Cond都有一个关联的Locker L(通常是*Mutex或*RWMutex)，在改变条件和调用Wait方法时必须保持它。
