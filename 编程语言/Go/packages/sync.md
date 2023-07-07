@@ -75,3 +75,14 @@ type Locker interface {
 }
 ```
 Locker表示一个可以lock/unlock的对象。
+## type Map
+```go
+type Map struct {
+	// contains filtered or unexported fields
+}
+```
+Map是一个类似map[any]any的结构但是是并发安全的，Loads、stores、deletes都是常量时间复杂度。Map类型是专门的。大多数代码应该使用普通的Go map类型+单独的锁定或协调，以获得更好的类型安全性，并更容易维护其他不变量以及map内容。Map类型主要用于2个场景:
+- 当给定键的条目仅写入一次但读取多次时，就像在只会增长的缓存中一样;
+- 当多个goroutine读取、写入和覆盖不相交的键集的条目时;
+
+在这2种场景中，Map的使用将会极大的减少锁的争用相比传统的Go map与Mutex/RWMutex。
