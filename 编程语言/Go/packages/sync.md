@@ -67,3 +67,11 @@ Cond实现了condition变量，等待或宣布事件发生的goroutine的集合�
   //... make use of condition ...
   c.L.Unlock()
   ```
+## type Locker
+```go
+type Locker interface {
+	Lock()
+	Unlock()
+}
+```
+Locker表示一个可以lock/unlock的对象。
