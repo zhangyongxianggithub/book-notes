@@ -54,4 +54,16 @@ type Cond struct {
 	// contains filtered or unexported fields
 }
 ```
-Cond实现了condition变量，等待或宣布事件发生的goroutine的集合点。每个Cond都有一个关联的Locker L(通常是*Mutex或*RWMutex)，在改变条件和调用Wait方法时必须保持它。
+Cond实现了condition变量，等待或宣布事件发生的goroutine的集合点。每个Cond都有一个关联的Locker L(通常是*Mutex或*RWMutex)，在改变条件和调用Wait方法时必须保持它。在Go的内存模型的术语中，Cond的Broadcast/Sinal调用始终发生在Wait调用之前。对于很多简单的场景，用户更好的使用channels（Broadcast类似closing a channle，Signal类似给channel发送事件）对于sync.Cond的更多的替代，可以参考[Roberto Clapis's series on advanced concurrency patterns](https://blogtitle.github.io/categories/concurrency/)以及[Bryan Mills's talk on concurrency patterns.](https://drive.google.com/file/d/1nPdvhB0PutEJzdCq5ms6UI58dp50fcAN/view)。
+- func NewCond: `func NewCond(l Locker) *Cond`，返回一个带有Locker l的新的Cond;
+- func (*Cond)Broadcast: `func (c *Cond)Broadcast()`，Broadcast唤醒所有在c上阻塞的协程。
+- func (*Cond)Signal: `func (c *Cond)Signal()`，唤醒在c上waiting的一个协程，`Signal()`不会影响协程的调度优先级。如果其他的协程尝试lock c.L，他们可能比之前waiting的协程优先唤醒;
+- func (*Cond)Wait(): `func (c *Cond)Wait()`，原子性的unlock c.L并将当前的协程休眠，重新唤醒执行时，lock c.L然后从Wait方法返回，与其他的系统不同，Wait只有被Broadcast/Sinal唤醒才能返回。因为c.L在Wait执行后是unclock的状态，当Wait方法返回时不能确定获得了锁，因此需要在一个循环中处理:
+  ```go
+  c.L.Lock()
+  for !condition() {
+    c.Wait()
+  }
+  //... make use of condition ...
+  c.L.Unlock()
+  ```
