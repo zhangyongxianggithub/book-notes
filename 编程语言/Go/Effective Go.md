@@ -90,4 +90,76 @@ codeUsing(f, d)
 # 函数
 ## Defer
 Go的Defer语句调度一个函数在执行return前执行(deferred function)，这是一种不寻常但有效的方法来处理诸如无论函数返回哪条路径都必须释放资源等情况。典型的例子是解锁Mutex或关闭文件。
+```go
+// Contents returns the file's contents as a string.
+func Contents(filename string) (string, error) {
+    f, err := os.Open(filename)
+    if err != nil {
+        return "", err
+    }
+    defer f.Close()  // f.Close will run when we're finished.
 
+    var result []byte
+    buf := make([]byte, 100)
+    for {
+        n, err := f.Read(buf[0:])
+        result = append(result, buf[0:n]...) // append is discussed later.
+        if err != nil {
+            if err == io.EOF {
+                break
+            }
+            return "", err  // f will be closed if we return here.
+        }
+    }
+    return string(result), nil // f will be closed if we return here.
+}
+```
+延迟函数调用有2个优势:
+- 它保证你不会忘记close，比如你加了一个条件分支return，可能忘记加close
+- close在open附近，比放在函数末尾更加清晰。
+
+传递给延迟函数的参数在defer执行时计算，不是延迟函数执行时计算。除了避免担心函数执行时变量值发生变化之外，这意味着单个延迟调用站点可以延迟多个函数执行。这是一个愚蠢的例子:
+```go
+for i := 0; i < 5; i++ {
+    defer fmt.Printf("%d ", i)
+}
+```
+延迟函数的执行采用的是后进先出的顺序。因此此代码将导致函数返回时打印4 3 2 1 0。 一个更合理的例子是通过程序跟踪函数执行的简单方法。我们可以编写几个简单的跟踪例程，如下所示:
+```go
+func trace(s string)   { fmt.Println("entering:", s) }
+func untrace(s string) { fmt.Println("leaving:", s) }
+
+// Use them like this:
+func a() {
+    trace("a")
+    defer untrace("a")
+    // do something....
+}
+```
+我们可以通过利用延迟执行时评估延迟函数的参数这一事实来做得更好。跟踪例程可以设置非跟踪例程的参数。这个例子:
+```go
+func trace(s string) string {
+    fmt.Println("entering:", s)
+    return s
+}
+
+func un(s string) {
+    fmt.Println("leaving:", s)
+}
+
+func a() {
+    defer un(trace("a"))
+    fmt.Println("in a")
+}
+
+func b() {
+    defer un(trace("b"))
+    fmt.Println("in b")
+    a()
+}
+
+func main() {
+    b()
+}
+```
+对于习惯于其他语言的块级资源管理的程序员来说，defer可能看起来很奇怪，但它最有趣和最强大的应用恰恰来自于它不是基于块而是基于函数的事实。在有关panic和recover的部分中，我们将看到其可能性的另一个示例。
