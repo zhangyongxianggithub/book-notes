@@ -87,5 +87,7 @@ if err != nil {
 }
 codeUsing(f, d)
 ```
-
+# 函数
+## Defer
+Go的Defer语句调度一个函数在执行return前执行(deferred function)，这是一种不寻常但有效的方法来处理诸如无论函数返回哪条路径都必须释放资源等情况。典型的例子是解锁Mutex或关闭文件。
 
