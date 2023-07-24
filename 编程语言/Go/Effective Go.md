@@ -165,4 +165,44 @@ func main() {
 对于习惯于其他语言的块级资源管理的程序员来说，defer可能看起来很奇怪，但它最有趣和最强大的应用恰恰来自于它不是基于块而是基于函数的事实。在有关panic和recover的部分中，我们将看到其可能性的另一个示例。
 # Data
 ## Allocation with new
-Go有2种分配原语，内置的函数new与make，他们职责不同并且以应用于不同的类型。new, 用于分配内存的函数，但是与其他语言中的new不同，它不初始化内存，只是zero它，也就是说，new(T)会为类型T的item分配0值，并且返回地址也就是类型*T，在Go的术语中，它返回类型T零值的指针;
+Go有2种分配原语，内置的函数new与make，他们职责不同并且以应用于不同的类型。new, 用于分配内存的函数，但是与其他语言中的new不同，它不初始化内存，只是zero它，也就是说，new(T)会为类型T的item分配0值，并且返回地址也就是类型*T，在Go的术语中，它返回类型T零值的指针;因为被new返回的内存都被0初始化了，在设计数据结构时安排可以使用每种类型的零值而无需进一步初始化是很有帮助的。这意味着，数据结构的用户可以可以直接创建一个结构体并直接使用。比如，bytes.Buffer的文档Buffer的0值是一个准备使用的空的buffer，类似的，sync.Mutex也没有一个明确的构造器或者初始化方法，它的0值定义为一个未锁的mutex。0值的属性也是可传递的，考虑下面的声明:
+```go
+type SyncedBuffer struct {
+    lock    sync.Mutex
+    buffer  bytes.Buffer
+}
+```
+这个类型之遥allocation/declaration之后就可以直接使用，下面的片段是正确的:
+```go
+p := new(SyncedBuffer)  // type *SyncedBuffer
+var v SyncedBuffer      // type  SyncedBuffer
+```
+## 构造器与文本初始化
+0值有时候还不够，需要一个构造器。正如在os包中的例子所示:
+```go
+func NewFile(fd int, name string) *File {
+    if fd < 0 {
+        return nil
+    }
+    f := new(File)
+    f.fd = fd
+    f.name = name
+    f.dirinfo = nil
+    f.nepipe = 0
+    return f
+}
+```
+上面的代码太多了，使用字面量初始化可以简化初始化过程
+```go
+func NewFile(fd int, name string) *File {
+    if fd < 0 {
+        return nil
+    }
+    f := File{fd, name, nil, 0}
+    return &f
+}
+```
+注意，与C不同，返回局部变量的地址是完全OK的，变量的存储空间在函数返回后并不会被收回，每次计算复合文字的地址时都会分配一个新的实例，因此我们可以将最后两行组合起来。
+```go
+ return &File{fd, name, nil, 0}
+```
