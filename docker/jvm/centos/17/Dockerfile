@@ -1,4 +1,4 @@
-from azul/zulu-openjdk-centos:11
+from --platform=linux/amd64 azul/zulu-openjdk-centos:17-jre
 label org.opencontainers.image.authors="zhangyongxiang@baidu.com"
 env TZ Asia/Shanghai
 run localedef -c -i zh_CN -f UTF-8 zh_CN.UTF-8
