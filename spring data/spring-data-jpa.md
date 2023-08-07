@@ -24,6 +24,43 @@ public interface CrudRepository<T, ID> extends Repository<T, ID> {
 }
 ```
 ## 定义查询方法
+## Defining Query Methods
+repo代理有2种方法来从方法名派生出查询:
+- 直接从方法名;
+- 手动指定
+可用的选项依赖底层使用存储中间件，然而，必须存在一个策略来决定查询如何生成。下一部分描述可用的选项
+### Query Lookup Strategies
+repo基础设施可以使用下面的策略来解析查询。使用XML配置方式，你可以在命名空间下通过query-lookup-strategy属性来配置策略。对于Java配置方式来说，你可以使用`@EnableJpaRepositories`注解的queryLookupStrategy属性来指定。特定的底层存储可能不支持某些策略:
+- `CREATE`，尝试从方法名构建查询，具体的方法就是从方法名中移除特定的前缀并根据方法名剩余的内容解析查询，可以阅读相信的信息[Query Creation](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-creation)
+- `USE_DECLARED_QUERY`，尝试查找一个声明的查询，如果没找到抛出异常。查询可以通过注解定义或者其他的方式定义。具体的信息可以参考各个存储模块的详细内容，如果在启动启动阶段没有找到查询，则启动失败。
+- `CREATE_IF_NOT_FOUND`，这是默认的策略，融合了上面2种策略，首先查找声明式查询，如果没有，基于方法名创建查询，这个策略是默认的策略，不需要显式的配置。可以通过方法名快速的定义查询，可以通过定义声明式查询来调整这些查询。
+### Query Creation
+查询构建机制是用来在实体上构建限制性的查询。下面的例子展示了如何构建查询:
+```java
+interface PersonRepository extends Repository<Person, Long> {
+
+  List<Person> findByEmailAddressAndLastname(EmailAddress emailAddress, String lastname);
+
+  // Enables the distinct flag for the query
+  List<Person> findDistinctPeopleByLastnameOrFirstname(String lastname, String firstname);
+  List<Person> findPeopleDistinctByLastnameOrFirstname(String lastname, String firstname);
+
+  // Enabling ignoring case for an individual property
+  List<Person> findByLastnameIgnoreCase(String lastname);
+  // Enabling ignoring case for all suitable properties
+  List<Person> findByLastnameAndFirstnameAllIgnoreCase(String lastname, String firstname);
+
+  // Enabling static ORDER BY for a query
+  List<Person> findByLastnameOrderByFirstnameAsc(String lastname);
+  List<Person> findByLastnameOrderByFirstnameDesc(String lastname);
+}
+```
+解析查询方法名会将方法名分解成subject与predicate，第一部分定义了查询的subject(find..By..,exists...By)，第二部分构成了predicate，subject可以包含更多的表达式，find/By之间的任何的文本都被认为是可描述的字段，也可以是结果限定关键词比如Distinct，或者是First/Top关键词。附录中包含了全部的[subject关键词](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#appendix.query.method.subject)与[查询方法predicate关键词](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#appendix.query.method.predicate)第一个遇到的By是一个分割符，意味着criteria predicate的开始，你可以在实体属性上定义条件，并用And/Or拼接。解析方法的实际结果取决于您为其创建查询的持久性存储。然而，有一些一般性的事情需要注意:
+- 表达式通常是属性遍历与可连接的运算符相结合。您可以使用AND和OR组合属性表达式。您还可以获得对属性表达式的运算符（例如Between、LessThan、GreaterThan和Like）的支持。支持的运算符可能因数据存储而异，因此请参阅参考文档的相应部分;
+- 方法解析器支持IgnoreCase标志；
+- 你可以使用OrderBy指定排序，为了支持动态排序，你可以参考[Paging, Iterating Large Results, Sorting](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.special-parameters)
+### Property Expressions
+
 ### 返回集合或者迭代器
 集合类型除了返回标准的Iterable，List或者Set，也可以返回Streamable或者Vavr类型，
 ## Spring Data拓展
@@ -51,11 +88,13 @@ class WebConfiguration {}
 ```
 
 # 参考文档
-这一章主要讲解spring data jpa的特点，这建立在核心概念“仓库”上，你需要充分的理解这里讲述的基本概念。
+这一章主要讲解spring data jpa的特点，这建立在核心概念Repository上，你需要充分的理解这里讲述的基本概念。
 ## 引言
-这一个节讲述jpa的基本动心
+这一个节讲述jpa配置的基本核心
 - XML配置，忽略
-- 基于注解的配置，代码如下：
+- 基于注解的配置
+
+Java配置方式的代码如下:
 ```java
 @Configuration
 @EnableJpaRepositories
@@ -91,20 +130,53 @@ class ApplicationConfig {
   }
 }
 ```
-你必须创建一个LocalContainerEntityManagerFactoryBean，不要直接创建EntityManagerFactory，因为前面比后面自动加入了异常翻译机制。上面的配置类，使用呢HSQL作为数据库，然后设置了一个EntityManagerFactory，并使用Hibernate作为简单的持久化提供者，最后的基础组件是JpaTransactionManager，最后，例子使用@EnableJpaRepositories注解激活了JPA的仓库功能，如果没有指定包，默认是配置类所在的包。
-- 引导模式，默认情况下，JPA仓库既是Spring管理的bean，它们是单例的声明周期并且初始化比较早。在启动过程中，它们就被EntityManager使用作为验证与元数据分析工作，Spring支持EntityManagerFactory的后台初始化，因为EntityManagerFactory的初始化比较耗时，为了让后台初始化有效，我们需要确保JPA仓库在比较后面初始化。Spring data 2.1版本后，你可以通过注解或者XML的方式配置BootstrapMode，可能的值如下：
-    - DEFAULT，早期初始化，除非用@lazy指定，如果存在依赖，也会先初始化。
-    - LAZY，所有的repo都是懒加载的，注入其他bean的都是懒加载的代理Bean，这意味着，如果只是作为一个field注入而没有用到repo的方法，repo就没有真正的初始化，repo只有在第一次使用时才会实例化并验证。
-    - DEFERRED，模式与LAZY差不多，但是仓库在收到ContextRefreshEvent事件后会被初始化，所以，仓库会在应用启动前被验证。
-- 建议，如果你的JPA启动不是异步的，那么用默认模式，如果是异步模式，那么用DEFERRED模式，因为JPA仓库实例化只会等待EntityManagerFactory设置完之后，它会确保在程序启动前，所有的仓库得到合理的初始化与验证，LAZY模式主要用于测试场景与本地开发的场景，只要你确定你的仓库是完美启动的，或者你只要测试仓库中的一个或者某个，不需要其他仓库实例化，这样可以节省启动的时间。
+你必须创建一个`LocalContainerEntityManagerFactoryBean`，不要直接创建`EntityManagerFactory`，因为前面比后面自动加入了异常翻译机制。上面的配置类，使用HSQL作为数据库，然后设置了一个`EntityManagerFactory`，并使用Hibernate作为简单的持久化中间件提供者，最后的基础组件是`JpaTransactionManager`，最后，例子使用`@EnableJpaRepositories`注解激活了JPA的仓库功能，它具有与XML配置方式相同的属性，如果没有配置base package，默认是配置类所在的包。
+### 引导模式
+默认情况下，JPA仓库既是Spring管理的bean，它们是单例的生命周期并且初始化比较早。在启动过程中，它们就被`EntityManager`使用用于验证与元数据分析工作，Spring框架支持`EntityManagerFactory`的后台初始化，因为`EntityManagerFactory`的初始化比较耗时，为了让后台初始化有效，我们需要确保JPA仓库尽可能晚的初始化。Spring data JPA 2.1版本后，你可以通过注解或者XML的方式配置BootstrapMode，可能的值如下：
+- DEFAULT(默认的启动模式)，早期初始化，除非用@lazy指定，如果存在依赖，也会先初始化。
+- LAZY，所有的repo都是懒加载的，注入其他bean的都是懒加载的代理Bean，这意味着，如果只是作为一个field注入而没有用到repo的方法，repo就没有真正的初始化，repo只有在第一次使用时才会实例化并验证。
+- DEFERRED，模式与LAZY差不多，但是仓库在收到ContextRefreshEvent事件后会被初始化，所以，仓库会在应用启动前被验证。
+
+### 建议
+如果你的JPA启动不是异步的，那么用默认模式，如果是异步模式，那么用DEFERRED模式，因为JPA仓库实例化只会等待EntityManagerFactory设置完之后，它会确保在程序启动前，所有的仓库得到合理的初始化与验证，LAZY模式主要用于测试场景与本地开发的场景，只要你确定你的仓库是完美启动的，或者你只要测试仓库中的一个或者某个部分，不需要其他仓库实例化，这样可以节省启动的时间。
 ## 持久化实体
-存储实体通过save()方法，底层用的EntityManager，如果实体是第一次存储，EntityManager会使用persist()方法，否则使用merge()方法。
-判断实体是否是新的，有3种方法，可以看文档。
+存储实体通过`save()`方法，底层用的`EntityManager`，如果实体是第一次存储，`EntityManager`会使用`persist()`方法，否则使用`merge()`方法。
+### Entity State-detection Strategies
+SDJ提供了3种策略来检测一个entity是不是新的:
+- Version-Property and Id-Property inspection (default):先检测Version-Property，如果存在且为null，就认为实体是新的，然后检测ID属性，如果为null，就认为是新的实体，否则不是新的实体
+- 实现`Persistable`: 实现`isNew()`方法来检测;
+- 实现`EntityInformation`: 创建自定义的`JpaRepositoryFactory`bean，覆盖`getEntityInformation(…)`方法来实现
+
+选项1不适合人工分配主键的情况，因为主键任何时候都不是空的，一种通用的做法是在基类中声明一个transient标志字段来表示是否是新的实体并使用JPA的生命周期回调方法来改变值:
+```java
+@MappedSuperclass
+public abstract class AbstractEntity<ID> implements Persistable<ID> {
+
+  @Transient
+  private boolean isNew = true; // 声明一个标志，Transient表示不会被存储到数据库
+
+  @Override
+  public boolean isNew() {
+    return isNew; // 实现了Persistable.isNew()接口，这样SDJ知道什么时候调用persist或者merge
+  }
+
+  @PrePersist // 声明一个回调方法，标识在调用save后就是一个已经存在的实体
+  @PostLoad
+  void markNotNew() {
+    this.isNew = false;
+  }
+
+  // More code…
+}
+```
 ## 查询方法
 JPA模块支持手动以一个字符串的方式定义一个查询或者从方法名衍生。
-- 查询查找策略，JPA支持2种查询方式，一种是直接执行SQL，一种是SQL通过方法名字衍生出来的SQL；衍生查询会使用很多谓词来处理方法的参数，这意味着如果参数里面出现了SQL的敏感词，会使用@EnableJpaRepositories里面的escapeCharacter转义。
-- 声明查询，虽然通过方法名生成查询很方便，但是有些场景下也不好，比如，方法名解析不支持想用的一些SQL关键字比如regexp操作，或者生成的方法名太丑了，你可以使用命名查询或者使用@Query方式。
-- 查询创建，通过方法名生成查询的例子在上面，下面是一个例子
+### Query Lookup Strategies
+查询查找策略，JPA支持2种查询方式，一种是直接执行SQL，一种是SQL通过方法名字衍生出来的SQL，带有下面谓词的派生查询`IsStartingWith, StartingWith, StartsWith, IsEndingWith, EndingWith, EndsWith, IsNotContaining, NotContaining, NotContains, IsContaining, Containing, Contains`的方法中的参数会被转义处理，比如like中的通配符，会被转义，转义字符可以通过`@EnableJpaReposities`注解的escapeCharacter配置
+### Declared Queries
+虽然通过方法名生成查询很方便，但是有些场景下也不好，比如，方法名解析不支持想用的一些SQL关键字比如regexp操作，或者生成的方法名太丑了，你可以使用命名查询或者使用`@Query`方式。
+### 查询创建
+通过方法名生成查询的例子在上面，下面是一个例子
 ```java
 public interface UserRepository extends Repository<User, Long> {
 
@@ -112,12 +184,16 @@ public interface UserRepository extends Repository<User, Long> {
 }
 ```
 我们使用JPA criteria API创建了一个查询，本质上，上面的代码会翻译成下面的查询`select u from User u where u.emailAddress = ?1 and u.lastname = ?2`,Spring Data JPA会做属性检查，并且遍历嵌套的属性，正如在[Property Expressions](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-property-expressions)章节。
-我们使用JPA的规则创建了一个查询，但是本质上，使用的查询是
-```sql
-select u from User u where u.emailAddress = ?1 and u.lastname = ?2
+下面的列表描述了JPA支持的SQL关键词翻译规则，参考文档上有，不写了。In/Not In支持任何Collection的子类作为参数，也支持数组与可变参数，DISTINCT比较难以处理，可能会产生非预期的结果，比如，`select distinct u from User u`相比`select distinct u.lastname from User u`会产生完全不同的结果，第一种情况，因为User.id必然不会相同，所以不会存在任何重复，第二个只是lastname，`countDistinctByLastname(String lastname)`也会产生非预期的结果，SDJ会翻译为`select count(distinct u.id) from User u where u.lastname = ?1`等同于`countByLastname(String lastname)`，使用distinct最好使用自定义查询并且使用投影来获取结果
+### 使用JPA命名查询
+```java
+@Entity
+@NamedQuery(name = "User.findByEmailAddress",
+  query = "select u from User u where u.emailAddress = ?1")
+public class User {
+}
 ```
-下面的列表描述了JPA支持的SQL关键词翻译规则，参考文档上有，不写了。
-- 使用JPA命名查询，使用@NamedQuery或者@NameNativeQuery，下面的例子都使用了<named-query/>或者@NamedQuery注解，这些查询必须以JPA查询语言的方式定义，当然，也可以使用<named-native-query/>或者@NamedNativeQuery注解，这些元素可以让你以native SQL的方式定义查询，但是这样做丧失了数据库平台无关性。@NamedQuery的例子
+使用@NamedQuery或者@NameNativeQuery，下面的例子都使用了<named-query/>或者@NamedQuery注解，这些查询必须以JPA查询语言的方式定义，当然，也可以使用<named-native-query/>或者@NamedNativeQuery注解，这些元素可以让你以native SQL的方式定义查询，但是这样做丧失了数据库平台无关性。@NamedQuery的例子
 ```java
 @Entity
 @NamedQuery(name = "User.findByEmailAddress",
@@ -135,7 +211,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 }
 ```
 Spring会尝试解析方法调用是否与命名查询相匹配，名字的匹配方式是domain classname.method name，当名字匹配时，接口中的findByEmailAddress方法就不会衍生SQL了，而是使用定义的命名查询。
-- 使用@Query，优先级比@NamedQuery高
+### 使用@Query
+优先级比@NamedQuery高,机制都一样。
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -143,7 +220,52 @@ public interface UserRepository extends JpaRepository<User, Long> {
   User findByEmailAddress(String emailAddress);
 }
 ```
-like的高级用法
+#### 应用QueryRewriter
+有时候，你可以在查询发送到`EntityManager`前重写查询，也就是你可以对最后的语句改写:
+```java
+public interface MyRepository extends JpaRepository<User, Long> {
+
+		@Query(value = "select original_user_alias.* from SD_USER original_user_alias",
+                nativeQuery = true,
+				queryRewriter = MyQueryRewriter.class)
+		List<User> findByNativeQuery(String param);
+
+		@Query(value = "select original_user_alias from User original_user_alias",
+                queryRewriter = MyQueryRewriter.class)
+		List<User> findByNonNativeQuery(String param);
+}
+```
+上面的例子展示了native sql与JPQL查询使用了相同的QueryRewriter，在这种场景下，SDJ会寻找这个类型的bean。
+```java
+public class MyQueryRewriter implements QueryRewriter {
+
+     @Override
+     public String rewrite(String query, Sort sort) {
+         return query.replaceAll("original_user_alias", "rewritten_user_alias");
+     }
+}
+```
+你必须保证`QueryRewriter`注册到Application Context中的一个bean，要么使用`@Component`注解，要么使用`@Bean`。repo可以自己实现这个接口:
+```java
+public interface MyRepository extends JpaRepository<User, Long>, QueryRewriter {
+
+		@Query(value = "select original_user_alias.* from SD_USER original_user_alias",
+                nativeQuery = true,
+				queryRewriter = MyRepository.class)
+		List<User> findByNativeQuery(String param);
+
+		@Query(value = "select original_user_alias from User original_user_alias",
+                queryRewriter = MyRepository.class)
+		List<User> findByNonNativeQuery(String param);
+
+		@Override
+		default String rewrite(String query, Sort sort) {
+			return query.replaceAll("original_user_alias", "rewritten_user_alias");
+		}
+}
+```
+
+#### like的高级用法
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -151,6 +273,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
   List<User> findByFirstnameEndsWith(String firstname);
 }
 ```
+在这个例子中，LIKE标识符%会被识别到，查询会被翻译为一个有效的JPQL查询。
+#### Native Queries
 @Query中的nativeQuery标志可以标志语句是否是一个完全的SQL
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -159,7 +283,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
   User findByEmailAddress(String emailAddress);
 }
 ```
-使用本地查询完成分页的功能（但是不支持分页）
+SDJ不支持native sql的动态排序，你可以声明native query来支持分页或者排序，使用本地查询完成分页的功能（但是不支持分页）
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -169,7 +293,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
   Page<User> findByLastname(String lastname, Pageable pageable);
 }
 ```
-- 排序,必须提供PageRequest或者Sort参数，主要是只用里面的Order实例，Order里面的属性必须是domain中的属性，或者属性的别名。
+### 排序
+必须提供PageRequest或者Sort参数，主要是只用里面的Order实例，Order里面的属性必须是domain中的属性，或者属性的别名。
 @Query与Sort组合使用，可以在排序中使用函数，如下：
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -186,6 +311,8 @@ repo.findByAndSort("stark", Sort.by("LENGTH(firstname)"));
 repo.findByAndSort("targaryen", JpaSort.unsafe("LENGTH(firstname)")); 
 repo.findByAsArrayAndSort("bolton", Sort.by("fn_len"));               
 ```
+### Scrolling Large Query Results
+
 - 使用命名参数，默认使用基于位置的参数，也可以使用@Param注解给定参数的名字，如下：
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
