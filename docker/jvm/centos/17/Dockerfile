@@ -1,14 +1,14 @@
-from --platform=linux/amd64 azul/zulu-openjdk-centos:17-jre
-label org.opencontainers.image.authors="zhangyongxiang@baidu.com"
-env TZ Asia/Shanghai
-run localedef -c -i zh_CN -f UTF-8 zh_CN.UTF-8
-env LC_ALL zh_CN.utf8
-env LANG zh_CN.UTF-8
-env LANGUAGE zh_CN:zh
-run echo 'LANG=zh_CN.UTF-8' > /etc/locale.conf
-run echo 'Asia/Shanghai' > /etc/timezone
-run ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-copy tini /usr/bin/
-run chmod a+x /usr/bin/tini
-cmd ["java", "-version"]
-entrypoint ["tini", "-v", "-g", "--"]
+FROM --platform=linux/amd64 azul/zulu-openjdk-centos:17-jre
+LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
+ENV TZ Asia/Shanghai
+RUN localedef -c -i zh_CN -f UTF-8 zh_CN.UTF-8
+ENV LC_ALL zh_CN.utf8
+ENV LANG zh_CN.UTF-8
+ENV LANGUAGE zh_CN:zh
+RUN echo 'LANG=zh_CN.UTF-8' > /etc/locale.conf
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY tini /usr/bin/
+RUN chmod a+x /usr/bin/tini
+CMD ["java", "-version"]
+ENTRYPOINT ["tini", "-v", "-g", "--"]
