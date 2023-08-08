@@ -221,7 +221,11 @@ interface PersonRepository extends Repository<Person, Long> {
 - 方法解析器支持IgnoreCase标志；
 - 你可以使用OrderBy指定排序，为了支持动态排序，你可以参考[Paging, Iterating Large Results, Sorting](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.special-parameters)
 ### Property Expressions
-
+属性表达式只能是实体的直接属性，在启动时就会检查属性是不是实体的属性，你也可以定义内嵌属性，下面的方法签名:
+```java
+List<Person> findByAddressZipCode(ZipCode zipCode);
+```
+Person下面的Address具有属性ZipCode，方法会查找属性名x.address.zipCode，解析算法解析AddressZipCode作为属性，并且检查实体是否具有给定的属性，如果算法成功就是使用这个属性，如果不成功，算法会根据驼峰格式从右向左分解为2个头尾字符串，试图寻找相关的属性，在我们的例子中，会被分解为AddressZip与Code，如果算法找到AddressZip，
 ### 返回集合或者迭代器
 集合类型除了返回标准的Iterable，List或者Set，也可以返回Streamable或者Vavr类型，
 ## Spring Data拓展
