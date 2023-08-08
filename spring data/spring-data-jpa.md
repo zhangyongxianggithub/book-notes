@@ -295,7 +295,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 ```
 ### 排序
 必须提供PageRequest或者Sort参数，主要是只用里面的Order实例，Order里面的属性必须是domain中的属性，或者属性的别名。
-@Query与Sort组合使用，可以在排序中使用函数，如下：
+@Query与Sort组合使用，可以在排序中使用函数，默认情况下，SDJ会拒绝任何包含函数调用的Order，可以使用`JpaSort.unsafe`来添加坑的不安全的排序。如下：
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -306,14 +306,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
   List<Object[]> findByAsArrayAndSort(String lastname, Sort sort);
 }
 
-repo.findByAndSort("lannister", Sort.by("firstname"));                
-repo.findByAndSort("stark", Sort.by("LENGTH(firstname)"));            
-repo.findByAndSort("targaryen", JpaSort.unsafe("LENGTH(firstname)")); 
-repo.findByAsArrayAndSort("bolton", Sort.by("fn_len"));               
+repo.findByAndSort("lannister", Sort.by("firstname")); // 有效的排序表达式               
+repo.findByAndSort("stark", Sort.by("LENGTH(firstname)")); // 无效的排序表达式，包含函数调用，抛出异常           
+repo.findByAndSort("targaryen", JpaSort.unsafe("LENGTH(firstname)")); // 有效的排序表达式，包含明确的unsafe order
+repo.findByAsArrayAndSort("bolton", Sort.by("fn_len")); // 有效的排序表达式，包含别名函数              
 ```
 ### Scrolling Large Query Results
-
-- 使用命名参数，默认使用基于位置的参数，也可以使用@Param注解给定参数的名字，如下：
+当遇到大数据集时，滚动可以有效的处理这种情况，不需要一次性把所有的结果都加入到内存中。你有多种办法来处理大量的查询结果。
+- Paging
+- Offset scrolling，这是比paging更轻量级的变体，因为不需要计算总数
+- Keyset scrolling，加入索引机制的offset scrolling
+  
+参考[which method to use best](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.scrolling.guidance)，你可以在查询方法、QBE、Querydsl3种机制上使用Scroll API。直接定义查询的Scroll目前还不支持，使用存储过程查询方法也不支持scrolling
+### 使用命名参数
+默认使用基于位置的参数绑定，在重构时容易出错，为了解决这个问题，也可以使用@Param注解给定参数的名字并在查询中绑定，如下：
 ```java
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -323,8 +329,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 }
 ```
 如果你使用了java8的-parameters功能，可以不用使用@Param
-- SpEL表达式
-  
+### SpEL表达式
 从Spring Data JPA 1.4版本开始，我们支持在@Query注解中手动定义的查询使用限制的SpEL模板表达式，根据正在运行的查询，这些表达式会在一个预定义的变量集合上执行解析，Spring Data JPA支持一个叫做entityName的变量，它的用法是
 ```sql
 select x from #{#entityName} x
