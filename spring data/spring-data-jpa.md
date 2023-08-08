@@ -1,28 +1,194 @@
 [TOC]
 # 前言
 Spring data jpa实现了JPA（Java Persistence API），简化了数据库应用的开发工作。
-# Spring Data如何工作
-Spring data抽象的目标就是为各种各样的持久存储减少数据访问的模板代码。
+## Project Metadata
+- Version control: [https://github.com/spring-projects/spring-data-jpa](https://github.com/spring-projects/spring-data-jpa);
+- Bugtracker: [https://github.com/spring-projects/spring-data-jpa/issues](https://github.com/spring-projects/spring-data-jpa/issues);
+- Milestone repository: [https://repo.spring.io/milestone](https://repo.spring.io/milestone);
+- Snapshot repository: [ https://repo.spring.io/snapshot]( https://repo.spring.io/snapshot)
+# Upgrading Spring Data
+如何升级SDJ，在项目的[wiki](https://github.com/spring-projects/spring-data-commons/wiki)中，点击[release notes section](https://github.com/spring-projects/spring-data-commons/wiki#release-notes)中的链接来查找你想要升级的版本。升级步骤总是在发布note的前面，如果你落后了多个release版本，请确保你知道中间版本更新的内容。
+# Dependencies
+由于Spring Data不同模块的创始时间不同，他们有不同的major/minor版本号。可以通过Spring Data Release Train BOM来获取所有兼容的Spring Data模块版本。在一个maven项目中，需要在<dependencyManagement/>中声明这个依赖。
+```xml
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-bom</artifactId>
+      <version>2023.0.2</version>
+      <scope>import</scope>
+      <type>pom</type>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+```
+当前的release train版本是`2023.0.2`，train version使用模式为YYYY.MINOR.MICRO格式的日历版本号表示法。GA/service release使用普通的日历表示法版本号，类似`${calver}-${modifier}`这样的版本号格式是其他的版本的版本号。modifier可以是下面的符号:
+- SNAPSHORT: 当前的snapshots
+- M1、M2: Milestones版本
+- RC1、RC2: Release candidates
+你可以在[Spring Data examples repository](https://github.com/spring-projects/spring-data-examples/tree/main/bom)找到例子。你可以在<dependencies/>中声明你想要的Spring Data模块且不需要指定版本号。
+```xml
+<dependencies>
+  <dependency>
+    <groupId>org.springframework.data</groupId>
+    <artifactId>spring-data-jpa</artifactId>
+  </dependency>
+<dependencies>
+```
+## Dependency Management with Spring Boot
+Spring Boot会为你选择最近一个版本的Spring Data模块。如果你想要升级一个更新的版本，可以通过属性`spring-data-bom.version`设置你想要使用的train版本，可以参考Spring Boot相关的文档。
+## Spring Framework
+Spring Data模块的当前版本需要Spring Framework 6.0.11+版本。
+# Spring Data Repositories如何工作
+Spring data抽象的目标就是为各种各样的持久存储减少数据访问的样本代码。本章解释了Spring Data Repositories的核心概念与接口。本章的内容来自Spring Data Commons。它使用JPA相关的配置与代码。如果你想要使用XML配置，你应该采用XML命名空间声明。
 ## 核心概念
-核心接口就是Repository，这个主要就是一个标记接口，细致化的CRUD要使用CrudRepository。
+核心接口抽象就是`Repository`，它接受2个范型参数，一个是domain class，一个是domain class中的标识符类型，这个主要就是一个标记接口，细致化的CRUD要使用`CrudRepository/ListCrudRepository`。
 ```java
 public interface CrudRepository<T, ID> extends Repository<T, ID> {
 
-  <S extends T> S save(S entity);      
+  <S extends T> S save(S entity); // 保存给定的实体     
 
-  Optional<T> findById(ID primaryKey); 
+  Optional<T> findById(ID primaryKey); // 根据给定的ID返回实体
 
-  Iterable<T> findAll();               
+  Iterable<T> findAll(); // 返回所有的实体              
 
-  long count();                        
+  long count(); // 返回实体的数量                       
 
-  void delete(T entity);               
+  void delete(T entity); // 删除实体              
 
-  boolean existsById(ID primaryKey);   
+  boolean existsById(ID primaryKey); //给定id的实体是否已存在  
 
   // … more functionality omitted.
 }
 ```
+接口中的方法声明就是CRUD方法，`ListCrudRepository`与`CrudRepository`中的方法相同，只是返回`List`而不是`CrudRepository`中的`Iterable`。我们也提供特定持久化存储相关的抽象，必入`JpaRepository`或者`MongoRepository`，这些接口扩展自`CrudRepository`接口，暴露了存储相关的操作。除了`CrudRepository`接口，`PagingAndSortingRepository`抽象添加了额外的方法，提供了分页相关的能力。
+```java
+public interface PagingAndSortingRepository<T, ID>  {
+
+  Iterable<T> findAll(Sort sort);
+
+  Page<T> findAll(Pageable pageable);
+}
+```
+```java
+PagingAndSortingRepository<User, Long> repository = // … get access to a bean
+Page<User> users = repository.findAll(PageRequest.of(1, 20));
+```
+除了分页之外，滚动还提供了更细粒度的访问来迭代较大结果集的块.除了查询方法之外，还可以使用计数查询和删除查询的查询派生。 以下列表显示了派生计数查询的接口定义：
+```java
+interface UserRepository extends CrudRepository<User, Long> {
+  long countByLastname(String lastname);
+}
+```
+下面的例子展示了一个派生删除查询的接口定义:
+```java
+interface UserRepository extends CrudRepository<User, Long> {
+  long deleteByLastname(String lastname);
+  List<User> removeByLastname(String lastname);
+}
+```
+## 查询方法
+声明查询需要4个步骤:
+- 声明一个接口，继承自Repository
+  ```java
+  interface PersonRepository extends Repository<Person, Long> { … }
+  ```
+- 在接口内声明查询方法
+  ```java
+  interface PersonRepository extends Repository<Person, Long> {
+    List<Person> findByLastname(String lastname);
+  }
+  ```
+- 设置Spring让其创建接口的代理实现，可以通过JavaConfig/XML配置的方式实现
+  ```java
+  import org.springframework.data.….repository.config.EnableJpaRepositories;
+
+  @EnableJpaRepositories
+  class Config { … }
+  ```
+  JavaConfig的配置方式没有明确的指定一个包，默认使用注解类所在的包，如果要自定义扫描的包，使用`@EnableXXXXRepositories`注解的basePackage属性。
+- 注入repository
+  ```java
+  class SomeClient {
+    private final PersonRepository repository;
+    SomeClient(PersonRepository repository) {
+      this.repository = repository;
+    }
+    void doSomething() {
+      List<Person> persons = repository.findByLastname("Matthews");
+    }
+  }
+  ```
+## Defining Repositories Interface
+定义一个接口，先要继承自`Repository`，并且已经有了domain class还有ID。
+### Fine-tuning Repository Definition
+您可以通过多种方式开始使用repository接口。通常就是继承`CrudRepository`或者`ListCrudRepository`，如果你使用reactive  store，你可以继承`ReactiveCrudRepository`或者`RxJava3CrudRepository`，这依赖你正在使用哪个reactive framework。如果你使用Kotlin，你也可以继承`CoroutineCrudRepository`，它使用了Kotlin的协程。另外，你也可以继承`PagingAndSortingRepository, ReactiveSortingRepository, RxJava3SortingRepository, CoroutineSortingRepository`。如果你不想要继承Spring Data的接口，你可以使用`@RepositoryDefinition`注解到你自己的接口。如果你的应用中有很多相同方法集的repositories，你可以定义个父接口，父接口必须使用`@NoRepsitoryBean`注解，它会阻止Spring Data创建一个它的代理实例，因为这里没有domain class，所以创建会失败。下面是一个例子:
+```java
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends Repository<T, ID> {
+  Optional<T> findById(ID id);
+  <S extends T> S save(S entity);
+}
+interface UserRepository extends MyBaseRepository<User, Long> {
+  User findByEmailAddress(EmailAddress emailAddress);
+}
+```
+### Using Repositories with Multi Spring Data Modules
+在应用程序中使用单独的Spring Data模块使事情变得简单，因为定义范围内的所有存储库接口都绑定到一个Spring Data模块。有时，应用程序需要使用多个Spring Data模块。在这种情况下，一个Repository定义必须区分持久性底层存储。当它在类路径上检测到多个repository工厂时，Spring Data会进入严格的repository配置模式。严格配置使用respository或domain类的详细信息来决定repository绑定到哪个Spring Data模块:
+- 如果repository继承自模块特有的repository，它是一个考虑因素。
+- 如果domain class被模块特有的注解指定，它也是一个因素，Spring Data模块接受第三方注解。或者自己的注解。
+
+下面例子展示了使用模块特有特性接口的repository的例子:
+```java
+interface MyRepository extends JpaRepository<User, Long> { }
+
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends JpaRepository<T, ID> { … }
+
+interface UserRepository extends MyBaseRepository<User, Long> { … }
+```
+下面的例子使用范型接口的例子
+```java
+interface AmbiguousRepository extends Repository<User, Long> { … }
+
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends CrudRepository<T, ID> { … }
+
+interface AmbiguousUserRepository extends MyBaseRepository<User, Long> { … }
+```
+下面的例子展示了domain class注解的例子
+```java
+interface PersonRepository extends Repository<Person, Long> { … }
+
+@Entity
+class Person { … }
+
+interface UserRepository extends Repository<User, Long> { … }
+
+@Document
+class User { … }
+```
+`PersonRepository`引用了`Person`，使用了JPA的`@Entity`注解，所以这个repo将会绑定到Spring Data JPA，UserRepository引用了User，使用了Spring Data MongoDB的`@Document`注解。下面是一个不好的例子:
+```java
+interface JpaPersonRepository extends Repository<Person, Long> { … }
+
+interface MongoDBPersonRepository extends Repository<Person, Long> { … }
+
+@Entity
+@Document
+class Person { … }
+```
+上面的例子中，domain class同时使用了JPA与Spring Data MongoDB，它定义了2个repo，一个是JPA使用的，一个是MongoDB使用的。Spring Data不能区分repo，这会导致未定义的行为。[Repository type details](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.multiple-modules.types)和[distinguishing domain class annotations](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.multiple-modules.annotations)是用来严格的repo配置来表示repo属于哪个Spring Data模块。在同一域类型上使用多个特定存储模块的注释是可以的，并且可以跨多种持久性技术重用域类型。但是，Spring Data将无法再确定repo绑定到哪一个模块。最终区分repo的方式是限定repo的base package，base package定义了扫描repo接口定义的开始点，下面定义是一个base package的例子:
+```java
+@EnableJpaRepositories(basePackages = "com.acme.repositories.jpa")
+@EnableMongoRepositories(basePackages = "com.acme.repositories.mongo")
+class Configuration { … }
+```
+## Defining Query Methods
+2种生成查询的方式:
+- 通过方法名
+- 手动指定查询
 ## 定义查询方法
 ## Defining Query Methods
 repo代理有2种方法来从方法名派生出查询:
