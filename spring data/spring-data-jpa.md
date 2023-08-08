@@ -186,11 +186,6 @@ class Person { … }
 class Configuration { … }
 ```
 ## Defining Query Methods
-2种生成查询的方式:
-- 通过方法名
-- 手动指定查询
-## 定义查询方法
-## Defining Query Methods
 repo代理有2种方法来从方法名派生出查询:
 - 直接从方法名;
 - 手动指定
