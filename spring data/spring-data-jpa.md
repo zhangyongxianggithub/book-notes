@@ -521,23 +521,18 @@ public abstract class AbstractMappedType {
   …
   String attribute
 }
-
 @Entity
 public class ConcreteType extends AbstractMappedType { … }
-
 @NoRepositoryBean
 public interface MappedTypeRepository<T extends AbstractMappedType>
   extends Repository<T, Long> {
-
   @Query("select t from #{#entityName} t where t.attribute = ?1")
   List<T> findAllByAttribute(String attribute);
 }
-
 public interface ConcreteRepository
   extends MappedTypeRepository<ConcreteType> { … }
-
 ```
-在上面的例子中，MappedTypeRepository接口是所有继承于AbstractMappedType的领域类型的共同的parent接口，它也定义了通用的findAllByAttribye(…)方法，可以在专门的repo接口上使用这个方法，如果你现在调用ConcreteRepository的findAllByAttribye方法，生成的查询是`select t from ConcreteType t where t.attribute = ?1`，SpEL表达式也可以用来处理方法参数，在这种SpEL表达式中，entity name不允许使用，但是可以方法的参数，可以通过参数的名字或者索引使用参数，如下面的例子所示
+在上面的例子中，`MappedTypeRepository`接口是所有继承于`AbstractMappedType`的domain class的共同的父接口，它也定义了通用的`findAllByAttribye(…)`方法，可以在专门的repo接口上使用这个方法，如果你现在调用`ConcreteRepository`的`findAllByAttribye`方法，生成的查询是`select t from ConcreteType t where t.attribute = ?1`，SpEL表达式也可以用来处理方法参数，在这种SpEL表达式中，entity name不允许使用，但是可以使用方法的参数，可以通过参数的名字或者索引使用参数，如下面的例子所示
 ```java
 @Query("select u from User u where u.firstname = ?1 and u.firstname=?#{[0]} and u.emailAddress = ?#{principal.emailAddress}")
 List<User> findByFirstnameAndCurrentUserWithCustomQuery(String firstname);
@@ -547,14 +542,43 @@ List<User> findByFirstnameAndCurrentUserWithCustomQuery(String firstname);
 @Query("select u from User u where u.lastname like %:#{[0]}% and u.lastname like %:lastname%")
 List<User> findByLastnameWithSpelExpression(@Param("lastname") String lastname);
 ```
-当使用like条件时，like的值可能来自于不安全的输入，所以应该被转义处理防止它们包含一些通配符或者关键词，这样攻击者可能会访问到比正常情况下更多的数据；为了处理这种情况，在SpEL上下文中可以使用escape(Strring)方法，它在第一个参数中的所有存在_ 和 %字符的实例前面加上第二个参数指定的单个字符。在JPQL与SQL中，escape与like表达式的这种用法都允许使用，这保证了绑定参数的简洁可用。
-```
+当使用like条件时，like的值可能来自于不安全的输入，所以应该被转义处理防止它们包含一些通配符或者关键词，这样攻击者可能会访问到比正常情况下更多的数据；为了处理这种情况，在SpEL上下文中可以使用`escape(Strring)`方法，它在第一个参数中的所有_和%字符前面加上第二个参数指定的单个字符。在JPQL与SQL中，escape与like表达式相结合保证了绑定参数的简洁可用。如下面的例子:
+```java
 @Query("select u from User u where u.firstname like %?#{escape([0])}% escape ?#{escapeCharacter()}")
 List<User> findContainingEscaped(String namePart);
 ```
-当声明了上面repo的查询方法，那么findContainingEscaped("Peter_”)将会查询到Peter_Parker而不是Peter Parker，使用的转义字符可以通过@EnableJpaRepositories注解的escapeCharacter属性设置配置，请注意，SpEL 上下文中可用的方法 escape(String) 只会转义 SQL 和 JPQL 标准通配符 _ 和 %。 如果底层数据库或 JPA 实现支持其他通配符，则这些通配符不会被转义。
-- 应用查询提示
-为了给repo接口中声明的查询应用JPA查询提示，你可以使用@QueryHints注解，这个注解使用来了JPA @QueryHint注解数组与一个boolean类型的用于指定在分页查询时查询总数是否应用查询提示的标志
+当声明了上面repo的查询方法，那么`findContainingEscaped("Peter_”)`将会查询到`Peter_Parker`而不是`Peter Parker`，使用的转义字符可以通过`@EnableJpaRepositories`注解的`escapeCharacter`属性设置配置，请注意，`escape(String)`只在SpEL上下文中可用，只会转义SQL和JPQL标准通配符_和%。如果底层数据库或 JPA实现支持其他通配符，则这些通配符不会被转义。
+### Other Methods
+SDJ提供了很多种构建查询的方式，对于很复杂的查询，你可以:
+- 使用`@Query`
+- [自定义实现repo](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.custom-implementations)。
+  - 直接与EntityManager交互，可以直接写HQL/JPQL/EQL/SQL或者使用Criteria API
+  - 直接使用Spring Framework的JdbcTemplate
+  - 使用任何第三方的数据库工具
+- 创建存储过程或者函数，使用SDJ的`@StoredProcedure`注解或者直接调用函数
+
+当你想要更多的控制查询的时候，这些策略可能很有效。
+### Modifying Queries
+所有前面的章节讲述了如何声明查询。你可以通过[Custom Implementations for Spring Data Repositories](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.custom-implementations)中介绍的自定义实现机制加入自定义的修改行为。如果修改只是简单的参数绑定，你还可以在查询方法上加入注解`@Modifying`，如下面所示:
+```java
+@Modifying
+@Query("update User u set u.firstname = ?1 where u.lastname = ?2")
+int setFixedFirstnameFor(String firstname, String lastname);
+```
+将查询设置为更新而不是检索，因为`EntityManager`可能在执行修改查询后可能包含过期的实体，我们并不会自动清空它，这个注解会丢弃掉所有`EntityManager`中的没有flush的是实体。如果你想要`EntityManager`可以自动清空，你可以设置`@Modifying`注解的`clearAutomatically=true`。`@Modifying`注解只能与`@Query`注解组合使用，不能用于派生查询或者自定义方法。
+### Derived Delete Queries
+SDJ支持派生删除操作，不需要明确的声明JPQL，如下所示:
+```java
+interface UserRepository extends Repository<User, Long> {
+  void deleteByRoleId(long roleId);
+  @Modifying
+  @Query("delete from User u where u.role.id = ?1")
+  void deleteInBulkByRoleId(long roleId);
+}
+```
+看起来上面2种方法的效果一样，但是就运行的方式而言，2种方法区别很大，后面的方法声明一个JPQL，这意味着当前加载的User实例不会被调用生命周期的方法。为了调用声明周期方法，第一种会先执行一个查询，得到所有实体后再一个一个执行删除，然后其中会调用生命周期的方法。派生删除就是先查询出实体，然后调用`CrudRepository.delete(Iterable<User> users)`，
+### 应用查询提示
+为了给repo接口中声明的查询应用JPA查询提示，你可以使用@QueryHints注解，这个注解使用一个JPA`@QueryHint`注解数组与一个boolean类型标志，标志用于指定在分页查询时查询总数时否应用查询提示的标志，如下面的代码所示:
 ```java
 public interface UserRepository extends Repository<User, Long> {
 
@@ -563,27 +587,43 @@ public interface UserRepository extends Repository<User, Long> {
   Page<User> findByLastname(String lastname, Pageable pageable);
 }
 ```
-前面的所有的章节描述了如何声明查询来获取一个给定的实体或者实体的集合，你可以使用[Custom Implementations for Spring Data Repositories](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.custom-implementations)中描述的自定义方法的方式添加自定义修改行为，这种方式可以实现全面的功能定制，你可以通过在查询方法上使用注解@Modifying来实现查询修改，如下面的例子中所示
+### Adding Comments to Queries
+有时候，你需要debug一个查询来查看数据库性能，但是具体的SQL与SDJ生成的最终SQL可能看起来不是很相似，为了能找到具体的SQL，你可以给查询添加注释，使用注解`@Meta`，代码如下:
 ```java
-@Modifying
-@Query("update User u set u.firstname = ?1 where u.lastname = ?2")
-int setFixedFirstnameFor(String firstname, String lastname);
-```
-上面的写法会让查询从一个查询方法变成一个变更查询，因为EntityManager在变更查询执行完后可能包含过期的实体，我们不会自动清空它（可以参考EntityManager.clear()方法获得更多详细的细节），由于在执行修改查询后 EntityManager 可能包含过时的实体，我们不会自动清除它（有关详细信息，请参阅 EntityManager.clear() 的 JavaDoc），因为这有效地删除了 EntityManager 中仍待处理的所有未刷新的更改。 如果您希望 EntityManager 自动清除，可以将 @Modifying 注解的 clearAutomatically 属性设置为 true。@Modifying注解仅与@Query注解结合使用。 派生查询方法或自定义查询方法不需要此注解。
-Spring Data JPA也支持派生的删除查询，你可以不用明确的声明JPQL查询，如下面的例子所示
-```java
-interface UserRepository extends Repository<User, Long> {
+public interface RoleRepository extends JpaRepository<Role, Integer> {
 
-  void deleteByRoleId(long roleId);
+	@Meta(comment = "find roles by name")
+	List<Role> findByName(String name);
 
-  @Modifying
-  @Query("delete from User u where u.role.id = ?1")
-  void deleteInBulkByRoleId(long roleId);
+	@Override
+	@Meta(comment = "find roles using QBE")
+	<S extends Role> List<S> findAll(Example<S> example);
+
+	@Meta(comment = "count roles for a given name")
+	long countByName(String name);
+
+	@Override
+	@Meta(comment = "exists based on QBE")
+	<S extends Role> boolean exists(Example<S> example);
 }
-
 ```
-虽然，声明式的查询方法deletebyRoleId(…)看起来也能实现deleteInBulkByRoleId方法同样的功能，但是他们2个还是有区别的，主要是运行的方式不同，正如名字所揭示的的那样，后面的方法会生成一个JPQL查询，这意味着，当前加载的User实例不会调用生命周期回调方法，为了确保实际调用生命周期回调，调用 deleteByRoleId(...) 会运行一个查询，然后一一删除返回的实例，以便持久性提供程序实际上可以在这些实体上调用 @PreRemove 声明周期回调方法。
-实际上，派生的删除查询是运行查询然后在结果上调用 CrudRepository.delete(Iterable<User> users) 并使行为与 CrudRepository 中其他 delete(...) 方法的实现保持同步的快捷方式。
+JPQL/SQL日志都不是JPA中的标准，每个JPA实现提供者需要自定义日志配置。为了激活hibernate的query注释，你需要设置`hibernate.use_sql_comments=true`。
+```java
+@Bean
+public Properties jpaProperties() {
+
+	Properties properties = new Properties();
+	properties.setProperty("hibernate.use_sql_comments", "true");
+	return properties;
+}
+```
+如果使用spring boot，你可以设置属性:
+>spring.jpa.properties.hibernate.use_sql_comments=true
+
+eclipselink的实现忽略了。这个可能需要更高的版本。
+### Configuring Fetch-and LoadGraphs
+
+
 ## 存储过程
 ## 规格
 JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
