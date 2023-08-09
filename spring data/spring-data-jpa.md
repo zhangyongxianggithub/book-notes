@@ -495,31 +495,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
 ```
 如果你使用了java8的-parameters功能，可以不用使用@Param
 ### SpEL表达式
-从Spring Data JPA 1.4版本开始，我们支持在@Query注解中手动定义的查询使用限制的SpEL模板表达式，根据正在运行的查询，这些表达式会在一个预定义的变量集合上执行解析，Spring Data JPA支持一个叫做entityName的变量，它的用法是
+从Spring Data JPA 1.4版本开始，我们支持在@Query注解中手动定义的查询中使用有限的SpEL模板表达式，根据要执行的查询，这些表达式会在一个预定义的变量集合上解析，Spring Data JPA支持一个叫做`entityName`的变量，它的用法是
 ```sql
 select x from #{#entityName} x
 ```
-它会根据与给定的repo相关联的领域类型插入entityName，entityName的解析方式：如果领域类型在 @Entity 注释上设置了 name 属性，则使用它。 否则，使用领域类型的简单类名。下面的例子展示了在查询中使用#{#entityName}表达式的一种用例
+它会插入根据与给定的repo相关联的领域类型的`entityName`，entityName的解析方式：如果领域类型在`@Entity`注释上设置了name属性，则使用它。否则，使用领域类型的简单类名。下面的例子展示了在查询中使用`#{#entityName}`表达式的一种用例
 ```java
 @Entity
 public class User {
-
   @Id
   @GeneratedValue
   Long id;
-
   String lastname;
 }
-
 public interface UserRepository extends JpaRepository<User,Long> {
-
   @Query("select u from #{#entityName} u where u.lastname = ?1")
   List<User> findByLastname(String lastname);
 }
-
 ```
-使用#{#entityName}变量可以让你不需要在@Query注解中的查询书写实际的实体名。entityName可以通过@Entity注解定义，orm.xml中的定义不支持SpEL表达式。当然，你也可以直接在查询中使用User，但是这个名字你需要在查询中及时的变更，对#entityName的应用，可能会是一个对user类的映射的完全不同的实体名字（比如，通过使用@Entity(name=“MyUser”)定义逻辑实体的名字）。
-在查询中使用#{#entityName}表达式的另一个用例是当你想要定义一个通用的repo接口，这个通用的repo接口是一个具体的领域类型的专门的repo接口。为了不在repo接口重复定义相似的查询方法，你可以在通用的repo接口中@Query注解中的查询中使用#{#entityName}表达式，如下面的例子所示
+entityName可以通过@Entity注解定义，orm.xml中的定义不支持SpEL表达式。当然，你可以直接在查询声明中使用User。但是，使用`#{#entityName}`变量可以让你不需要在@Query注解中的查询书写实际的实体名，避免实体名变更需要重新修改（比如，通过使用@Entity(name="MyUser")定义逻辑实体的名字）。
+在查询中使用`#{#entityName}`表达式的另一个用例是当你想要定义一个通用的repo接口，这个通用的repo接口与具体的领域类型集合就是具体的repo接口。为了不在repo接口中重复定义相同逻辑的查询方法，你可以在通用的repo接口中@Query注解中的查询中使用`#{#entityName}`表达式，如下面的例子所示
 ```java
 @MappedSuperclass
 public abstract class AbstractMappedType {
