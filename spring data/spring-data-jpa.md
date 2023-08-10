@@ -225,7 +225,27 @@ interface PersonRepository extends Repository<Person, Long> {
 ```java
 List<Person> findByAddressZipCode(ZipCode zipCode);
 ```
-Person下面的Address具有属性ZipCode，方法会查找属性名x.address.zipCode，解析算法解析AddressZipCode作为属性，并且检查实体是否具有给定的属性，如果算法成功就是使用这个属性，如果不成功，算法会根据驼峰格式从右向左分解为2个头尾字符串，试图寻找相关的属性，在我们的例子中，会被分解为AddressZip与Code，如果算法找到AddressZip，
+Person下面的Address具有属性ZipCode，方法会查找属性名x.address.zipCode，解析算法解析AddressZipCode作为属性，并且检查实体是否具有给定的属性，如果算法成功就是使用这个属性，如果不成功，算法会根据驼峰格式从右向左分解为2个头尾字符串，试图寻找相关的属性，在我们的例子中，会被分解为AddressZip与Code，如果算法找到AddressZip，那么会按照这个递归的过程锅里尾字符串。如果没找到，切分点向左移动并继续寻找。虽然这个算法大部分情况下都是正确的，但是有时候可能选出错。为了解决可能出错的请款，你可以在方法名中加入_下划线手动指定切分点，类似如下:
+```java
+List<Person> findByAddress_ZipCode(ZipCode zipCode);
+```
+因为我们把下划线座位保留字符，所以我们建议你不要在属性名中使用下划线而是使用驼峰命名法。
+### Paging，Iterating Large Results, Sorting
+为了操作查询中的参数，需要定义方法参数。除此以外，SDJ可以识别特定的类型比如Pageable或者Sort，可以动态的支持分页或者排序。下面的例子展示了这些特性:
+```java
+Page<User> findByLastname(String lastname, Pageable pageable);
+Slice<User> findByLastname(String lastname, Pageable pageable);
+Window<User> findTop10ByLastname(String lastname, ScrollPosition position, Sort sort);
+List<User> findByLastname(String lastname, Sort sort);
+List<User> findByLastname(String lastname, Pageable pageable);
+```
+使用了Sort或者Pageable参数的方法不会接受null，如果你不分页或者不排序，使用`Sort.unsorted()`或者`Pageable.unpaged()`。
+底层会计算总数与总页数，通过一个count查询计算。这可能比较耗时，你可以返回一个`Slice`，`Slice`只有是否有下一个slice的信息。从方法中可以返回的结果在文档的表中。可以定义多个排序字段
+```java
+Sort sort = Sort.by("firstname").ascending()
+  .and(Sort.by("lastname").descending());
+```
+如果想用类型安全的方式定义排序表达式，
 ### 返回集合或者迭代器
 集合类型除了返回标准的Iterable，List或者Set，也可以返回Streamable或者Vavr类型，
 ## Spring Data拓展
