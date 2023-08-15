@@ -165,3 +165,22 @@ interface RepositoryService {
 |Method return value|Description|
 |:---|:---|
 |void, Mono\<Void>|执行给定的请求，忽略响应|
+|HttpHeaders/Mono\<HttpHeaders>|执行请求，忽略响应的body，返回headers|
+|\<T>,Mono\<T>|将响应的内容解码为声明的类型返回|
+|\<T>, Flux\<T>|将响应的内容解码为声明的类型的流返回|
+|ResponseEntity\<Void>, Mono<ResponseEntity<Void>>||
+|ResponseEntity\<T>, Mono\<ResponseEntity<T>>||
+|Mono\<ResponseEntity\<Flux<T\>>||
+
+## Exception Handling
+默认情况下，WebClient会为4xx或者5xx的状态码抛出`WebClientResponseException`异常。为了改变这种行为，你可以注册自定义的状态码处理器。
+```java
+WebClient webClient = WebClient.builder()
+		.defaultStatusHandler(HttpStatusCode::isError, resp -> ...)
+		.build();
+
+WebClientAdapter clientAdapter = WebClientAdapter.forClient(webClient);
+HttpServiceProxyFactory factory = HttpServiceProxyFactory
+		.builder(clientAdapter).build();
+```
+更多的细节与选项，比如抑制错误状态码。参考`WebClient.Builder`中的`defaultStatusHandler`
