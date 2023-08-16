@@ -440,6 +440,7 @@ FailsafeExecutor<Object> executor = Failsafe.with(retryPolicy).compose(circuitBr
 executor.run(this::connect);
 ```
 ## POLICIES
+### Policies Overview
 分为几类:
 - Failure Handling, Failsafe通过检测错误来添加resilience并处理错误。每个policy定义什么情况下是失败并且如何处理这些失败。默认情况下，policies处理所有所有抛出的异常。也可以配置只处理某些特定的异常或者情况:
   ```java
@@ -474,6 +475,158 @@ executor.run(this::connect);
   - Fallback handles the result or exception according to its configuration and returns a fallback result or exception if needed
   - Failsafe returns the final result or exception to the caller
 
-
-### 
+默认情况下，policies会处理所有的Exception，通常来说会为某些异常配置单独的policy，比如下面的配置
+```java
+retryPolicyBuilder.handle(ConnectException.class);
+```
+通常来说也要配置处理内部policy抛出的异常
+```java
+retryPolicyBuilder.handle(CircuitBreakerOpenException.class, TimeoutExceededException.class);
+```
+常见的policy组合通常是Fallback、RetryPolicy、CircuitBreaker、RateLimiter、Bulkhead、Timeout的顺序的组合方式。也就是说。
+### Retry
+Retry Policy会重试执行失败的逻辑指定的次数。可以配置重试之间执行的延迟。如果重试还是失败，会返回最终的结果或者异常。如果需要额外的处理或者其他的替代的结果，可以考虑配置一个外部的fallback policy，创建RetryPolicy很简单:
+```java
+// Retry on a ConnectException up to 3 times with a 1 second delay between attempts
+RetryPolicy<Object> retryPolicy = RetryPolicy.builder()
+  .handle(ConnectException.class)
+  .withDelay(Duration.ofSeconds(1))
+  .withMaxRetries(3)
+  .build();
+```
+#### Max Attempts
+RetryPolicy默认最多尝试3次，你可以配置:
+```java
+builder.withMaxAttempts(3);
+builder.withMaxRetries(2);
+```
+你可以关闭默认的最大限制:
+```java
+builder.withMaxAttempts(-1);
+```
+#### Max Duration
+也可以配置最大的持续时间，如果超出，重试会停止:
+```java
+builder.withMaxDuration(Duration.ofMinutes(5));
+```
+#### Delays
+默认情况下，RetryPolicy在重试间没有延迟，你可以配置固定的延迟或者指数增长的延迟或者随机的延迟:
+```java
+builder.withDelay(Duration.ofSeconds(1));
+builder.withBackoff(1, 30, ChronoUnit.SECONDS);
+builder.withDelay(1, 10, ChronoUnit.SECONDS);
+```
+或者基于执行结果或者异常计算的延迟。
+#### Jitter
+你还可以天际随机的抖动因子:
+```java
+builder.withJitter(.1);
+builder.withJitter(Duration.ofMillis(100));
+```
+#### Aborts
+你还可以指定终止重试的条件:
+```java
+builder
+  .abortWhen(true)
+  .abortOn(NoRouteToHostException.class)
+  .abortIf(result -> result == true)
+```
+#### Failure Handling
+RetryPolicy可以配置为只处理特定的结果或者异常，
+```java
+builder
+  .handle(ConnectException.class)
+  .handleResult(null);
+```
+#### Event Listeners
+除了标准的policy listeners，RetryPolicy也可以在重试失败或者重试之前通知你:
+```java
+builder
+  .onFailedAttempt(e -> log.error("Connection attempt failed", e.getLastException()))
+  .onRetry(e -> log.warn("Failure #{}. Retrying.", e.getAttemptCount()));
+```
+重试超过最大次数时也能通知:
+```java
+builder.onRetriesExceeded(e -> log.warn("Failed to connect. Max retries exceeded."));
+```
+或者要执行异步的重试前通知:
+```java
+builder.onRetryScheduled(e -> log.info("Connection retry scheduled {}.", e.getException()));
+```
+或者重试被终止通知
+```java
+builder.onAbort(e -> log.warn("Connection aborted due to {}.", e.getException()));
+```
+### Circuit Breaker
+### Rate Limiter
+### Timeout
+Timeout允许你在执行时间太长时将执行标记为失败并抛出`TimeoutExceededException`。
+```java
+Timeout<Object> timeout = Timeout.of(Duration.ofSeconds(10));
+```
+你可以创建一个可以中断执行的timeout
+```java
+Timeout<Object> timeout = Timeout.builder(Duration.ofSeconds(10)).withInterrupt().build();
+```
+如果取消由timeout触发，执行会抛出`TimeoutExceededException`,参考[execution cancellation](https://failsafe.dev/execution-cancellation)获取更多的取消与中断执行的信息。
+#### Timeouts with Retries
+Timeout内部包含RetryPolicy，timeout后会取消内部的retries:
+```java
+Failsafe.with(timeout).compose(retryPolicy).run(this::connect);
+```
+RetryPolicy包含Timeout，那么timeout不会取消外部的retries
+```java
+Failsafe.with(retryPolicy).compose(timeout).run(this::connect);
+```
+#### Async Execution Timeouts
+当异步执行超时时，Failsafe 仍然会通过中断或自然方式等待执行完成，然后再记录 TimeoutExceededException。 这避免了在原始执行仍在运行时重试的风险，这最终可能导致在多个线程中运行大量放弃的执行。
+#### Event Listeners
+当超时发生时可以获得通知:
+```java
+builder.onFailure(e -> log.error("Connection attempt timed out", e.getException()));
+```
+或者执行完成没有发生超时也能获得通知:
+```java
+builder.onSuccess(e -> log.info("Execution completed on time"));
+```
+#### Limits
+由于异步集成方法涉及Failsafe不知道的外部线程，因此无法通过超时直接取消或中断这些执行。但是，这些执行仍然可以与超时取消配合。
+### Bulkhead
+### Fallback
+Fallback允许你为失败的执行提供替代的结果。用来抑制异常并提供默认结果
+```java
+Fallback<Object> fallback = Fallback.of(defaultResult);
+```
+或者抛出自定义的异常
+```java
+Fallback<Object> fallback = Fallback.ofException(e -> new CustomException(e.getException()));
+```
+或者从备份的地方获取结果
+```java
+Fallback<Object> fallback = Fallback.of(this::connectToBackup);
+```
+也可以提供一个CompletionStage作为fallback
+```java
+Fallback<Object> fallback = Fallback.ofStage(this::connectToBackup);
+```
+对于阻塞的计算，可以配置异步计算Fallback
+```java
+Fallback<Object> fallback = Fallback.builder(this::blockingCall).withAsync().build();
+```
+#### Failure Handling
+Fallback可以配置为只对特定的结果或异常处理:
+```java
+builder
+  .handle(ConnectException.class)
+  .handleResult(null);
+```
+## FEATURES
+### Async Execution
+除了同步执行以外，Failsafe提供集中方式异步执行
+#### Simple Async Execution
+异步执行可以通过`runAsync`与`getAsync`方法执行，这2个方法都返回一个`CompletableFuture`:
+```java
+CompletableFuture<Connection> future = Failsafe.with(retryPolicy).getAsync(this::connect);
+```
+# resilience4j
 
