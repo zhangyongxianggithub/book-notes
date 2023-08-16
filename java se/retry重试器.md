@@ -395,5 +395,85 @@ public void service3() {
 表达式可以包含属性占位符，比如`#{${max.delay}}`或者`#{@exceptionChecker.${retry.method}(#root)}`.
 
 # Failsafe
+## Overview
+FailSafe是一个轻量化的0以来的用于处理错误的库。主要是在Java8+以上的版本中使用。它有简洁与灵活的得API定义。主要的工作原理是将执行逻辑包裹到一个或者多个resilience policies中。这些policies可以按需组合或者聚合。
+### Setup
+添加最新的[Failsafe](https://maven-badges.herokuapp.com/maven-central/dev.failsafe/failsafe)依赖到你的项目中
+### Getting Started
+为了了解Failsafe是如何工作的。我们创建一个重试策略，它定义了如何处理错误以及什么时候重试:
+```java
+RetryPolicy<Object> retryPolicy = RetryPolicy.builder()
+  .handle(ConnectException.class)
+  .withDelay(Duration.ofSeconds(1))
+  .withMaxRetries(3)
+  .build();
+```
+我们使用重试机制可以执行一个`Runnable`或者一个`Supplier`
+```java
+// Run with retries
+Failsafe.with(retryPolicy).run(() -> connect());
 
+// Get with retries
+Connection connection = Failsafe.with(retryPolicy).get(() -> connect());
+```
+使用重试机制异步执行`Runnable`或者一个`Supplier`也很简单
+```java
+// Run with retries asynchronously
+CompletableFuture<Void> future = Failsafe.with(retryPolicy).runAsync(() -> connect());
+
+// Get with retries asynchronously
+CompletableFuture<Connection> future = Failsafe.with(retryPolicy).getAsync(() -> connect());
+```
+多个policy可以任意的组合来添加额外的机制或者用不通的方式处理不同的错误:
+```java
+var fallback = Fallback.of(this::connectToBackup);
+var circuitBreaker = CircuitBreaker.ofDefaults();
+var timeout = Timeout.of(Duration.ofSeconds(10));
+
+// Get with fallback, retries, circuit breaker, and timeout
+Failsafe.with(fallback, retryPolicy, circuitBreaker, timeout).get(this::connect);
+```
+组合policy时，顺序很重要，参考[policy composition](https://failsafe.dev/policies#policy-composition)得到更多的信息。
+policy组合也可以先临时保存起来，后续通过`FailsafeExecutor`使用
+```java
+FailsafeExecutor<Object> executor = Failsafe.with(retryPolicy).compose(circuitBreaker);
+executor.run(this::connect);
+```
+## POLICIES
+分为几类:
+- Failure Handling, Failsafe通过检测错误来添加resilience并处理错误。每个policy定义什么情况下是失败并且如何处理这些失败。默认情况下，policies处理所有所有抛出的异常。也可以配置只处理某些特定的异常或者情况:
+  ```java
+  policyBuilder
+  .handle(ConnectException.class, SocketException.class)
+  .handleIf(e -> e instanceof ConnectException);
+  ```
+  也支持处理特定的结果或者结果满足某些条件。
+  ```java
+  policyBuilder
+  .handleResult(null)
+  .handleResultIf(result -> result == null);  
+  ```
+  如果配置了多个处理方法，它们将进行逻辑OR运算。默认的异常处理条件只能被处理异常的另一个条件替换。仅处理结果的条件不会替换默认的异常处理。
+- Policy Composition， policy可以组合，包括很多相同类型的policy，Policy会以相反的顺序处理执行结果。与函数组合的工作方式类似。比如下面的policy：
+  ```java
+  Failsafe.with(fallback)
+  .compose(retryPolicy)
+  .compose(circuitBreaker)
+  .compose(timeout)
+  .get(supplier);
+  ```
+  也可以写成这样`Failsafe.with(fallback, retryPolicy, circuitBreaker, timeout).get(supplier);`。当执行时，实际的执行如下`Fallback(RetryPolicy(CircuitBreaker(Timeout(Supplier))))`。policy组合首先执行最外面的policy，这个policy内部在嗲偶用下一个policy，一直下去。一直到用户提供的`Runnable`或者`Supplier`。执行的结果或者异常向上一层一层返回。按照定义决定是否处理。每一个oplicy自己决定是否允许继续执行或者如何处理执行结果或者异常。比如`RetryPolicy`会重试执行，会再一次的调用内部的policy或者返回执行的结果或者异常。`CircuitBreaker`可能会在到达`Supplier`之前抛出异常。考虑下面的policy组合的执行
+  ![execution](retry/composition.png)
+  - Failsafe calls the Fallback
+  - Fallback calls the RetryPolicy
+  - RetryPolicy calls the CircuitBreaker
+  - CircuitBreaker rejects the execution if the breaker is open, else calls the Supplier
+  - Supplier executes and returns a result or throws an exception
+  - CircuitBreaker records the result as either a success or failure, based on its configuration, possibly changing the state of the breaker, then returns or throws
+  - RetryPolicy records the result as either a success or failure, based on its configuration, and either retries or returns the result or exception
+  - Fallback handles the result or exception according to its configuration and returns a fallback result or exception if needed
+  - Failsafe returns the final result or exception to the caller
+
+
+### 
 
