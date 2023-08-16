@@ -1,7 +1,6 @@
+[TOC]
 # guava-retrying
-这是什么？ guava-retrying 模块提供了一种通用方法，用于重试任意的java代码执行，可以在指定的情况下停止、重试并且可以处理代码中发生的异常，这些功能基于 Guava 的谓词匹配。
-
-这是由 Jean-Baptiste Nizet (JB) 在这里发布的优秀 RetryerBuilder 代码的分支。 我添加了一个 Gradle 构建，用于将它推送到我的 Maven Central 的小角落，以便其他人可以轻松地将其拉入他们现有的项目中。 它还包括指数和斐波那契退避等待策略，这对于首选行为更良好的服务轮询的情况可能很有用。
+这是什么？ guava-retrying模块提供了一种通用方法，可以重试执行任意的java代码，并具有在指定的情况下停止、重试以及异常处理等能力，这些功能基于Guava的谓词匹配。本代码库fork自Jean-Baptiste Nizet(JB) 发布的优秀RetryerBuilder代码的分支。我添加了一个Gradle构建并将它推送到我的Maven Central，以便其他人可以轻松地将其拉入到他们现有的项目中。它还包括指数和斐波那契机制的降级等待策略。
 maven
 ```xml
     <dependency>
@@ -33,8 +32,7 @@ try {
 }
 
 ```
-每当 callable 的结果为 null、抛出 IOException 或从 call() 方法抛出任何其他 RuntimeException 时，这将重试。 它会在尝试重试 3 次后停止并抛出包含有关上次失败尝试的信息的 RetryException。 如果有任何其他异常从 call() 方法中弹出，它会被包装并重新抛出为 ExecutionException异常。
-下面的例子创建了一个永久重试的Retryer，每次失败后，增加指数级增长的时间间隔，最终达到最大重试间隔(指数退避算法)
+每当`Callable`的结果为null、抛出`OException`或从`call()`方法抛出任何其他`RuntimeException`时，Guava将重试方法调用。它会在尝试重试3次后停止并抛出包含最近失败异常的`RetryException`异常。 如果有任何其他异常从`call()`方法中弹出，它会被包装并重新抛出为`ExecutionException`异常。下面的例子创建了一个永久重试的`Retryer`，每次失败后，增加指数级增长的降级时间间隔，最终达到最大重试间隔(指数退避算法)
 ```java
 Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
         .retryIfExceptionOfType(IOException.class)
@@ -43,7 +41,7 @@ Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
         .withStopStrategy(StopStrategies.neverStop())
         .build();
 ```
-下面的例子创建一个斐波那契回退算法的重试器，每次失败后，增加一个斐波那契回退间隔，一直到最大的23分钟。
+你可以阅读更多的关于[指数时间](http://en.wikipedia.org/wiki/Exponential_backoff)的信息，还有在TCP/IP开发中所发挥的作用。下面的例子创建一个斐波那契回退算法的重试器，每次失败后，增加一个斐波那契回退间隔，一直到最大的2分钟。
 ```java
 Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
         .retryIfExceptionOfType(IOException.class)
@@ -52,6 +50,9 @@ Retryer<Boolean> retryer = RetryerBuilder.<Boolean>newBuilder()
         .withStopStrategy(StopStrategies.neverStop())
         .build();
 ```
+类似`ExponentialWaitStrategy`，`FibonacciWaitStrategy`的回退时间也是不断增长的，但是是使用斐波那契序列来计算等待时间。通常来说`FibonacciWaitStrategy`执行的效果更好，可以带来更大的吞吐量。具体参考[A Performance Comparison of Different Backoff Algorithms under Different Rebroadcast Probabilities for MANETs.](http://www.comp.leeds.ac.uk/ukpew09/papers/12.pdf)。`FibonacciWaitStrategy`使用了迭代版本而不是递归版本。这是因为递归版本可能会导致StackOverflowError，当然如果定义良好的参数不太可能会发生这种情况。
+# guava-retrying3
+这是guava-retry的一个个人版本，与原来的版本有一点不同，大部分情况下一样，改了包名与变成了maven项目。
 # spring retry
 spring retry为Spring应用提供了声明式的重试支持，广发应用在Spring Batch、Spring Integration等组件中，也支持编程式的方式使用。
 ## 快速开始
@@ -393,5 +394,6 @@ public void service3() {
 自从Spring Retry 1.2.5版本发布后，对于exceptionExpression的值，模板表达式的方式已经被废弃了，只支持简单的表达式字符串。
 表达式可以包含属性占位符，比如`#{${max.delay}}`或者`#{@exceptionChecker.${retry.method}(#root)}`.
 
+# Failsafe
 
 
