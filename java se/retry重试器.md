@@ -798,4 +798,122 @@ Failsafe.with(retryPolicy).getAsync(ctx -> {
 ```
 Failsafe为ForkJoinPool添加了中断支持，因为异步集成方法会调用外部的线程，这些执行过程不能被Failsafe直接取消或者中断。
 # resilience4j
+## Introduction
+Resilience4j是一个轻量级的容错处理库，主要为函数时编程设计。Resilience4j提供了高阶函数(decorators)来增强任何函数式接口、lambda表达式、方法引用。通过Circuit Breaker、Rate Limiter、Retry、Bulkhead来增强。你可以stack多个decorator到函数式接口上。
+Resilience4j 2需要java 17
+```java
+// Create a CircuitBreaker with default configuration
+CircuitBreaker circuitBreaker = CircuitBreaker.ofDefaults("backendService");
 
+// Create a Retry with default configuration
+// 3 retry attempts and a fixed time interval between retries of 500ms
+Retry retry = Retry.ofDefaults("backendService");
+
+// Create a Bulkhead with default configuration
+Bulkhead bulkhead = Bulkhead.ofDefaults("backendService");
+
+Supplier<String> supplier = () -> backendService
+  .doSomething(param1, param2);
+
+// Decorate your call to backendService.doSomething()
+// with a Bulkhead, CircuitBreaker and Retry
+// **note: you will need the resilience4j-all dependency for this
+Supplier<String> decoratedSupplier = Decorators.ofSupplier(supplier)
+  .withCircuitBreaker(circuitBreaker)
+  .withBulkhead(bulkhead)
+  .withRetry(retry)
+  .decorate();
+
+// Execute the decorated supplier and recover from any exception
+String result = Try.ofSupplier(decoratedSupplier)
+  .recover(throwable -> "Hello from Recovery").get();
+
+// When you don't want to decorate your lambda expression,
+// but just execute it and protect the call by a CircuitBreaker.
+String result = circuitBreaker
+  .executeSupplier(backendService::doSomething);
+
+// You can also run the supplier asynchronously in a ThreadPoolBulkhead
+ ThreadPoolBulkhead threadPoolBulkhead = ThreadPoolBulkhead
+  .ofDefaults("backendService");
+
+// The Scheduler is needed to schedule a timeout on a non-blocking CompletableFuture
+ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(3);
+TimeLimiter timeLimiter = TimeLimiter.of(Duration.ofSeconds(1));
+
+CompletableFuture<String> future = Decorators.ofSupplier(supplier)
+    .withThreadPoolBulkhead(threadPoolBulkhead)
+    .withTimeLimiter(timeLimiter, scheduler)
+    .withCircuitBreaker(circuitBreaker)
+    .withFallback(asList(TimeoutException.class, CallNotPermittedException.class, BulkheadFullException.class),
+      throwable -> "Hello from Recovery")
+    .get().toCompletableFuture();
+```
+- resilience4j-all，所有的核心模块与Decorators
+
+Resilience4j提供了几个核心模块
+- resilience4j-circuitbreaker: Circuit breaking
+- resilience4j-ratelimiter: Rate limiting
+- resilience4j-bulkhead: Bulkheading
+- resilience4j-retry: Automatic retrying (sync and async)
+- resilience4j-timelimiter: Timeout handling
+- resilience4j-cache: Result caching
+
+额外的模块
+- resilience4j-feign: Feign adapter
+- resilience4j-consumer: Circular Buffer Event consumer
+- resilience4j-kotlin: Kotlin coroutines support
+- resilience4j-vavr: Vavr support
+  
+Frameworks modules
+- resilience4j-spring-boot3: Spring Boot 3 Starter
+- resilience4j-spring-boot2: Spring Boot 2 Starter
+- resilience4j-micronaut: Micronaut Starter
+  
+Reactive modules
+- resilience4j-rxjava2: Custom RxJava2 operators
+- resilience4j-rxjava3: Custom RxJava3 operators
+- resilience4j-reactor: Custom Spring Reactor operators
+  
+Metrics modules
+- resilience4j-micrometer: Micrometer Metrics exporter
+- resilience4j-metrics: Dropwizard Metrics exporter
+  
+3rd party modules
+- Camel Circuit Breaker
+- Spring Cloud Circuit Breaker
+- http4k resilience module
+## Comparison to Netflix Hystrix
+## Maven
+```xml
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-circuitbreaker</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-ratelimiter</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-retry</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-bulkhead</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-cache</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+<dependency>
+    <groupId>io.github.resilience4j</groupId>
+    <artifactId>resilience4j-timelimiter</artifactId>
+    <version>${resilience4jVersion}</version>
+</dependency>
+```
