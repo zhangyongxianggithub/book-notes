@@ -83,7 +83,7 @@ class Service {
 ```
 这个例子声明，当调用service方法发生RemoteAccessException异常时，重试，并且重试达到最大次数后，调用recover方法恢复，在注解`@Retryable`中有非常多的属性，可以声明一些条件。
 声明式的重试需要AOP支持。
-## 非声明的方式
+下面的方式是命令式的重试方式。
 ```java
 RetryTemplate template = RetryTemplate.builder()
 				.maxAttempts(3)
