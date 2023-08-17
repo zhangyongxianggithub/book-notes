@@ -138,10 +138,9 @@ Foo result = template.execute(new RetryCallback<Foo>() {
         // Do stuff that might fail, e.g. webservice operation
         return result;
     }
-
 });
 ```
-在1.3版本后，可以使用流式的方式创建RetryTemplate
+在这个例子中，我们执行一个web服务调用并返回结果给用户。如果调用失败，会重试直到超时时间到达。在1.3版本后，可以使用流式的方式创建RetryTemplate
 ```java
 RetryTemplate.builder()
       .maxAttempts(10)
@@ -163,9 +162,9 @@ RetryTemplate.builder()
 
 ```
 ### 使用RetryContext
-RetryCallback接口的方法参数是RetryContext，很多回调都忽略上下文，如果有必要，你可以使用它存储一些迭代过程中的共享数据。当一个线程中，存在嵌套的retry的时候，RetryContext会有父上下文，父上下文用来在不同的execute调用间共享数据是非常有用的。
+`RetryCallback`接口的方法参数是`RetryContext`，很多回调都忽略上下文，如果有必要，你可以使用它存储一些迭代过程中的共享数据。当一个线程中，存在嵌套的retry的时候，RetryContext会有父上下文，父上下文用来在不同的execute调用间共享数据是非常有用的。
 ### 使用RecoveryCallback
-当停止重试时，回调用RecoveryCallback接口，调用方式：
+当停止重试时，回调用`RecoveryCallback`接口，调用方式：
 ```java
 Foo foo = template.execute(new RetryCallback<Foo>() {
     public Foo doWithRetry(RetryContext context) {
@@ -178,6 +177,7 @@ Foo foo = template.execute(new RetryCallback<Foo>() {
 });
 
 ```
+如果业务逻辑在template决定终止前没有执行成功，client可以通过recovery回调做替代处理。
 ### Stateless Retry
 最简单的重试方法就是使用一个循环，RetryContext会保存一些有关状态的上下文，但是这个上下文只是栈存储，而不是全局存储，因而，我们称这种重试是无状态重试，无状态重试与有状态重试的区别就是是否共享RetryPolicy的实现，在无状态重试中，回调只会在一个线程中执行。
 ### stateful Retry
@@ -187,8 +187,8 @@ RetryOperations的部分指责是识别失败的执行（这个执行通常位�
 失败的操作可以通过RetryState识别出来，为了标识操作的状态，你可以提供一个RetryState类型的对象，这个对象携带一个唯一key，这个key是用来标识操作的，这个唯一的key可以作为RetryContextCache中的key。
 *警告：需要定义key的Object.equals()与Object.hashCode()方法，最好的办法使用一个业务的key来标识操作，在JMS消息中，你可以使用小=消息的ID作为业务的key*
 是否重试还是终止由RetryPolicy控制，可以设置最大次数或者最大时间等决策。
-### Retry Policies
-在一个RetryTemplate中，由RetryPolicy控制execute的重试或者终止策略，RetryPolicy也是一个RetryContext的工厂，RetryTemplate负责使用当前的policy来创建一个RetryContext，并且在每次重试执行时，传递到RetryCallback对象中，当重试失败时，RetryTemplate必须访问RetryPolicy判断怎么更新操作的状态（存储在RetryContext中），然后询问RetryPolicy是否执行重试，以及何时重试，如果不能重试了，policy也会负责设置最终的状态，但不处理异常，当没有recovery可用时，RetryTemplate会抛出原始的异常（stateful retry除外，它抛出RetryExhaustedException），你也可以给RetryTemplate设置一个标志，让它无条件的抛出原始的异常。
+## Retry Policies
+在一个`RetryTemplate`中，由RetryPolicy控制execute的重试或者终止策略，RetryPolicy也是一个RetryContext的工厂，RetryTemplate负责使用当前的policy来创建一个RetryContext，并且在每次重试执行时，传递到RetryCallback对象中，当重试失败时，RetryTemplate必须访问RetryPolicy判断怎么更新操作的状态（存储在RetryContext中），然后询问RetryPolicy是否执行重试，以及何时重试，如果不能重试了，policy也会负责设置最终的状态，但不处理异常，当没有recovery可用时，RetryTemplate会抛出原始的异常（stateful retry除外，它抛出RetryExhaustedException），你也可以给RetryTemplate设置一个标志，让它无条件的抛出原始的异常。
 *tips: 失败要么可以重试，要么不需要重试，这种失败就是一直失败的，可以分为2类，如果一直抛出同样的异常，那么没有必要重试，所以不是所有的异常都要重试，更多的需要关注的是哪些可以重试的异常，更积极地重试通常不会对业务逻辑造成损害，但会造成浪费，因为如果失败是确定性的，那么重试您事先知道的事情所花费的时间是致命的。*
 Spring Retry提供了一些简单的通用的无状态的RetryPolicy的实现，比如SimpleRetryPolicy与TimeoutRetryPolicy.
 SimpleRetryPolicy可以在遇到制定的一些类型的异常时重试，也可以指定重试的次数，下面的例子展示了使用的方法：
@@ -209,8 +209,8 @@ template.execute(new RetryCallback<Foo>() {
 ```
 一个更灵活的实现是ExceptionClassifierRetryPolicy，这个策略可以让你在遇到不同的异常类型时可以指定不同的行为，这是通过ExceptionClassifier实现的，具体的工作方式是Classifier把异常转换成一个委托的RetryPolicy来处理。
 你可能想要定义自己的RetryPolicy。
-### 回退策略
-当短暂的失败然后重试时，等待一段时间是非常好的，因为造成失败的原因，可能需要等一会才会好，比如网络抖动，马上重试，可能得到相同的结果，是比较浪费的，如果一个RetryCallback失败了，RetryTemplate可以根据指定的BackoffPolicy解析执行，下面是BackoffPolicy的定义。
+## 回退策略
+当短暂的失败然后重试时，等待一段时间是非常好的，因为造成失败的原因，可能需要等一会才会好，比如网络抖动，马上重试，可能得到相同的结果，是比较浪费的，如果一个`RetryCallback`失败了，`RetryTemplate`可以根据指定的`BackoffPolicy`解析执行，下面是`BackoffPolicy`的定义。
 ```java
 public interface BackoffPolicy {
 
@@ -221,9 +221,9 @@ public interface BackoffPolicy {
 
 }
 ```
-一个BackoffPolicy就是用来实现回退算法的，所有的Spring Retry提供的策略都使用到了Object.wait()，一个更好用的回退策略是指数回退策略。Spring Retry提供了ExponentialBackoffPolicy实现，它就是指数回退策略。
-### Listeners
-很多的不同的重试可能需要相同的切面处理， 为此，Spring Retry 提供了 RetryListener 接口。 RetryTemplate 允许您注册 RetryListener 实例，并使用 RetryContext 和 Throwable（在迭代期间可用的情况下）为它们提供回调。
+一个`BackoffPolicy`就是用来实现回退算法的，所有的Spring Retry提供的策略都使用到了`Object.wait()`，一个更好用的回退策略是指数回退策略。Spring Retry提供了`ExponentialBackoffPolicy`实现，它就是指数回退策略。
+## Listeners
+很多的不同的重试可能需要相同的切面处理，为此，Spring Retry 提供了`RetryListener`接口。`RetryTemplate`允许您注册 `RetryListener`实例对象，并使用`RetryContext`和 `Throwable`（在迭代期间可用的情况下）为它们提供回调。
 ```java
 public interface RetryListener {
 
@@ -234,10 +234,9 @@ public interface RetryListener {
     void close(RetryContext context, RetryCallback<T> callback, Throwable e);
 }
 ```
-open与close回调在完整的重试之前或者之后调用，onError只作用于单独的RetryCallback调用，close方法也会接受一个Throwable异常，它就是RetryCallback最后一次调用抛出的异常。
-当存在多个监听器时，它们会被组成一个列表，列表中顺序就是调用的顺序，open按照正序调用，close与onError按照反序调用。
+open与close回调在完整的重试之前或者之后调用，onSuccess, onError只作用于单独的`RetryCallback`调用，当前的重试次数可以通过`RetryContext`中获取。close方法也会接受一个Throwable异常，它就是RetryCallback最后一次调用抛出的异常。从2.0版本开始，onSuccess房啊在一次成功后的调用后调用，这允许listener检测调用的结果，并且在结果不对的情况抛出异常。抛出的异常随后被用来检测是否应该重试执行。当存在多个监听器时，它们会被组成一个列表，列表中顺序就是调用的顺序，open按照正序调用，close与onError按照反序调用。
 ### 反射方法调用的监听器
-当处理被@Retryable注解的方法时，或者处理任何的Spring AOP拦截的方法时，Spring Retry可以在RetryListener中获得方法调用的详细的情况，获得详细的调用情况在一些场景下是非常有用的，特别是需要一些监控的场景，需要监控方法重试的次数，并且记录方法的类名、方法名或者参数等信息。
+当处理被`@Retryable`注解的方法时，或者处理任何的Spring AOP拦截的方法时，Spring Retry可以在`RetryListener`中获得方法调用的详细的情况，获得详细的调用情况在一些监控场景下是非常有用的，特别是需要一些监控的场景，需要监控方法重试的次数，并且记录方法的类名、方法名或者参数等信息。
 下面的例子就是这样的场景
 ```java
 
@@ -258,29 +257,25 @@ template.registerListener(new MethodInvocationRetryListenerSupport() {
     });
 
 ```
-### 声明式的Retry
-有时候，你想要重试一些业务逻辑，典型的使用场景是远程调用，Spring Retry提供了AOP拦截器，可以把方法调用包装到一个RetryOperations对象中，RetryOperationsInterceptor执行被拦截的方法，并且依据RetryPpolicy的策略在失败的情况下重试。
-你可以在一个@Configuration注解的类上添加@EnableRetry注解，并且使用@Retryable注解到方法上，或者放到类上，你可以指定任意数量的监听器，下面的了例子展示了做法.
+## Declarative Retry, 声明式的Retry
+有时候，你想要重试一些业务逻辑，典型的使用场景是远程服务调用，Spring Retry提供了AOP拦截器，可以把方法调用wrap到一个`RetryOperations`对象中，`RetryOperationsInterceptor`执行被拦截的方法，并且依据`RetryPpolicy`定义的失败策略在失败的情况下重试。
+### Java Configuration for Retry Proxies
+你可以在一个`@Configuration`注解的类上添加`@EnableRetry`注解，并且使用`@Retryable`注解到方法上，或者放到类上(此时作用预类上的所有的方法)，你可以指定任意数量的监听器，下面的了例子展示了做法.
 ```java
 @Configuration
 @EnableRetry
 public class Application {
-
     @Bean
     public Service service() {
         return new Service();
     }
-
     @Bean public RetryListener retryListener1() {
         return new RetryListener() {...}
     }
-
     @Bean public RetryListener retryListener2() {
         return new RetryListener() {...}
     }
-
 }
-
 @Service
 class Service {
     @Retryable(RemoteAccessException.class)
@@ -288,7 +283,7 @@ class Service {
         // ... do something
     }
 ```
-你可以使用@Retryable的属性来定义Retry Policy或者BackoffPolicy,如下：
+你可以使用`@Retryable`的属性来定义`RetryPolicy`或者`BackoffPolicy`,如下：
 ```java
 @Service
 class Service {
@@ -297,12 +292,9 @@ class Service {
         // ... do something
     }
 }
-
 ```
-上面的例子使用了一个随机的回退策略，这个策略定义了回退的间隔在100-500毫秒之间，并且最大重试次数是12次，并且有一个statful的属性来控制retry是有状态的还是无状态的，为了使用有状态的retry，被拦截的方法必须是带参的，因为它们会被用来生成state的缓存key。
-@EnableRetry注解也会寻找RetryTemplate中使用的Sleeper类型的bean与其他策略的相关的bean来控制重试时的行为。
-@EnableRetry注解会为@Retryable注解的bean生成代理，代理会实现Retryable接口，这是一个用于标记的接口，通常在一些添加retry advice工具中有用。
-当重试结束时，往往需要做一些额外的操作，你可以定义一个recovery方法，这样的方法需要与@Retryable注解的方法定义在一个类中，并且使用@Recover注解注释，返回的类型必须与@Retryable注解的方法比配，recovery方法的参数可以可选的包含一个异常，或者与retryable方法匹配的参数，或者部分参数，下面的例子展示了如何做：
+上面的例子使用了一个随机的降级策略，这个策略定义了回退的间隔是100-500毫秒之间的随机值，并且最大重试次数是12次，并且有一个statful(默认是false)的属性来控制retry是有状态的还是无状态的，为了使用有状态的retry，被拦截的方法必须是带参的，因为它们会被用来生成state的缓存key。`@EnableRetry`注解也会寻找`Sleeper`类型的bean、`RetryTemplate`中使用的其他策略的相关的bean、或者拦截器来控制运行时重试时的行为。`@EnableRetry`注解会为`@Retryable`注解的bean生成代理，代理会实现`Retryable`接口，这是一个用于标记的接口，一些添加retry advice工具会用到这个接口。
+当重试结束还没得到正确的结果，往往需要做一些降级的补偿操作，你可以定义一个recovery方法，这样的方法需要与`@Retryable`注解的方法定义在一个类中，并且使用`@Recover`注解注释，返回的类型必须与`@Retryable`注解的方法比配，recovery方法的参数可以可选的包含一个异常，或者与retryable方法匹配的参数，或者部分参数，下面的例子展示了如何做：
 ```java
 @Service
 class Service {
@@ -316,7 +308,7 @@ class Service {
     }
 }
 ```
-要解决可以选择进行恢复的多个方法之间的冲突，您可以明确指定恢复方法名称。 以下示例显示了如何执行此操作：
+如果有多个revcover方法都要执行，要解决这些方法之间的冲突，您可以明确指定恢复方法名称。 以下示例显示了如何执行此操作：
 ```java
 @Service
 class Service {
@@ -334,15 +326,13 @@ class Service {
     public void service1Recover(RemoteAccessException e, String str1, String str2) {
         // ... error handling making use of original args if required
     }
-
     @Recover
     public void service2Recover(RemoteAccessException e, String str1, String str2) {
         // ... error handling making use of original args if required
     }
 }
-
 ```
-版本 1.3.2 及更高版本支持匹配参数化（通用）返回类型以检测正确的恢复方法：
+版本1.3.2及更高版本支持通过返回类型以检测正确的恢复方法：
 ```java
 @Service
 class Service {
@@ -351,7 +341,6 @@ class Service {
     public List<Thing1> service1(String str1, String str2) {
         // ... do something
     }
-
     @Retryable(RemoteAccessException.class)
     public List<Thing2> service2(String str1, String str2) {
         // ... do something
@@ -372,28 +361,139 @@ class Service {
 ```
 1.2版本支持使用表达式功能，下面的例子展示了用法：
 ```java
-
 @Retryable(exceptionExpression="message.contains('this can be retried')")
 public void service1() {
   ...
 }
-
 @Retryable(exceptionExpression="message.contains('this can be retried')")
 public void service2() {
   ...
 }
-
 @Retryable(exceptionExpression="@exceptionChecker.shouldRetry(#root)",
     maxAttemptsExpression = "#{@integerFiveBean}",
   backoff = @Backoff(delayExpression = "#{1}", maxDelayExpression = "#{5}", multiplierExpression = "#{1.1}"))
 public void service3() {
   ...
 }
-
 ```
-自从Spring Retry 1.2.5版本发布后，对于exceptionExpression的值，模板表达式的方式已经被废弃了，只支持简单的表达式字符串。
-表达式可以包含属性占位符，比如`#{${max.delay}}`或者`#{@exceptionChecker.${retry.method}(#root)}`.
+自从Spring Retry1.2.5版本发布后，对于exceptionExpression的值，模板表达式(#{})的方式已经被废弃了，只支持简单的表达式字符串(message.contains('this can be retried'))。
+表达式可以包含属性占位符，比如`#{${max.delay}}`或者`#{@exceptionChecker.${retry.method}(#root)}`。处理规则如下:
+- exceptionExpression, 在抛出的异常上计算，异常为#root对象;
+- maxAttemptsExpression，@BackOff表达式属性只会在初始化时计算一次
 
+从2.0版本开始，任何`@Retryable`, `@CircuitBreaker`, `@BackOf`的表达式只会在应用初始化时计算一次。当在运行时计算表达式时，会创建一个root对象，包含方法的参数，传输到evaluation context中。只有方法调用时才能知道参数，他们会初始化为null。更灵活的异常分类
+```java
+@Retryable(retryFor = RuntimeException.class, noRetryFor = IllegalStateException.class, notRecoverable = {
+        IllegalArgumentException.class, IllegalStateException.class })
+public void service() {
+    ...
+}
+@Recover
+public void recover(Throwable cause) {
+    ...
+}
+```
+retryFor与noRetryFor是icnlude/exclude的替代，`notRecoverable`会忽略recovery方法的调用。
+```java
+@Retryable(maxAttemptsExpression = "@runtimeConfigs.maxAttempts",
+        backoff = @Backoff(delayExpression = "@runtimeConfigs.initial",
+                maxDelayExpression = "@runtimeConfigs.max", multiplierExpression = "@runtimeConfigs.mult"))
+public void service() {
+    ...
+}
+```
+### Further customizations，深度定制化
+从1.3.2版本开始`@Retryable`注解可以座作为元注解使用，你可以创建具有预定义行为的自己的注解。比如，如果你发现你需要2种重试策略，一个用于本地调用，一个用于远程调用。你可以创建2个自定义的注解`@LocalRetryable`与`@RemoteRetryable`。这2个注解在重试策略与重试次数上有所不同。为了让自定义的注解良好的工作，你可以使用`@AliasFor`注解，比如，对于recover方法来说，你可以扩展你自定义注解的功能性，允许pick方法的参数值。
+```java
+@Service
+class Service {
+    ...
+    
+    @LocalRetryable(include = TemporaryLocalException.class, recover = "service1Recovery")
+    public List<Thing> service1(String str1, String str2){
+        //... do something
+    }
+    
+    public List<Thing> service1Recovery(TemporaryLocalException ex,String str1, String str2){
+        //... Error handling for service1
+    }
+    ...
+    
+    @RemoteRetryable(include = TemporaryRemoteException.class, recover = "service2Recovery")
+    public List<Thing> service2(String str1, String str2){
+        //... do something
+    }
+
+    public List<Thing> service2Recovery(TemporaryRemoteException ex, String str1, String str2){
+        //... Error handling for service2
+    }
+}
+```
+```java
+@Target({ ElementType.METHOD, ElementType.TYPE })
+@Retention(RetentionPolicy.RUNTIME)
+@Retryable(maxAttempts = "3", backoff = @Backoff(delay = "500", maxDelay = "2000", random = true)
+)
+public @interface LocalRetryable {
+    
+    @AliasFor(annotation = Retryable.class, attribute = "recover")
+    String recover() default "";
+
+    @AliasFor(annotation = Retryable.class, attribute = "value")
+    Class<? extends Throwable>[] value() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "include")
+
+    Class<? extends Throwable>[] include() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "exclude")
+    Class<? extends Throwable>[] exclude() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "label")
+    String label() default "";
+
+}
+```
+```java
+@Target({ ElementType.METHOD, ElementType.TYPE })
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Retryable(maxAttempts = "5", backoff = @Backoff(delay = "1000", maxDelay = "30000", multiplier = "1.2", random = true)
+)
+public @interface RemoteRetryable {
+    
+    @AliasFor(annotation = Retryable.class, attribute = "recover")
+    String recover() default "";
+
+    @AliasFor(annotation = Retryable.class, attribute = "value")
+    Class<? extends Throwable>[] value() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "include")
+    Class<? extends Throwable>[] include() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "exclude")
+    Class<? extends Throwable>[] exclude() default {};
+
+    @AliasFor(annotation = Retryable.class, attribute = "label")
+    String label() default "";
+
+}
+```
+
+### XML Configuration
+下面的例子使用Spring AOP来重试方法remoteCall。
+```xml
+<aop:config>
+    <aop:pointcut id="transactional"
+        expression="execution(* com..*Service.remoteCall(..))" />
+    <aop:advisor pointcut-ref="transactional"
+        advice-ref="retryAdvice" order="-1"/>
+</aop:config>
+
+<bean id="retryAdvice"
+    class="org.springframework.retry.interceptor.RetryOperationsInterceptor"/>
+```
+关于如何配置AOP拦截器的更多的信息参考Spring框架文档。前面的例子在拦截器中使用了一个默认的`RetryTemplate`，位了改变policy或者listener，你只需要将一个RetryTemplate注入到拦截器中。
 # Failsafe
 ## Overview
 FailSafe是一个轻量化的0以来的用于处理错误的库。主要是在Java8+以上的版本中使用。它有简洁与灵活的得API定义。主要的工作原理是将执行逻辑包裹到一个或者多个resilience policies中。这些policies可以按需组合或者聚合。
