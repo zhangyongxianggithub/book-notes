@@ -628,5 +628,74 @@ builder
 ```java
 CompletableFuture<Connection> future = Failsafe.with(retryPolicy).getAsync(this::connect);
 ```
+返回`CompletionStage`的代码可以直接与Failsafe集成，通过`getStageAsync`方法，这个方法接受一个`CompletionStage`Supplier。返回一个带有内置错误处理的`CompletableFuture`。
+```java
+Failsafe.with(retryPolicy)
+  .getStageAsync(this::connectAsync)
+  .thenAccept(System.out::println));
+```
+Failsafe也可以集成外部的线程。`runAsyncExecution`与`getAsyncExecution`方法提供了一个`AsyncExecution`对象可以用来记录其他线程的执行结果。
+```java
+Failsafe.with(retryPolicy).getAsyncExecution(execution -> {
+  // A method that runs in a different thread
+  service.connectAsync().whenComplete((connection, exception) -> {
+    execution.record(connection, exception);
+  });
+});
+```
+如果记录的结果不对或者产生了异常，那么执行会被重试。默认情况下，Failsafe使用ForkJoinPool的common pool来执行异步任务。你也可以指定 `ScheduledExecutorService`或者`ExecutorService`:
+```java
+Failsafe.with(policy).with(executorService).getAsync(this::connect);
+```
+Failsafe可以与其他的自带调度器的异步执行库集成，比如Akka或者Vert.x，这是通过自定义的Scheduler来实现的:
+```java
+Failsafe.with(policy).with(akkaScheduler).getAsync(this::connect);
+```
+### Execution Context
+Failsafe提供了一个`ExecutionContext`包含了执行相关的信息。比如执行的重试次数，开始与经过时间、最近一次的结果与异常。
+```java
+Failsafe.with(retryPolicy).run(ctx -> {
+  log.debug("Connection attempt #{}", ctx.getAttemptCount());
+  connect();
+});
+```
+这对于依赖上次重试的结果来决定下一次是否执行是非常有帮助的。
+```java
+int result = Failsafe.with(retryPolicy).get(ctx -> ctx.getLastResult(0) + 1);
+```
+### Execution Cancellation
+Failsafe支持对执行过程的取消与中断。可以手动触发或者通过Timeout policy触发。同步执行可以通过`Call`手动取消或者中断
+```java
+Call<Connection> call = Failsafe.with(retryPolicy).newCall(this::connect);
+scheduler.schedule(() -> call.cancel(false), 10, TimeUnit.SECONDS);
+Connection connection = call.execute();
+```
+异步执行可以通过Future取消或者中断:
+```java
+CompletableFuture<Connection> future = Failsafe.with(retryPolicy).getAsync(this::connect);
+future.cancel(shouldInterrupt);
+```
+取消会终止所有的重试或者超时都停止。中断会设置执行的线程中断标志。执行过程可以通过检查`ExecutionContext.isCancelled()`来执行取消。
+```java
+Failsafe.with(timeout).getAsync(ctx -> {
+  while (!ctx.isCancelled())
+    doWork();
+});
+```
+执行过程的中断会导致所有的阻塞的调用变成非阻塞状态，并抛出`InterruptedException`异常。非阻塞的执行过程可以通过定期的检查`Thread.isInterrupted()`来中断执行。
+```java
+Failsafe.with(timeout).getAsync(()-> {
+  while (!Thread.isInterrupted())
+    doBlockingWork();
+});
+```
+执行取消可以通过`onCancel`回调广播到其他的代码。允许你执行支持取消的其他代码:
+```java
+Failsafe.with(retryPolicy).getAsync(ctx -> {
+  Request request = performRequest();
+  ctx.onCancel(request::cancel);
+});
+```
+Failsafe为ForkJoinPool添加了中断支持，因为异步集成方法会调用外部的线程，这些执行过程不能被Failsafe直接取消或者中断。
 # resilience4j
 
