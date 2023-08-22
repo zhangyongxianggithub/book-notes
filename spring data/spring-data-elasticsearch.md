@@ -1,3 +1,4 @@
+[TOC]
 version=5.1.2
 # overview
 SDE是Spring Data项目的其中一部分。Spring Data项目为所有的数据存储中间件提供类似与一致性的基于Spring的编程模型。同时也支持数据存储库特有的特性与能力。SDE项目提供了与ES的整合。SDE的关键能力是POJO中心模型。使用POJO中心模型完成与ES文档的交互。使方便的编写Repository风格的数据访问层。
@@ -381,3 +382,127 @@ class ProductService {
   }
 }
 ```
+# Auditing
+## Basics
+Spring Data提供了丰富的支持，可以透明地跟踪谁创建或更改了实体以及更改发生的时间。要从该功能中受益，您必须为实体类配备auditing元数据，这些元数据可以使用注解或实现接口来定义。此外，必须通过注解配置或XML配置来开启auditing以注册所需的基础架构组件。请参阅特定sotre部分的配置示例。仅跟踪创建和修改日期的应用程序不需要使其实体实现`AuditorAware`。
+### Annotation-based Auditing Metadata
+我们提供`@CreatedBy`和`@LastModifiedBy`来捕获创建或修改实体的用户，以及`@CreatedDate`和`@LastModifiedDate`来捕获更改发生的时间。
+```java
+class Customer {
+  @CreatedBy
+  private User user;
+
+  @CreatedDate
+  private Instant createdDate;
+
+  // … further properties omitted
+}
+```
+正如您所看到的，可以根据您想要捕获的信息有选择地应用注解。这些注解指示在发生更改时进行捕获，可用于JDK8日期和时间类型、long、Long以及旧版Java日期和日历的属性。auditing元数据不一定需要存在于根级实体中，也可以添加到嵌入式实体中（取决于使用的实际存储），如下面的代码片段所示。
+```java
+class Customer {
+  private AuditMetadata auditingMetadata;
+  // … further properties omitted
+}
+class AuditMetadata {
+  @CreatedBy
+  private User user;
+  @CreatedDate
+  private Instant createdDate;
+}
+```
+### Interface-based Auditing Metadata
+如果您不想使用注解来定义auditing元数据，您可以让您的域类实现`Auditable`接口。它公开了所有auditing属性的setter方法。
+### AuditorAware
+如果您使用`@CreatedBy`或`@LastModifiedB`，auditing基础设施需要以某种方式了解当前principal。为此，我们提供了一个`AuditorAware<T>`SPI接口，您必须实现该接口来告诉基础架构当前与应用程序交互的用户或系统是谁。泛型类型T定义了用`@CreatedBy`或`@LastModifiedBy`注释的属性必须是什么类型。
+以下示例显示了使用Spring Security的Authentication对象的接口的实现:
+```java
+class SpringSecurityAuditorAware implements AuditorAware<User> {
+
+  @Override
+  public Optional<User> getCurrentAuditor() {
+
+    return Optional.ofNullable(SecurityContextHolder.getContext())
+            .map(SecurityContext::getAuthentication)
+            .filter(Authentication::isAuthenticated)
+            .map(Authentication::getPrincipal)
+            .map(User.class::cast);
+  }
+}
+```
+该实现访问Spring Security提供的Authentication对象，并查找您在`UserDetailsService`实现中创建的自定义`UserDetails`实例。我们在这里假设您通过UserDetails实现公开域用户，但根据找到的身份验证，您也可以从任何地方查找它。
+### ReactiveAuditorAware
+使用reactive基础设施时，您可能希望利用上下文信息来提供`@CreatedBy`或`@LastModifiedBy`信息。我们提供了一个`ReactiveAuditorAware<T>`SPI接口，您必须实现该接口来告诉基础架构当前与应用程序交互的用户或系统是谁。泛型类型T定义了用`@CreatedBy`或`@LastModifiedBy`注释的属性必须是什么类型。以下示例显示了使用反应式Spring Security的Authentication对象的接口实现：
+```java
+class SpringSecurityAuditorAware implements ReactiveAuditorAware<User> {
+
+  @Override
+  public Mono<User> getCurrentAuditor() {
+
+    return ReactiveSecurityContextHolder.getContext()
+                .map(SecurityContext::getAuthentication)
+                .filter(Authentication::isAuthenticated)
+                .map(Authentication::getPrincipal)
+                .map(User.class::cast);
+  }
+}
+```
+该实现访问Spring Security提供的Authentication对象，并查找您在`UserDetailsService`实现中创建的自定义`UserDetails`实例。 我们在这里假设您通过`UserDetails`实现公开域用户，但根据找到的身份验证，您也可以从任何地方查找它。
+## Elasticsearch Auditing
+### Preparing entities
+为了使auditing代码能够确定实体实例是否是新的，该实体必须实现`Persistable<ID>`接口，其定义如下:
+```java
+package org.springframework.data.domain;
+import org.springframework.lang.Nullable;
+public interface Persistable<ID> {
+    @Nullable
+    ID getId();
+    boolean isNew();
+}
+```
+由于Id的存在不足以确定`Elasticsearch`中的实体是否是新实体，因此需要额外的信息。一种方法是使用与创建相关的auditing字段来做出此决定.Person实体可能如下所示，为简洁起见，省略getter和setter方法:
+```java
+@Document(indexName = "person")
+public class Person implements Persistable<Long> {
+    @Id private Long id;
+    private String lastName;
+    private String firstName;
+    @CreatedDate
+    @Field(type = FieldType.Date, format = DateFormat.basic_date_time)
+    private Instant createdDate;
+    @CreatedBy
+    private String createdBy
+    @Field(type = FieldType.Date, format = DateFormat.basic_date_time)
+    @LastModifiedDate
+    private Instant lastModifiedDate;
+    @LastModifiedBy
+    private String lastModifiedBy;
+
+    public Long getId() {     //                                            (1)
+        return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return id == null || (createdDate == null && createdBy == null);  (2)
+    }
+}
+```
+### Activating auditing
+设置实体并提供`AuditorAware`或`ReactiveAuditorAware`, 必须通过在配置类上设置 `@EnableElasticsearchAuditing`来激活auditing：
+```java
+@Configuration
+@EnableElasticsearchRepositories
+@EnableElasticsearchAuditing
+class MyConfiguration {
+   // configuration code
+}
+@Configuration
+@EnableReactiveElasticsearchRepositories
+@EnableReactiveElasticsearchAuditing
+class MyConfiguration {
+   // configuration code
+}
+```
+如果您的代码包含多个不同类型的AuditorAware bean，则必须提供该bean的名称，以用作 `@EnableElasticsearchAuditing`注释的`AuditorAwareRef`参数的参数。
+
