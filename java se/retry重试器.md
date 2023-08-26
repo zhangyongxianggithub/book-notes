@@ -659,6 +659,54 @@ builder.onAbort(e -> log.warn("Connection aborted due to {}.", e.getException())
 ```
 ### Circuit Breaker
 ### Rate Limiter
+Rate Limiter允许你控制执行的速率防止系统过载。Failsafe提供了2种形式的速率限制
+- smooth，平滑速率限制
+- bursty，突发速率限制
+
+#### how it works
+档执行超过了速率限制配置的单位周期的最大次数。当超过的执行到来时，将会抛出`RateLimitExceededException`或者将会等待直到可执行。
+#### Smooth Rate Limiter
+smooth rate limiter限制速率的方式是leaky bucket方法。这个方法可以执行在时间线上平均展开。创建smooth rate limiter的方式如下:
+```java
+// Permits 100 executions per second
+RateLimiter<Object> limiter = RateLimiter.smoothBuilder(100, Duration.ofSeconds(1)).build();
+```
+速率是通过2个参数计算出来的。也可以通过一个参数来计算速率
+```java
+// Permits an execution every 10 millis
+RateLimiter<Object> limiter = RateLimiter.smoothBuilder(Duration.ofMillis(10)).build();
+```
+允许平滑速率限制执行，在达到最大速率时无延迟，并且始终以最大速率或低于最大速率执行，从而避免潜在的突发。
+#### Bursty Rate Limiter
+bursty rate limiter使用一个固定的窗口方式来限定一段时间的执行次数。创建方式如下:
+```java
+// Permits 10 executions every 1 second
+RateLimiter<Object> limiter = RateLimiter.burstyBuilder(10, Duration.ofSeconds(1)).build();
+```
+允许无延迟执行，最多可达当前期间给定的`maxExecutions`。当新的周期开始时，允许的执行次数将重置为配置的`maxExecutions`。当新的时间段开始时，这可能会导致执行突发。较长的时间段可能会导致较大的突发。
+#### Waiting
+默认情况下，当执行超过速率时，超过的执行会抛出`RateLimitExceededException`异常。rate limiter也可以配置为等待一段时间以便执行。
+```java
+// Wait up to 1 second for execution permission
+builder.withMaxWaitTime(Duration.ofSeconds(1));
+```
+rate limiter的实际等待时间可能会根据rate limiter的繁忙程度而有所不同。如果尝试执行的次数持续超过rate limiter允许的次数，则等待时间将会增加。由于同步执行在等待rate limiter时会阻塞，因此应仔细选择maxWaitTime以避免阻塞太多线程。等待rate limiter时，异步执行不会阻塞。
+#### Event Listeners
+RateLimiter支持标准policy listener，这些listener指示通过rate limiter的执行何时成功或失败。
+#### Best Practices
+rate limiter可以而且应该在访问公共依赖项的代码之间共享。这确保了如果超过速率限制，则共享相同依赖项并使用相同rate limiter的所有执行将等待或失败，直到再次允许执行。例如，如果向同一外部服务器发出多个连接或请求，通常它们都应该经过相同的速率限制器。
+#### Standalone Usage
+Rate Limiter可以独立运行。
+```java
+if (rateLimiter.tryAcquirePermit()) {
+  doSomething();
+}
+```
+您还可以将独立的rate limiter与外部scheduler集成以异步等待执行：
+```java
+Duration permitWaitTime = rateLimiter.reservePermit();
+executor.schedule(this::sendRequest, permitWaitTime);
+```
 ### Timeout
 Timeout允许你在执行时间太长时将执行标记为失败并抛出`TimeoutExceededException`。
 ```java
