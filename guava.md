@@ -630,3 +630,38 @@ protected void triggerShutdown() {
 - `servicesByState()`返回所有服务的状态;
 - `startupTimes()`返回所有服务的启动时间;
 虽然建议通过`ServiceManager`管理`Service`生命周期，但通过其他机制启动的状态转换不会影响其方法的正确性。例如，如果`Service`是通过`startAsync()`之外的某种机制启动的，则listeners将在适当的时候被调用，并且`awaitHealthy()`仍将按预期工作。 `ServiceManager`的唯一要求是在构造`ServiceManager`时所有服务必须是NEW。
+# EventBus
+`EventBus`是用来支持不同组件之间的pub/sub通信模式的。组件之间透明的，可以不需要提前知道相互之间的信息。它专门设计用于替代使用显式注册的传统Java进程内事件分发。它不是通用的发布-订阅系统，也不是用于进程间通信。
+## Avoid EventBus
+我们不建议使用EventBus。它是多年前设计的，较新的库提供了更好的方法来解耦组件并对事件做出反应。为了解耦组件，我们建议使用依赖注入框架。对于Android代码，大多数应用程序都使用Dagger。对于服务器代码，常见的选项包括Guice和Spring。框架通常提供一种方法来独立注册多个侦听器，然后将它们作为一个集合一起请求（Dagger、Guice、Spring）。对于响应式事件，我们推荐一个反应流框架，如RxJava（如果您正在为Android构建，则补充其RxAndroid扩展）或Project Reactor。 （有关将代码从使用事件总线转换为使用反应式流框架的基础知识，请参阅以下两个指南：1、2。）EventBus 的某些用法可能最好使用Kotlin协程编写，包括Flow和 Channels。 然而，其他用途可以通过为特定用例提供专门支持的单独库来更好地服务。
+EventBus的限制包括:
+- 它使得生产者和订阅者之间的交叉引用更难找到。这可能会使调试复杂化，导致意外的重入调用，并迫使应用程序在启动时急切地初始化所有可能的订阅者。
+- 当R8和Proguard等优化器/最小化器处理代码时，它使用反射的方式会中断。
+- 它不提供在采取操作之前等待多个事件的方法。例如，它没有提供等待多个生产者全部报告它们“准备好”的方法，也没有提供将来自单个生产者的多个事件一起批处理的方法。
+- 它不支持背压和弹性所需的其他功能。
+- 它不提供对线程的太多控制。
+- 它不提供太多监控。
+- 它不会传播异常，因此应用程序无法对异常做出反应。
+- 它与RxJava、协程和其他更常用的替代方案的互操作性不佳。
+- 它对其订阅者的生命周期提出了要求。 例如，如果在删除一个订阅者和添加下一个订阅者之间发生事件，则该事件将被丢弃。
+- 它的性能不是最优的，尤其是在 Android 下。
+- 它不支持参数化类型。
+- 随着Java 8中lambda的引入，EventBus从比侦听器更详细变得更详细。
+
+```java
+// Class is typically registered by the container.
+class EventBusChangeRecorder {
+  @Subscribe public void recordCustomerChange(ChangeEvent e) {
+    recordChange(e.getChange());
+  }
+}
+// somewhere during initialization
+eventBus.register(new EventBusChangeRecorder());
+// much later
+public void changeCustomer()
+  ChangeEvent event = getChangeEvent();
+  eventBus.post(event);
+}
+```
+## one minute guide
+将一个使用EventListener的系统转换为EventBus是很容易的。
