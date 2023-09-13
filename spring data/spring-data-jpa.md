@@ -642,10 +642,165 @@ public Properties jpaProperties() {
 
 eclipselink的实现忽略了。这个可能需要更高的版本。
 ### Configuring Fetch-and LoadGraphs
+### Projections
+Spring Data查询方法通常会返回Repo管理的聚合根的一个或者多个实例，然而，有时候需要依据聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型，这种类型是聚合根的特定部分的视图。比如如下的Repository与聚合根。
+```java
+class Person {
 
+  @Id UUID id;
+  String firstname, lastname;
+  Address address;
 
-## 存储过程
-## 规格
+  static class Address {
+    String zipCode, city, street;
+  }
+}
+
+interface PersonRepository extends Repository<Person, UUID> {
+
+  Collection<Person> findByLastname(String lastname);
+}
+```
+现在假设我们只想检索人员的name属性，怎么办呢？
+#### 基于接口的投影
+最简单的方式就是接口投影的方式，接口暴漏属性的访问器方法，如下：
+```java
+interface NamesOnly {
+  String getFirstname();
+  String getLastname();
+}
+```
+需要注意的地方是这里定义的属性访问器方法与聚合根中的属性访问器方法是完全一样，定义的查询方法如下：
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+
+  Collection<NamesOnly> findByLastname(String lastname);
+}
+```
+查询执行引擎在运行时会为每个条目创建接口的代理实例，对访问器的访问会被转发到目标对象上。在Repository中声明的方法如果覆盖基类接口中的方法（比如在CrudRepository、特定于存储的存储库接口或Simple…Repository接口中声明的方法）会导致对基本方法的调用，无论声明的返回类型如何。 确保使用兼容的返回类型，因为基方法不能用于投影。 一些存储模块支持 @Query 注释，将重写的基本方法转换为查询方法，然后可用于返回投影。投影是可以递归进行的，如果你想要包含Address的信息，可以创建一个Address接口的投影信息，如下：
+```java
+interface PersonSummary {
+
+  String getFirstname();
+  String getLastname();
+  AddressSummary getAddress();
+
+  interface AddressSummary {
+    String getCity();
+  }
+}
+```
+方法调用时，目标实例的address属性被获取并且被包装到一个投影代理里面。投影接口的访问器方法与聚合根的属性访问器完全匹配的投影接口叫做封闭式投影接口，上面的例子就是封闭式投影。如果你使用封闭式投影，Spring Data可以优化查询执行，因为我们知道要查询的所有的属性，而且这些属性都会都会被包装到投影接口代理中，更多的信息，可以看参考文档。
+不匹配的叫做开放式投影，投影接口的访问器方法必须使用`@Value`注解标注，如下：
+```java
+interface NamesOnly {
+  @Value("#{target.firstname + ' ' + target.lastname}")
+  String getFullName();
+}
+```
+投影代理后面的聚合根就是`target`变量，开放式投影不能使用查询优化，因为SpEL表达式可能会使用聚合根中的任何属性。@Value中的表达式不要太复杂。你不太可能想要String的编程，对于简单的表达式，可以借助default方法的方式完成。
+```java
+interface NamesOnly {
+
+  String getFirstname();
+  String getLastname();
+
+  default String getFullName() {
+    return getFirstname().concat(" ").concat(getLastname());
+  }
+}
+```
+这种方式你只能选择投影接口暴漏出来的方法实现拼接逻辑，还有另外一种方法更灵活一些，定义一个Spring Bean实现自定义的逻辑，然后通过SpEL表达式调用这段逻辑，如下：
+```java
+@Component
+class MyBean {
+
+  String getFullName(Person person) {
+  }
+}
+interface NamesOnly {
+  @Value("#{@myBean.getFullName(target)}")
+  String getFullName();
+}
+```
+需要注意SpEL是如何引用myBean并调用`getFullName(...)`方法的，注意bean中方法的参数是聚合根实例。投影接口的方法上的SpEL表达式也可以使用方法参数，方法参数是一个名叫args的Object对象数组，表达式中通过args[0,1,2]的方式引用，下面是一个例子:
+```java
+interface NamesOnly {
+  @Value("#{args[0] + ' ' + target.firstname + '!'}")
+  String getSalutation(String prefix);
+}
+```
+对于更复杂的表达式，你应该使用Spring Bean，并通过SpEL调用调用Bean的方法的形式操作。
+投影接口里面的访问器方法可以返回null安全的数据，支持的null包装类型如下
+- java.util.Optional
+- com.google.common.base.Optional
+- scala.Option
+- io.varr.control.Option
+如下：
+```java
+interface NamesOnly {
+  Optional<String> getFirstname();
+}
+```
+如果底层的投影值不是null，返回值的包装形式，如果是null返回空。
+#### 基于类的投影(DTOs)
+另一种定义投影的方式是使用DTO，里面包含要被检索的属性，与投影接口的使用方法差不多，区别就是DTO方式不会产生代理，也不支持嵌套的投影，如果底层存储通过限定要加载的字段的方式优化查询执行，要被加载的字段必须通过构造函数的参数名字定义，下面是投影DTO的例子
+```java
+class NamesOnly {
+
+  private final String firstname, lastname;
+
+  NamesOnly(String firstname, String lastname) {
+
+    this.firstname = firstname;
+    this.lastname = lastname;
+  }
+
+  String getFirstname() {
+    return this.firstname;
+  }
+
+  String getLastname() {
+    return this.lastname;
+  }
+}
+```
+```java
+record NamesOnly(String firstname, String lastname) {
+}
+```
+Java Records是理想的定义DTO的方式，因为符合值的语义。所有的字段都是private final的，并且自动创建`equals()\hashCode()\toString()`方法。也可以自定义DTO。可以使用Lombok的@Value避免模板代码的生成。基于类的投影使用通过JPQL表达式的构造函数表达式方式使用。比如`SELECT new com.example.NamesOnly(u.firstname, u.lastname) from User u`记住DTO的FQDN使用，投影不能用于native查询。
+#### 动态投影
+到目前为止，我们已经使用投影类型作为返回类型与返回集合的元素类型，然而，你可能想要实际运行时决定返回的类型（返回的类型是动态），为了使用动态投影，代码如下：
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+  <T> Collection<T> findByLastname(String lastname, Class<T> type);
+}
+```
+这种方式，方法获取聚合根时会根据传递的Class决定是返回聚合根还是返回投影类型。
+```java
+void someMethod(PersonRepository people) {
+
+  Collection<Person> aggregates =
+    people.findByLastname("Matthews", Person.class);
+
+  Collection<NamesOnly> aggregates =
+    people.findByLastname("Matthews", NamesOnly.class);
+}
+```
+```java
+void someMethod(PersonRepository people) {
+
+  Collection<Person> aggregates =
+    people.findByLastname("Matthews", Person.class);
+
+  Collection<NamesOnly> aggregates =
+    people.findByLastname("Matthews", NamesOnly.class);
+}
+```
+检查`Class`类型的查询参数是否符合动态投影参数的条件。如果查询的实际返回类型等于`Class`参数的泛型参数类型，则匹配的 `Class`参数不可用于查询或SpEL表达式中。 如果您想使用`Class`参数作为查询参数，请确保使用不同的泛型参数，例如Class<?>。
+### 存储过程
+### 规格
 JPA2版本加入了谓词API的支持，你可以通过编程的方式构造查询条件，通过书写criteria，你可以定义一个领域模型的查询子句，Spring Data JPA采用了领域驱动的概念，为了支持规格描述，你的repository需要扩展`JpaSpecificationExecutor`接口，如下所示
 ```java
 public interface CustomerRepository extends CrudRepository<Customer, Long>, JpaSpecificationExecutor<Customer> {
@@ -691,7 +846,7 @@ MonetaryAmount amount = new MonetaryAmount(200.0, Currencies.DOLLAR);
 List<Customer> customers = customerRepository.findAll(
   isLongTermCustomer().or(hasSalesOfMoreThan(amount)));
 ```
-## QBE查询方式
+### QBE查询方式
 QBE是一个用户友好的查询方式，可以动态的创建查询，事实上，QBE查询方式对底层查询SQL来说，是透明的。QBE的API包含3个部分
 - Probe:领域对象的实际实例；
 - ExampleMatcher:特定字段的匹配规则，多个Example之间可以复用;
@@ -791,7 +946,7 @@ public class PersonService {
 |ENDING (case-insensitive)|LOWER(firstname) like '%' + LOWER(?0)|
 |CONTAINING (case-sensitive)|firstname like '%' + ?0 + '%'|
 |CONTAINING (case-insensitive)|LOWER(firstname) like '%' + LOWER(?0) + '%'|
-## 事务
+### 事务
 默认情况下，repository实例中继承于SimpleJpaRepository接口的CRUD方法都是事务性的，对于读操作来说，事务配置readOnly=true，其他的配置与只使用@Transactional的配置相同，这是为了可以使用事务的默认配置，由事事务repository片段支持的repository方法从实际片段方法继承事务属性。
 如果你想要调整repo、中一个方法的事务配置，只需要重新声明方法的事务就可以了，比如
 ```java
@@ -849,7 +1004,7 @@ interface UserRepository extends JpaRepository<User, Long> {
 ```
 通常，您希望将 readOnly 标志设置为 true，因为大多数查询方法只读取数据。 与此相反，`deleteInactiveUsers()`使用 `@Modifying`注释这会覆盖事务配置。 因此，该方法运行时，readOnly配置是false。
 你可以在只读查询上使用事务，并通过设置`readOnly=true`来标记它们，但是，这么做并不能保证你不会触发一个变更查询（虽然有的数据拒绝在只读事务中执行insert或者update语句），但是readOnly标记可以作为一个提示传播到底层的JDBC驱动中，驱动程序可以用来做性能优化。此外spring对底层的JPA提供程序做了一些优化。比如：当与Hibernate一起使用时，当事务被配置为`readOnly=true`时，flush modo会被设置为NEVER，这会让Hibernate跳过脏检查（对大量的对象树的检索会带来明显的提升）
-## Locking
+### Locking
 为了指定要使用的lock模式，你可以在查询方法上使用@Lock注解，如下面的代码所示
 ```java
 interface UserRepository extends Repository<User, Long> {
@@ -869,7 +1024,7 @@ interface UserRepository extends Repository<User, Long> {
 }
 
 ```
-## Auditing审计
+### Auditing审计
 Spring Data 提供了成熟的审计支持，这些支持可以对entity的创建/变更保持透明的及时的跟踪。为了使用这些功能，你必须给你的实体类添加有关审计的元数据信息，可以使用注解的形式或者实现指定的接口。另外，审计功能需要一些注解配置或者XML配置才能开启，这些配置需要注册一些需要的基础组件。请参考配置案例中的store-specific章节。只需要跟踪创建/修改日期的应用不需要指定任何的AuditorAware。
 1. 基于注解的审计元数据
 我们提供了@CreatedBy、@LastModifiedBy来捕获创建与修改实体的用户，@CreatedDate、@LastModifiedDate用来捕获发生变更的时间。
@@ -942,7 +1097,7 @@ class SpringSecurityAuditorAware implements ReactiveAuditorAware<User> {
   }
 }
 ```
-## JPA Auditing
+### JPA Auditing
 1. 普通的Auditing配置
 Spring Data JPA提供了entity监听器，这个监听器可以用来触发捕获审计信息的操作，首先，为了所有的实体都可以使用到这个entity监听器，你必须注册AuditingEntityListener在你的orm.xml文件中，如下所示
 ```xml
@@ -980,160 +1135,8 @@ class Config {
 }
 ```
 如果你的应用上下文中存在AuditorAware类型的bean，审计的基础组件会自动使用这个bean来决定当前登录的用户；如果你的ApplicationContext中有多个实现或者多个bean，你可以通过@EnableJpAAuditing的auditorAwareRef属性明确的指定选择使用的AuditorAware实例。
-# JPA仓库
-## 投影
-Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例，然而，有时候需要依据聚合根的某些特定的属性创建投影，Spring Data可以返回特定的聚合根的投影类型。比如如下的仓库与聚合根。
-```java
-class Person {
-
-  @Id UUID id;
-  String firstname, lastname;
-  Address address;
-
-  static class Address {
-    String zipCode, city, street;
-  }
-}
-
-interface PersonRepository extends Repository<Person, UUID> {
-
-  Collection<Person> findByLastname(String lastname);
-}
-```
-现在假设我们只想检索人员的name属性，怎么办呢？
-### 基于接口的投影
-最简单的方式就是接口投影的方式，接口暴漏属性的访问器方法，如下：
-```java
-interface NamesOnly {
-  String getFirstname();
-  String getLastname();
-}
-```
-需要注意的地方是没这里定义的属性访问器方法与聚合根中的属性访问器方法是完全相同的，定义的查询方法如下：
-```java
-interface PersonRepository extends Repository<Person, UUID> {
-
-  Collection<NamesOnly> findByLastname(String lastname);
-}
-```
-查询执行引擎在运行时会为每个条目创建接口的代理实例，对访问器的访问会被转发到目标对象上。投影是可以递归进行的，如果你想要包含Address的信息，可以创建一个Address接口的投影信息，如下：
-```java
-interface PersonSummary {
-
-  String getFirstname();
-  String getLastname();
-  AddressSummary getAddress();
-
-  interface AddressSummary {
-    String getCity();
-  }
-}
-```
-方法调用时，目标实例的address属性被获取并且被包装到一个投影代理里面。投影接口的访问器方法与聚合根的属性访问器完全匹配的投影接口叫做封闭式投影，上面的例子就是封闭式投影。如果你使用封闭式投影，Spring Data可以优化查询执行，因为我们知道所有的属性都会被包装到投影接口代理中，更多的信息，可以看参考文档。
-不匹配的叫做开放式投影，投影接口的访问器方法必须使用@Value注解标注，如下：
-```java
-interface NamesOnly {
-  @Value("#{target.firstname + ' ' + target.lastname}")
-  String getFullName();
-  …
-}
-```
-聚合根就是target变量，开放式投影不能使用查询优化。@Value中的表达式不要太复杂。你不太可能想要String的编程，对于简单的表达式，可以借助default方法的方式完成。
-```java
-interface NamesOnly {
-
-  String getFirstname();
-  String getLastname();
-
-  default String getFullName() {
-    return getFirstname().concat(" ").concat(getLastname());
-  }
-}
-```
-这种方式你只能选择投影接口暴漏出来的方法实现拼接逻辑，还有另外一种方法更灵活一些，在一个定义的SpringBean中实现拼接逻辑，然后通过SpEL表达式调用这段逻辑，如下：
-```java
-@Component
-class MyBean {
-
-  String getFullName(Person person) {
-    …
-  }
-}
-
-interface NamesOnly {
-
-  @Value("#{@myBean.getFullName(target)}")
-  String getFullName();
-  …
-}
-```
-需要注意SpEL是如何引用myBean并调用getFullName(...)方法的，投影接口的方法也可以有参数，并在表达式中使用，表达式中通过args[0,1,2]的方式引用
-```java
-interface NamesOnly {
-
-  @Value("#{args[0] + ' ' + target.firstname + '!'}")
-  String getSalutation(String prefix);
-}
-```
-投影接口里面的访问器方法可以返回null安全的数据，支持的null包装类型如下
-- java.util.Optional
-- com.google.common.base.Optional
-- scala.Option
-- io.varr.control.Option
-如下：
-```java
-interface NamesOnly {
-
-  Optional<String> getFirstname();
-}
-```
-### 基于类的投影
-另一种定义投影的方式是使用DTO，里面包含要被检索的属性，与投影接口的使用方法差不多，区别就是DTO方式不会产生代理，也不支持嵌套的投影，如果底层存储通过限定要加载的字段的方式优化查询执行，要被加载的字段必须通过构造函数的参数名字定义，下面是投影DTO的例子
-```java
-class NamesOnly {
-
-  private final String firstname, lastname;
-
-  NamesOnly(String firstname, String lastname) {
-
-    this.firstname = firstname;
-    this.lastname = lastname;
-  }
-
-  String getFirstname() {
-    return this.firstname;
-  }
-
-  String getLastname() {
-    return this.lastname;
-  }
-
-  // equals(…) and hashCode() implementations
-}
-```
-可以使用Lombok的@Value避免模板代码的生成
-### 动态投影
-到目前为止，我们已经使用投影类型作为返回类型与返回集合的元素类型，然而，你可能想要实际运行时决定返回的类型（返回的是动态），为了使用动态投影，代码如下：
-```java
-interface PersonRepository extends Repository<Person, UUID> {
-
-  <T> Collection<T> findByLastname(String lastname, Class<T> type);
-}
-```
-这种方式，方法获取聚合根时会根据传递的Class决定是返回聚合根还是返回投影类型。
-```java
-void someMethod(PersonRepository people) {
-
-  Collection<Person> aggregates =
-    people.findByLastname("Matthews", Person.class);
-
-  Collection<NamesOnly> aggregates =
-    people.findByLastname("Matthews", NamesOnly.class);
-}
-```
-检查 Class 类型的查询参数是否符合动态投影参数的条件。 如果查询的实际返回类型等于 Class 参数的泛型参数类型，则匹配的 Class 参数不可用于查询或 SpEL 表达式中。 如果您想使用 Class 参数作为查询参数，请确保使用不同的泛型参数，例如 Class<?>。
-# 其他注意事项
-## 在自定义的实现中使用JpaContext
+## 其他注意事项
+### 在自定义的实现中使用JpaContext
 当环境中有多个EntityManager类型的实例或者有自定义的repository实现时，你需要讲正确的EntityManager注入到repository的实现类中去；你也可以在@PersistenceContext注解中明确的指定EntityManager的名字，或者如果EntityManager是自动注入的，那么使用@Qualifier。从Spring Data JPA 1.9版本后，Spring Data JPA引入了一个叫做JpaContext的类，可以让你通过领域类来获得与其相关的EntityManager。我们假设一个领域类只会被应用中的一个EntityManager实例管理。下面的例子是如何在自定义的repository中使用JpaContext的方法。
 ```java
 class UserRepositoryImpl implements UserRepositoryCustom {
@@ -1172,7 +1175,7 @@ Spring支持多种持久性单元。然而有时候，你想要模块化你的�
   </property>
 </bean>
 ```
-## CDI Integration
+### CDI Integration
 Repository接口的实例通常都是由容器创建的，所以当使用Spring Data的时候，使用Spring也是非常合适的。Spring为创建bean实例提供了成熟的支持，就像在[Creating Repository Instances](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.create-instances)文档中所示。从1.1.0版本开始，Spring Data JPA提供了自定义的CDI扩展，允许在CDI环境中使用repository抽象定义。扩展是JAR包的一部分。
 您现在可以通过为 EntityManagerFactory 和 EntityManager 实现 CDI 生产者来设置基础架构，如以下示例所示：
 ```java
