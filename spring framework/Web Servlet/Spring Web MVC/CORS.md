@@ -1,0 +1,19 @@
+# 简介
+由于安全的原因，浏览器禁止AJAX访问当前origin(源)之外的资源；例如，你用浏览器打开2个tab，一个tab访问你的支付宝，一个tab访问evil.com；evil.com平台的js不应该用你的支付宝的身份认证信息访问你的支付宝账户信息；并从你的账户中扣除金钱。跨源资源共享(cross-origin resource sharing)是一个被大多数的浏览器实现的W3C规范；可以指定一些授权的源地址可以访问当前的源的API，这样不需要使用一些基于IFRAME活着JSONP的不太安全的方式或者不太强大的临时方案。
+# Credentialed Request
+
+# 处理
+	CORS规范规定对于检查请求、简单请求、实际请求的处理规定时不同的，详细的可以参阅官方文档。
+Spring MVC的HandlerMapping对象提供了处理CORS的内置的支持；当映射器成功将一个请求匹配到一个处理器时；HandlerMaping对象同时检查请求与处理器的CORS配置以便决定后续的处理步骤；Preflight请求会被直接在此处理，而带有CORS的实际请求会被拦截、检验、并且会需要CORS相关的响应头集合。
+为了启用跨源访问请求，此时Origin的头与请求的host头的值是不同的；你需要明确的声明一些CORS配置；如果没有发现匹配的CORS配置，preflight请求会被拒绝；实际请求的的返回的响应中也不会包含CORS信息，浏览器后续会拒绝访问他们（第一次是可以访问的，后端会进行跨源检测）。
+每一个处理器映射器都可以使用URL模式来独立的配置CORS信息，这些URL模式是基于CorsConfiguation配置的路径映射，只有映射了指定路径的URL才会启用这些CORS控制；在大多数场景下，应用会使用MVC的配置来声明这些映射；这样的映射对于所有的处理器映射器都是有效的。
+全局的CORS配置与controller层面的CORDS会组合起来起作用；例如，@CrossOrigin修饰Controller挥着方法；handler也可以实现CorsConfigurationSource来实现CORS控制。当既有全局的又有局部的属性时，碰到那些只接受一个属性值的属性来说，局部的属性会覆盖全局的属性。
+4.1.7.3 @CrossOrigin
+@CrossOrigin可以放在方法与controller上，启用跨源访问请求支持；缺省情况下，@CrossOrigin允许所有的源、所有的header、所有的HTTP方法；
+4.1.7.4 全局配置
+全局配置：
+
+配置方式：
+
+4.1.7.5 CORS 过滤器
+你可以通过内置的CorsFilter提供CORS支持；如果你试图在Spring Security环境下使用CorsFilter，必须要知道Spring Security已经内置了对CORS的支持。配置这个Filter需要传送一个CorsConfigurationSource对象到构造方法。
