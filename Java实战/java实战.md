@@ -3,7 +3,7 @@
 Java的模块化系统诞生于Jigsaw项目，从Java9开始引入，演进了很多年，具有很大意义，本章只做简单的介绍。
 ## 模块化的驱动力: 软件的推理
 2个设计模式:
-- 关注点分离，separation of concern
+- 关注点分离，separation of concern。将程序分解为一个个相互独立的特性。可以将这些特性划分到模块
 - 信息隐藏，information hiding
 
 可以创建易于理解的软件。
