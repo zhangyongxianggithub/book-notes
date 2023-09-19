@@ -230,10 +230,10 @@ Access-Control-Allow-Headers 标头字段用于预检请求的响应。其指明
 # HTTP 请求标头字段
 本节列出了可用于发起跨源请求的标头字段。请注意，这些标头字段无须手动设置。当开发者使用 XMLHttpRequest 对象发起跨源请求时，它们已经被设置就绪。
 ## Origin
-Origin 标头字段表明预检请求或实际跨源请求的源站。origin 参数的值为源站 URL。它不包含任何路径信息，只是服务器名称。注意，在所有访问控制请求中，Origin 标头字段总是被发送。
+`Origin`标头字段表明预检请求或实际跨源请求的源站。`Origin`参数的值为源站URL。它不包含任何路径信息，只是服务器名称。注意，在所有访问控制请求中，`Origin`标头字段总是被发送。
 ## Access-Control-Request-Method
-Access-Control-Request-Method 标头字段用于预检请求。其作用是，将实际请求所使用的 HTTP 方法告诉服务器。`Access-Control-Request-Method: <method>`
+`Access-Control-Request-Method`标头字段用于预检请求。其作用是，将实际请求所使用的HTTP方法告诉服务器。`Access-Control-Request-Method: <method>`
 ## Access-Control-Request-Headers
-Access-Control-Request-Headers 标头字段用于预检请求。其作用是，将实际请求所携带的标头字段（通过 setRequestHeader() 等设置的）告诉服务器。这个浏览器端标头将由互补的服务器端标头 Access-Control-Allow-Headers 回答。
+`Access-Control-Request-Headers`标头字段用于预检请求。其作用是，将实际请求所携带的标头字段(通过`setRequestHeader()`等设置的)告诉服务器。这个浏览器端标头将由互补的服务器端标头`Access-Control-Allow-Headers`回答。
 
 
