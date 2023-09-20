@@ -129,4 +129,107 @@ GitHubService service = retrofit.create(GitHubService.class);
 ### CUSTOM CONVERTERS
 如果您需要与使用Retrofit不支持开箱即用的内容格式（例如 YAML、txt、自定义格式）的API进行通信，或者您希望使用不同的库来实现现有格式，您可以轻松创建您自己的转换器。创建一个扩展`Converter.Factory`类的类，并在构建适配器时传入一个实例。
 # Feign
-Feign是一个HTTP客户端库，
+Feign是一个HTTP客户端库，参考了Retrofit、JAXRS-2.0、WebSocket等内容，Feign的首要目标是降低HTTP开发的复杂性。
+## Why Feign and not X?
+Feign使用Jersey或者CXF等工具来写Java的HTTP客户端。更多的，Feign也可以基于http lib比如Apache HC等的客户端。Feign客户端可以以最小的消耗自定义的编解码器以及错误处理器等连接到HTTP API。
+## How does Feign work
+Feign的工作原理是将注解处理为模板化请求。在输出之前，参数会以简单的方式应用于这些模板。尽管Feign仅限于支持基于文本的API，但它极大地简化了系统方面，例如重放请求。此外，知道这一点后，Feign可以轻松地对您的转换进行单元测试。
+## Java Version Compatibility
+Feign 10.X与以上的版本基于Java 8，Feign 9.x可以工作于JDK 6版本以上。
+# Feature overview
+下面的图是feign提供的关键特性
+![Feign提供的关键特性](feign-feature.png)
+# Roadmap
+# Usage
+```xml
+<dependency>
+    <groupId>io.github.openfeign</groupId>
+    <artifactId>feign-core</artifactId>
+    <version>??feign.version??</version>
+</dependency>
+```
+## Basics
+使用方法类似:
+```java
+interface GitHub {
+  @RequestLine("GET /repos/{owner}/{repo}/contributors")
+  List<Contributor> contributors(@Param("owner") String owner, @Param("repo") String repo);
+
+  @RequestLine("POST /repos/{owner}/{repo}/issues")
+  void createIssue(Issue issue, @Param("owner") String owner, @Param("repo") String repo);
+
+}
+
+public static class Contributor {
+  String login;
+  int contributions;
+}
+
+public static class Issue {
+  String title;
+  String body;
+  List<String> assignees;
+  int milestone;
+  List<String> labels;
+}
+
+public class MyApp {
+  public static void main(String... args) {
+    GitHub github = Feign.builder()
+                         .decoder(new GsonDecoder())
+                         .target(GitHub.class, "https://api.github.com");
+
+    // Fetch and print a list of the contributors to this library.
+    List<Contributor> contributors = github.contributors("OpenFeign", "feign");
+    for (Contributor contributor : contributors) {
+      System.out.println(contributor.login + " (" + contributor.contributions + ")");
+    }
+  }
+}
+```
+## 接口注解
+Feign定义了一个Contract对象，用于定义接口与底层的客户端如何交互工作。Feign的默认的contract定义了下面的注解:
+|**注解**|**接口目标**|**使用方法**|
+|:---|:---|:---|
+|@RequestLine|Method|定义HttpMethod/UriTemplate，路径中表达式包含在{}中，其中表达式使用方法参数中的@Param定义|
+|@Param|Parameter|定义一个模板变量，其值将用于解析相应的模板表达式，如果值丢失，它将尝试从字节码方法参数名称中获取名称（如果代码是使用-parameters标志编译的）|
+|@Headers|Method,Type|定义一个`HeaderTemplate`；UriTemplate的变体。使用@Param注释值来解析相应的表达式。当用于类型时，模板将应用于每个请求。当用于方法时，模板将仅应用于带注释的方法。|
+|@QueryMap|Parameter|定义一个map，pojo，最终转化为多个query string|
+|@HeaderMap|Parameter|定义一个map，转换为Http Headers|
+|@Body|Method|定义一个模板，类似于`UriTemplate`和`HeaderTemplate`，它使用 @Param注解的值来解析相应的表达式。|
+
+如果请求需要提交到一个不同的host，需要在创建Feign客户端时提供或者对没个方法提供一个URI参数作为目标Host，
+```java
+@RequestLine("POST /repos/{owner}/{repo}/issues")
+void createIssue(URI host, Issue issue, @Param("owner") String owner, @Param("repo") String repo);
+```
+## Templates and Expressions
+Feign表达式表示Simple String Expressions (Level 1)，这是[RFC 6570 URI Template](https://tools.ietf.org/html/rfc6570)定义的。
+```java
+public interface GitHub {
+
+  @RequestLine("GET /repos/{owner}/{repo}/contributors")
+  List<Contributor> contributors(@Param("owner") String owner, @Param("repo") String repository);
+
+  class Contributor {
+    String login;
+    int contributions;
+  }
+}
+
+public class MyApp {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+                         .decoder(new GsonDecoder())
+                         .target(GitHub.class, "https://api.github.com");
+
+    /* The owner and repository parameters will be used to expand the owner and repo expressions
+     * defined in the RequestLine.
+     *
+     * the resulting uri will be https://api.github.com/repos/OpenFeign/feign/contributors
+     */
+    github.contributors("OpenFeign", "feign");
+  }
+}
+```
+表达式在一对中括号中，可以包含正则表达式，在:后指出来限定值的匹配。比如上面的例子owner必须是字母``{owner:[a-zA-Z]*}。
