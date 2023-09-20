@@ -128,3 +128,5 @@ GitHubService service = retrofit.create(GitHubService.class);
 ```
 ### CUSTOM CONVERTERS
 如果您需要与使用Retrofit不支持开箱即用的内容格式（例如 YAML、txt、自定义格式）的API进行通信，或者您希望使用不同的库来实现现有格式，您可以轻松创建您自己的转换器。创建一个扩展`Converter.Factory`类的类，并在构建适配器时传入一个实例。
+# Feign
+Feign是一个HTTP客户端库，
