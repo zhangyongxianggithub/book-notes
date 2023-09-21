@@ -232,4 +232,34 @@ public class MyApp {
   }
 }
 ```
-表达式在一对中括号中，可以包含正则表达式，在:后指出来限定值的匹配。比如上面的例子owner必须是字母``{owner:[a-zA-Z]*}。
+表达式在一对中括号中，可以包含正则表达式，在:后指出来限定值的匹配。比如上面的例子owner必须是字母`{owner:[a-zA-Z]*}`。请求参数可以使用扩展的方式，`RequestLine`与`QueryMap`模板遵循[URI Template - RFC6570](https://tools.ietf.org/html/rfc6570)规范。Level 1规范的内容如下:
+- 不能解析的表达式会被忽略
+- 所有文本或者变量值都会执行编码
+
+Level 3的内容如下:
+- Maps/Lists以默认的方式展开
+- 只支持单个变量模板
+
+```
+{;who}             ;who=fred
+{;half}            ;half=50%25
+{;empty}           ;empty
+{;list}            ;list=red;list=green;list=blue
+{;map}             ;semi=%3B;dot=.;comma=%2C
+```
+
+```java
+public interface MatrixService {
+
+  @RequestLine("GET /repos{;owners}")
+  List<Contributor> contributors(@Param("owners") List<String> owners);
+
+  class Contributor {
+    String login;
+    int contributions;
+  }
+}
+```
+如果上面例子中的owners的值为Matt、Jeff、Susan。uri会被扩展成`/repos;owners=Matt;owners=Jeff;owners=Susan`。
+### Undefined vs Empty Values
+
