@@ -1,3 +1,83 @@
+# 处理器方法
+## Multipart
+如果开启了`MultipartResolver`，Content-Type=multipart/form-data的POST请求体的内容将会被解析并且可以使用常规的请求参数的方式访问。下面的例子展示了访问一个普通的表单field与一个上传文件的例子:
+```java
+@Controller
+public class FileUploadController {
+
+	@PostMapping("/form")
+	public String handleFormUpload(@RequestParam("name") String name,
+			@RequestParam("file") MultipartFile file) {
+
+		if (!file.isEmpty()) {
+			byte[] bytes = file.getBytes();
+			// store the bytes somewhere
+			return "redirect:uploadSuccess";
+		}
+		return "redirect:uploadFailure";
+	}
+}
+```
+可以将参数声明为`List<MultipartFile>`，这样针对一个参数名可以解析多个上传的文件。当`@RequestParam`注解声明为`Map<String,MultipartFile>`或者`MultiValueMap<String,MultipartFile>`时，不需要在注解中指定参数名，文件与参数名会填充到map中。你也可以使用Servlet规范的multi形式，比如使用`jakarta.servlet.http.Part`参数代替`MultipartFile`，或者作为集合元素的元素类型。您还可以将multipart请求绑定到对象。例如，前面示例中的表单字段和文件可以是表单对象上的字段，如以下示例所示：
+```java
+class MyForm {
+
+	private String name;
+
+	private MultipartFile file;
+
+	// ...
+}
+
+@Controller
+public class FileUploadController {
+
+	@PostMapping("/form")
+	public String handleFormUpload(MyForm form, BindingResult errors) {
+		if (!form.getFile().isEmpty()) {
+			byte[] bytes = form.getFile().getBytes();
+			// store the bytes somewhere
+			return "redirect:uploadSuccess";
+		}
+		return "redirect:uploadFailure";
+	}
+}
+```
+Multipart请求也可能不是浏览器提交的，比如Rest服务。下面的例子是一个例子:
+```http
+POST /someUrl
+Content-Type: multipart/mixed
+
+--edt7Tfrdusa7r3lNQc79vXuhIIMlatb7PQg7Vp
+Content-Disposition: form-data; name="meta-data"
+Content-Type: application/json; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+{
+	"name": "value"
+}
+--edt7Tfrdusa7r3lNQc79vXuhIIMlatb7PQg7Vp
+Content-Disposition: form-data; name="file-data"; filename="file.properties"
+Content-Type: text/xml
+Content-Transfer-Encoding: 8bit
+... File Data ...
+```
+您可以通过`@RequestParam`以字符串的形式访问"meta-data"数据part，但您可能更想要将其从JSON反序列化(类似于`@RequestBody`)。在使用HttpMessageConverter转换后，使用`@RequestPart`注解来访问multipart：
+```java
+@PostMapping("/")
+public String handle(@RequestPart("meta-data") MetaData metadata,
+		@RequestPart("file-data") MultipartFile file) {
+	// ...
+}
+```
+你可以将`@RequestPart`与`jakarta.validation.Valid`配合使用或者使用Spring的`@Validated`注解。这样可以应用Bean校验。默认情况下，校验不通过会产生`MethodArgumentNotValidException`异常，然后Spring会以400返回给客户端。你可以通过在Controller方法中的`Errors`或者`BindingResult`来处理校验错误。
+```java
+@PostMapping("/")
+public String handle(@Valid @RequestPart("meta-data") MetaData metadata,
+		BindingResult result) {
+	// ...
+}
+```
 # 异常处理
 `@Controller/@ControllerAdvice`类可以使用`@ExceptionHandler`方法来处理controller方法抛出的异常。正如下面的例子所示:
 ```java
