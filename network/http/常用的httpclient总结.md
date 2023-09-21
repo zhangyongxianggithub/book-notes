@@ -262,4 +262,35 @@ public interface MatrixService {
 ```
 如果上面例子中的owners的值为Matt、Jeff、Susan。uri会被扩展成`/repos;owners=Matt;owners=Jeff;owners=Susan`。
 ### Undefined vs Empty Values
+未定义的表达式的意思就是表达式的值是null或者没有提供表达式的值。根据RFC6570规范，可以为表达式提供空值，当Feign解析表达式时，它首先检测值是否被定义，如果存在，正常执行，如果未定义，则查询参数被移除，下面的例子:
+```java
+public void test() {
+   Map<String, Object> parameters = new LinkedHashMap<>();
+   parameters.put("param", "");
+   this.demoClient.test(parameters);
+}
+```
+产生的请求: `http://localhost:8080/test?param=`.
+对下面的例子:
+```java
+public void test() {
+   Map<String, Object> parameters = new LinkedHashMap<>();
+   this.demoClient.test(parameters);
+}
+```
+产生的结果: `http://localhost:8080/test`。
+未定义:
+```java
+public void test() {
+   Map<String, Object> parameters = new LinkedHashMap<>();
+   parameters.put("param", null);
+   this.demoClient.test(parameters);
+}
+```
+产生的结果: `http://localhost:8080/test`
+可以参考[这里例子](https://github.com/OpenFeign/feign#advanced-usage)展示了高级的用法。
+>@RequestLine uri模板默认不会对slash编码，为了改变这个行为，设置@RequestLine的decodeSlash=false。
+>根据URI模板规范，+符号允许出现在URI的路径或者参数segments中，但是如何处理这个符号是不一致的。在老系统中，+符号等于空格。对于现代系统来说，+符号不代表空格，会被强制编码为%2B。如果你想要+符号代表空格，可以直接使用空格的直接文本形式或者使用%20
 
+### Custom Expansion
+`@Param`注解
