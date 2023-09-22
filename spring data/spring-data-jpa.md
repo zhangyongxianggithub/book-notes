@@ -248,6 +248,11 @@ Sort sort = Sort.by("firstname").ascending()
 如果想用类型安全的方式定义排序表达式，
 ### 返回集合或者迭代器
 集合类型除了返回标准的Iterable，List或者Set，也可以返回Streamable或者Vavr类型，
+## Custom Implementations for Spring Data Respositories
+Spring Data提供了非常多的功能，都是为了让你少写代码实现数据库查询。但是有时候还是难以满足要求，这个时候，你可以为repository方法提供自己的实现。
+### Customizing Individual Repositories
+
+## Publishing Events from Aggregate Roots
 ## Spring Data拓展
 - querydsl，用于构造流式的类似SQL语句的查询，通过继承QuerydslPredicateExecutor接口来使用dsl，如下：
 ```java
