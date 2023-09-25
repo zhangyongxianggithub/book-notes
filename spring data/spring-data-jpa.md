@@ -251,7 +251,73 @@ Sort sort = Sort.by("firstname").ascending()
 ## Custom Implementations for Spring Data Respositories
 Spring Data提供了非常多的功能，都是为了让你少写代码实现数据库查询。但是有时候还是难以满足要求，这个时候，你可以为repository方法提供自己的实现。
 ### Customizing Individual Repositories
+为了让repository具有自定义的功能，需要首先定义个自定义接口与接口的实现:
+```java
+interface CustomizedUserRepository {
+  void someCustomMethod(User user);
+}
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+  public void someCustomMethod(User user) {
+    // Your custom implementation
+  }
+}
+```
+实现本身不依赖于Spring Data，可以是常规Spring bean。因此，您可以使用标准DI行为来注入对其他bean（例如JdbcTemplate）的引用、参与切面等。然后你可以让你的repo接口继承自定义的接口:
+```java
+interface UserRepository extends CrudRepository<User, Long>, CustomizedUserRepository {
+  // Declare query methods here
+}
+```
+使用repository接口继承自定义接口结合了标准CRUD和自定义功能，并使其可供客户端使用。Spring Data Repository是通过多个自定义接口组合来实现的。自定义接口是基础repository库、功能方面（例如QueryDsl）以及自定义接口及其实现。每次将接口添加到存储库接口时，您都可以通过添加片段来增强组合。基础存储库和存储库方面实现由每个Spring Data模块提供。下面的例子展示了自定义接口与他们的实现:
+```java
+interface HumanRepository {
+  void someHumanMethod(User user);
+}
 
+class HumanRepositoryImpl implements HumanRepository {
+
+  public void someHumanMethod(User user) {
+    // Your custom implementation
+  }
+}
+
+interface ContactRepository {
+
+  void someContactMethod(User user);
+
+  User anotherContactMethod(User user);
+}
+
+class ContactRepositoryImpl implements ContactRepository {
+
+  public void someContactMethod(User user) {
+    // Your custom implementation
+  }
+
+  public User anotherContactMethod(User user) {
+    // Your custom implementation
+  }
+}
+interface UserRepository extends CrudRepository<User, Long>, HumanRepository, ContactRepository {
+
+  // Declare query methods here
+}
+```
+Repository可能由多个自定义实现组成，这些实现按声明顺序导入。自定义实现比基本实现和存储库切面具有更高的优先级。如果两个片段提供相同的方法签名，此排序允许您覆盖基本存储库和方面方法并解决歧义。存储库片段不限于在单个存储库接口中使用。多个存储库可以使用片段接口，让您可以跨不同存储库重复使用自定义内容。以下示例显示了存储库片段及其实现:
+```java
+interface CustomizedSave<T> {
+  <S extends T> S save(S entity);
+}
+
+class CustomizedSaveImpl<T> implements CustomizedSave<T> {
+
+  public <S extends T> S save(S entity) {
+    // Your custom implementation
+  }
+}
+```
+
+然后你可以让你的repository接口扩展fragment接口，如下：
 ## Publishing Events from Aggregate Roots
 ## Spring Data拓展
 - querydsl，用于构造流式的类似SQL语句的查询，通过继承QuerydslPredicateExecutor接口来使用dsl，如下：
