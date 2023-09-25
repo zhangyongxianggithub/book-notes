@@ -303,7 +303,7 @@ interface UserRepository extends CrudRepository<User, Long>, HumanRepository, Co
   // Declare query methods here
 }
 ```
-Repository可能由多个自定义实现组成，这些实现按声明顺序导入。自定义实现比基本实现和存储库切面具有更高的优先级。如果两个片段提供相同的方法签名，此排序允许您覆盖基本存储库和方面方法并解决歧义。存储库片段不限于在单个存储库接口中使用。多个存储库可以使用片段接口，让您可以跨不同存储库重复使用自定义内容。以下示例显示了存储库片段及其实现:
+Repository可能由多个自定义实现组成，这些实现按声明顺序导入。自定义实现比基本实现和repository切面具有更高的优先级。如果两个自定义接口提供相同的方法签名，此排序允许您覆盖基本repository和切面方法并解决歧义。自定义接口不限于在单个repository接口中使用。多个repository可以使用自定义接口，让您可以跨不同存储库重复使用自定义内容。以下示例显示了存储库片段及其实现:
 ```java
 interface CustomizedSave<T> {
   <S extends T> S save(S entity);
@@ -315,9 +315,76 @@ class CustomizedSaveImpl<T> implements CustomizedSave<T> {
     // Your custom implementation
   }
 }
-```
+interface UserRepository extends CrudRepository<User, Long>, CustomizedSave<User> {
+}
 
-然后你可以让你的repository接口扩展fragment接口，如下：
+interface PersonRepository extends CrudRepository<Person, Long>, CustomizedSave<Person> {
+}
+```
+### Configuration
+repository基础设置尝试通过自动扫描自定义的repo接口实现，扫描指定下的package。这些类需要遵守命名约定，也就是repo后+Impl。下面是2个例子:
+```xml
+<repositories base-package="com.acme.repository" />
+<repositories base-package="com.acme.repository" repository-impl-postfix="MyPostfix" />
+```
+第一个配置尝试寻找一个叫做`com.acme.repository.CustomizedUserRepositoryImpl`类来作为自定义的repo实现，第二个会寻找`om.acme.repository.CustomizedUserRepositoryMyPostfix`。
+### Resolution of Ambiguity
+如果在不同的包中找到具有匹配类名的多个实现，Spring Data将使用bean名称来识别要使用哪一个。鉴于前面显示的`CustomizedUserRepository`的以下两个自定义实现，将使用第一个实现。它的bean名称是`customizedUserRepositoryImpl`，它与片段接口（`CustomizedUserRepository`）加上后缀Impl相匹配。
+```java
+package com.acme.impl.one;
+
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+
+  // Your custom implementation
+}
+
+
+package com.acme.impl.two;
+
+@Component("specialCustomImpl")
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+
+  // Your custom implementation
+}
+```
+如果您使用`@Component("specialCustom")`注解标注`UserRepository`接口，则Bean名称加上Impl将与com.acme.impl.two中为存储库实现定义的名称相匹配，并且使用它而不是第一个。
+### Manual Wiring
+如果您的自定义实现仅使用基于注解的配置和自动装配，则前面显示的方法效果很好，因为它被视为任何其他Spring bean。如果您的实现片段bean需要特殊wiring，您可以声明该bean并根据上一节中描述的约定对其进行命名。 然后，基础设施通过名称引用手动定义的 bean 定义，而不是自行创建 bean定义。以下示例展示了如何手动连接自定义实现:
+```xml
+<repositories base-package="com.acme.repository" />
+
+<beans:bean id="userRepositoryImpl" class="…">
+  <!-- further configuration -->
+</beans:bean>
+
+```
+### Customize the Base Repository
+当您想要自定义基本repository行为以便所有repository都受到影响时，上一节中描述的方法需要自定义每个repository接口。要更改所有存储库的行为，您可以创建一个扩展特定于持久性技术的存储库基类的实现。 然后，此类充当存储库代理的自定义基类，如以下示例所示：
+```java
+class MyRepositoryImpl<T, ID>
+  extends SimpleJpaRepository<T, ID> {
+
+  private final EntityManager entityManager;
+
+  MyRepositoryImpl(JpaEntityInformation entityInformation,
+                          EntityManager entityManager) {
+    super(entityInformation, entityManager);
+
+    // Keep the EntityManager around to used from the newly introduced methods.
+    this.entityManager = entityManager;
+  }
+
+  @Transactional
+  public <S extends T> S save(S entity) {
+    // implementation goes here
+  }
+}
+```
+该类需要具有特定存储库工厂实现使用的超类的构造函数。如果存储库基类具有多个构造函数，请重写采用 EntityInformation 加上存储特定基础结构对象（例如 EntityManager 或模板类）的构造函数。最后一步是让 Spring Data基础设施了解定制的存储库基类。在配置中，您可以使用repositoryBaseClass来执行此操作，如以下示例所示：
+```xml
+<repositories base-package="com.acme.repository"
+     base-class="….MyRepositoryImpl" />
+```
 ## Publishing Events from Aggregate Roots
 ## Spring Data拓展
 - querydsl，用于构造流式的类似SQL语句的查询，通过继承QuerydslPredicateExecutor接口来使用dsl，如下：
