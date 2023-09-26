@@ -136,11 +136,11 @@ Feign使用Jersey或者CXF等工具来写Java的HTTP客户端。更多的，Feig
 Feign的工作原理是将注解处理为模板化请求。在输出之前，参数会以简单的方式应用于这些模板。尽管Feign仅限于支持基于文本的API，但它极大地简化了系统方面，例如重放请求。此外，知道这一点后，Feign可以轻松地对您的转换进行单元测试。
 ## Java Version Compatibility
 Feign 10.X与以上的版本基于Java 8，Feign 9.x可以工作于JDK 6版本以上。
-# Feature overview
+## Feature overview
 下面的图是feign提供的关键特性
 ![Feign提供的关键特性](feign-feature.png)
-# Roadmap
-# Usage
+## Roadmap
+## Usage
 ```xml
 <dependency>
     <groupId>io.github.openfeign</groupId>
@@ -148,7 +148,7 @@ Feign 10.X与以上的版本基于Java 8，Feign 9.x可以工作于JDK 6版本�
     <version>??feign.version??</version>
 </dependency>
 ```
-## Basics
+### Basics
 使用方法类似:
 ```java
 interface GitHub {
@@ -187,7 +187,7 @@ public class MyApp {
   }
 }
 ```
-## 接口注解
+### 接口注解
 Feign定义了一个Contract对象，用于定义接口与底层的客户端如何交互工作。Feign的默认的contract定义了下面的注解:
 |**注解**|**接口目标**|**使用方法**|
 |:---|:---|:---|
@@ -203,7 +203,7 @@ Feign定义了一个Contract对象，用于定义接口与底层的客户端如�
 @RequestLine("POST /repos/{owner}/{repo}/issues")
 void createIssue(URI host, Issue issue, @Param("owner") String owner, @Param("repo") String repo);
 ```
-## Templates and Expressions
+### Templates and Expressions
 Feign表达式表示Simple String Expressions (Level 1)，这是[RFC 6570 URI Template](https://tools.ietf.org/html/rfc6570)定义的。
 ```java
 public interface GitHub {
@@ -232,7 +232,9 @@ public class MyApp {
   }
 }
 ```
-表达式在一对中括号中，可以包含正则表达式，在:后指出来限定值的匹配。比如上面的例子owner必须是字母`{owner:[a-zA-Z]*}`。请求参数可以使用扩展的方式，`RequestLine`与`QueryMap`模板遵循[URI Template - RFC6570](https://tools.ietf.org/html/rfc6570)规范。Level 1规范的内容如下:
+表达式在一对中括号中，可以包含正则表达式，在:后指出来限定值的匹配。比如上面的例子owner必须是字母`{owner:[a-zA-Z]*}`。请求参数可以使用扩展的方式.
+#### Request Parameter Expansion
+`RequestLine`与`QueryMap`模板遵循[URI Template - RFC6570](https://tools.ietf.org/html/rfc6570)规范。Level 1规范的内容如下:
 - 不能解析的表达式会被忽略
 - 所有文本或者变量值都会执行编码
 
@@ -261,7 +263,7 @@ public interface MatrixService {
 }
 ```
 如果上面例子中的owners的值为Matt、Jeff、Susan。uri会被扩展成`/repos;owners=Matt;owners=Jeff;owners=Susan`。
-### Undefined vs Empty Values
+#### Undefined vs Empty Values
 未定义的表达式的意思就是表达式的值是null或者没有提供表达式的值。根据RFC6570规范，可以为表达式提供空值，当Feign解析表达式时，它首先检测值是否被定义，如果存在，正常执行，如果未定义，则查询参数被移除，下面的例子:
 ```java
 public void test() {
@@ -292,5 +294,15 @@ public void test() {
 >@RequestLine uri模板默认不会对slash编码，为了改变这个行为，设置@RequestLine的decodeSlash=false。
 >根据URI模板规范，+符号允许出现在URI的路径或者参数segments中，但是如何处理这个符号是不一致的。在老系统中，+符号等于空格。对于现代系统来说，+符号不代表空格，会被强制编码为%2B。如果你想要+符号代表空格，可以直接使用空格的直接文本形式或者使用%20
 
-### Custom Expansion
-`@Param`注解
+#### Custom Expansion
+`@Param`注解有一个可选项expander，允许控制单个参数的expansion。expander属性必须是一个实现了`Expander`接口的类:
+```java
+public interface Expander {
+    String expand(Object value);
+}
+```
+该方法的结果遵循上述相同的规则。 如果结果为 null 或空字符串，则省略该值。 如果该值不是 pct 编码的，则它将是。 有关更多示例，请参阅自定义 @Param 扩展。
+#### Request Headers Expansion
+#### Request Body Expansion
+### Customization
+
