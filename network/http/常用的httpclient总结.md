@@ -1,3 +1,5 @@
+[TOC]
+
 常用的httpclient有以下几种：
 - Okhttp；
 - httpurlconnection；
@@ -301,8 +303,25 @@ public interface Expander {
     String expand(Object value);
 }
 ```
-该方法的结果遵循上述相同的规则。 如果结果为 null 或空字符串，则省略该值。 如果该值不是 pct 编码的，则它将是。 有关更多示例，请参阅自定义 @Param 扩展。
+该方法的结果遵循上述相同的规则。 如果结果为 null或空字符串，则省略该值。 如果该值不是 pct 编码的，则它将是。 有关更多示例，请参阅自定义 @Param 扩展。
 #### Request Headers Expansion
 #### Request Body Expansion
 ### Customization
+Feign可以定制，对于简单的场景，使用`Feign.builder()`来使用自定义组件来构建API接口。对于request设置，你可以使用`options(Request.Options options)`来设置connetTimeout、connectTimeoutUnit、readTimeout、readTimeoutUnit等，比如下面的例子:
+```java
+interface Bank {
+  @RequestLine("POST /account/{id}")
+  Account getAccountInfo(@Param("id") String id);
+}
+
+public class BankService {
+  public static void main(String[] args) {
+    Bank bank = Feign.builder()
+        .decoder(new AccountDecoder())
+        .options(new Request.Options(10, TimeUnit.SECONDS, 60, TimeUnit.SECONDS, true))
+        .target(Bank.class, "https://api.examplebank.com");
+  }
+}
+```
+### Multiple Interface
 
