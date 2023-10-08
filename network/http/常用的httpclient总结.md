@@ -324,4 +324,141 @@ public class BankService {
 }
 ```
 ### Multiple Interface
+Feign可以生成多个API接口。它们被定义为`Target<T>`(默认为HardCodedTarget<T>)，这样允许动态发现或者允许在实际执行请求前装饰请求。比如，下面的模式会使用当前URL与auth token来装饰每个发出的请求:
+```java
+public class CloudService {
+  public static void main(String[] args) {
+    CloudDNS cloudDNS = Feign.builder()
+      .target(new CloudIdentityTarget<CloudDNS>(user, apiKey));
+  }
+  class CloudIdentityTarget extends Target<CloudDNS> {
+    /* implementation of a Target */
+  }
+}
+```
+### 例子
+Feign包含了Github/Wikipedia客户端的例子。
+### Integrations
+Feign设计为可以与其他开源工具很好地配合。可以为Feign开发模块来集成你喜欢项目。
+### Encoder/Decoder
+#### Gson
+Gson包含JSON的编解码器。添加`GsonEncoder`与`GsonDecoder`到你的`Feign.Builder`，比如:
+```java
+public class Example {
+  public static void main(String[] args) {
+    GsonCodec codec = new GsonCodec();
+    GitHub github = Feign.builder()
+                         .encoder(new GsonEncoder())
+                         .decoder(new GsonDecoder())
+                         .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+#### Jackson
+```java
+public class Example {
+  public static void main(String[] args) {
+      GitHub github = Feign.builder()
+                     .encoder(new JacksonEncoder())
+                     .decoder(new JacksonDecoder())
+                     .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+For the lighter weight Jackson Jr, use JacksonJrEncoder and JacksonJrDecoder from the Jackson Jr Module.
+#### Moshi
+也是用来处理JSON的
+```java
+GitHub github = Feign.builder()
+                     .encoder(new MoshiEncoder())
+                     .decoder(new MoshiDecoder())
+                     .target(GitHub.class, "https://api.github.com");
+```
+#### Sax
+解码XML，兼容JVM/android
+```java
+public class Example {
+  public static void main(String[] args) {
+      Api api = Feign.builder()
+         .decoder(SAXDecoder.builder()
+                            .registerContentHandler(UserIdHandler.class)
+                            .build())
+         .target(Api.class, "https://apihost");
+    }
+}
+```
+#### JAXB
+xml
+```java
+public class Example {
+  public static void main(String[] args) {
+    Api api = Feign.builder()
+             .encoder(new JAXBEncoder())
+             .decoder(new JAXBDecoder())
+             .target(Api.class, "https://apihost");
+  }
+}
+```
+#### SOAP
+用于处理XML，该模块添加了通过JAXB和SOAPMessage编码和解码SOAP Body对象的支持。它还通过将SOAPFault包装到原始 javax.xml.ws.soap.SOAPFaultException 中来提供 SOAPFault 解码功能，这样您只需捕获 SOAPFaultException 即可处理 SOAPFault。
+```java
+public class Example {
+  public static void main(String[] args) {
+    Api api = Feign.builder()
+	     .encoder(new SOAPEncoder(jaxbFactory))
+	     .decoder(new SOAPDecoder(jaxbFactory))
+	     .errorDecoder(new SOAPErrorDecoder())
+	     .target(MyApi.class, "http://api");
+  }
+}
+```
+### Contract
+#### JAX-RS
+JAXRSContract配置会替换默认的注解处理机制，使用标准的JAX-RS规范机制来生成HTTP客户端。目前支持1.1规范。下面是使用JAX-RS改写的例子。
+```java
+interface GitHub {
+  @GET @Path("/repos/{owner}/{repo}/contributors")
+  List<Contributor> contributors(@PathParam("owner") String owner, @PathParam("repo") String repo);
+}
+
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+                       .contract(new JAXRSContract())
+                       .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+### Client
+#### OkHttp
+[OkHttpClient](https://github.com/OpenFeign/feign/blob/master/ribbon)将Feign的HTTP请求发到OkHttp。OkHttp开启了SPDY，并且具有更好的网络控制。为了让Feign使用OkHttp底层客户端。你需要将OkHttp模块添加到你的类路径中。然后配置Feign使用OkHttpClient:
+```java
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+                     .client(new OkHttpClient())
+                     .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+#### Ribbon
+[RibbonClient](https://github.com/OpenFeign/feign/blob/master/ribbon)会覆盖Feign客户端的URL解析机制。添加Ribbon提供的动态路由与弹性机制。使用Ribbon客户端，需要你把ribbon客户端名字替换url中的host部分，比如下面的例子:
+```java
+public class Example {
+  public static void main(String[] args) {
+    MyService api = Feign.builder()
+          .client(RibbonClient.create())
+          .target(MyService.class, "https://myAppProd");
+  }
+}
+```
+#### Java 11 Http2
+[Http2Client](https://github.com/OpenFeign/feign/blob/master/java11)将Feign的HTTP请求导向Java11中实现了HTTP/2协议的新的HTTP/2客户端。为了让Feign客户端使用HTTP/2客户端，你需要使用SDK11，下面的例子:
+```java
+GitHub github = Feign.builder()
+                     .client(new Http2Client())
+                     .target(GitHub.class, "https://api.github.com");
+```
+### Breaker
+#### Hystrix
 
