@@ -461,4 +461,166 @@ GitHub github = Feign.builder()
 ```
 ### Breaker
 #### Hystrix
+[HystrixFeign](https://github.com/OpenFeign/feign/blob/master/hystrix)提供了Hystrix支持的circuit breaker机制。需要classpath下面有Hystrix模块
+```java
+public class Example {
+  public static void main(String[] args) {
+    MyService api = HystrixFeign.builder().target(MyService.class, "https://myAppProd");
+  }
+}
+```
+### Logger
+#### slf4j
+[SLF4JModule](https://github.com/OpenFeign/feign/blob/master/slf4j)将Feign的日志指向SLF4J。允许你简单的使用你自己选择的logging组件(Logback、Log4J等)。为了让Feign使用SLF4J，需要添加SLF4J与SLF4J的绑定模块到classpath，然后配置Feign使用Slf4jLogger:
+```java
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+                     .logger(new Slf4jLogger())
+                     .logLevel(Level.FULL)
+                     .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+### Decoders
+`Feign.buidler()`允许你指定额外的配置，比如如何解码响应体。如果接口中的请求映射方法返回的类型不是`Response`、`String`、`byte[]`、`void`，你都需要配置一个`Decoder`。下面是使用JSON解码的例子:
+```java
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+                     .decoder(new GsonDecoder())
+                     .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+如果你要在解码响应体之前做一些预处理操作，你可以使用builder的`mapAndDecode`方法，下面是一个JSONP的例子:
+```java
+public class Example {
+  public static void main(String[] args) {
+    JsonpApi jsonpApi = Feign.builder()
+                         .mapAndDecode((response, type) -> jsopUnwrap(response, type), new GsonDecoder())
+                         .target(JsonpApi.class, "https://some-jsonp-api.com");
+  }
+}
+```
+如果方法返回的类型是`Stream`，需要配置一个`StreamDecoder`，下面是例子:
+```java
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+            .decoder(StreamDecoder.create((r, t) -> {
+              BufferedReader bufferedReader = new BufferedReader(r.body().asReader(UTF_8));
+              return bufferedReader.lines().iterator();
+            }))
+            .target(GitHub.class, "https://api.github.com");
+  }
+}
+
+public class Example {
+  public static void main(String[] args) {
+    GitHub github = Feign.builder()
+            .decoder(StreamDecoder.create((r, t) -> {
+              BufferedReader bufferedReader = new BufferedReader(r.body().asReader(UTF_8));
+              return bufferedReader.lines().iterator();
+            }, (r, t) -> "this is delegate decoder"))
+            .target(GitHub.class, "https://api.github.com");
+  }
+}
+```
+### Encoders
+发送请求体到服务器的最简单的方式是顶一个POST方法且方法的参数为一个`String`或者`byte[]`，你需要添加一个Content-Type头
+```java
+interface LoginClient {
+  @RequestLine("POST /")
+  @Headers("Content-Type: application/json")
+  void login(String content);
+}
+
+public class Example {
+  public static void main(String[] args) {
+    client.login("{\"user_name\": \"denominator\", \"password\": \"secret\"}");
+  }
+}
+```
+配置Encoder，你可以发送类型安全的请求体，下面是一个例子:
+```java
+static class Credentials {
+  final String user_name;
+  final String password;
+
+  Credentials(String user_name, String password) {
+    this.user_name = user_name;
+    this.password = password;
+  }
+}
+
+interface LoginClient {
+  @RequestLine("POST /")
+  void login(Credentials creds);
+}
+
+public class Example {
+  public static void main(String[] args) {
+    LoginClient client = Feign.builder()
+                              .encoder(new GsonEncoder())
+                              .target(LoginClient.class, "https://foo.com");
+
+    client.login(new Credentials("denominator", "secret"));
+  }
+}
+```
+### @Body templates
+`@Body`注解指定了一个模板，模板使用`@Param`注解的参数构成。你需要配置Content-Type
+```java
+interface LoginClient {
+
+  @RequestLine("POST /")
+  @Headers("Content-Type: application/xml")
+  @Body("<login \"user_name\"=\"{user_name}\" \"password\"=\"{password}\"/>")
+  void xml(@Param("user_name") String user, @Param("password") String password);
+
+  @RequestLine("POST /")
+  @Headers("Content-Type: application/json")
+  // json curly braces must be escaped!
+  @Body("%7B\"user_name\": \"{user_name}\", \"password\": \"{password}\"%7D")
+  void json(@Param("user_name") String user, @Param("password") String password);
+}
+
+public class Example {
+  public static void main(String[] args) {
+    client.xml("denominator", "secret"); // <login "user_name"="denominator" "password"="secret"/>
+    client.json("denominator", "secret"); // {"user_name": "denominator", "password": "secret"}
+  }
+}
+```
+### Headers
+Feign支持设置headers，可以作为API的一部分或者作为client的一部分，可以根据具体的使用场景来设置。
+#### Set headers using apis
+如果只有特定的接口或者调用有某些固定的header，将header定义为api的一部分是好的，可以使用注解`@Headers`在接口或者方法上定义静态的注解:
+```java
+@Headers("Accept: application/json")
+interface BaseApi<V> {
+  @Headers("Content-Type: application/json")
+  @RequestLine("PUT /api/{key}")
+  void put(@Param("key") String key, V value);
+}
+```
+当放在方法上时，可以为header指定动态的内容，通过参数模板:
+```java
+public interface Api {
+   @RequestLine("POST /")
+   @Headers("X-Ping: {token}")
+   void post(@Param("token") String token);
+}
+```
+headers可以做成全动态的，比如:
+```java
+public interface Api {
+   @RequestLine("POST /")
+   void post(@HeaderMap Map<String, Object> headerMap);
+}
+```
+#### Setting headers per target
+
+
 
