@@ -293,7 +293,7 @@ public void test() {
 ```
 产生的结果: `http://localhost:8080/test`
 可以参考[这里例子](https://github.com/OpenFeign/feign#advanced-usage)展示了高级的用法。
->@RequestLine uri模板默认不会对slash编码，为了改变这个行为，设置@RequestLine的decodeSlash=false。
+>@RequestLine uri模板默认不会对slash编码，为了改变这个行为，设置`@RequestLine`的`decodeSlash=false`。
 >根据URI模板规范，+符号允许出现在URI的路径或者参数segments中，但是如何处理这个符号是不一致的。在老系统中，+符号等于空格。对于现代系统来说，+符号不代表空格，会被强制编码为%2B。如果你想要+符号代表空格，可以直接使用空格的直接文本形式或者使用%20
 
 #### Custom Expansion
