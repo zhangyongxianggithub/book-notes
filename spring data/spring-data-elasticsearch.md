@@ -123,15 +123,16 @@ Criteria criteria = new Criteria("lastname").is("Miller")// 第一个断言
   .and("firstname").is("James")                           
 Query query = new CriteriaQuery(criteria);
 ```
-如果想要创建内建的查询，你需要使用子查询。假设需要查询lastname=Miller，并且firstname=jack或者John的所有人。
+如果想要创建nested的查询，你需要使用子查询。假设需要查询lastname=Miller，并且firstname=jack或者John的所有人。
 ```java
-Criteria miller = new Criteria("lastName").is("Miller")  
-  .subCriteria(                                          
-    new Criteria().or("firstName").is("John")            
+Criteria miller = new Criteria("lastName").is("Miller") // 为last name创建第一个Criteria 
+  .subCriteria(    // 使用AND连接一个subCriteria                                     
+    new Criteria().or("firstName").is("John") //sub Criteria是一个or表达式           
       .or("firstName").is("Jack")                        
   );
 Query query = new CriteriaQuery(criteria);
 ```
+请参考`Criteria`类的API文档获得更多的操作信息。
 ### StringQuery
 这个类使用一个JSON字符串的ES查询。下面的代码展示了一个搜索firstname=Jack的人。
 ```java
