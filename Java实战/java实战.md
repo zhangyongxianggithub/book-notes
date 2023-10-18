@@ -8,3 +8,10 @@ Java的模块化系统诞生于Jigsaw项目，从Java9开始引入，演进了�
 
 可以创建易于理解的软件。
 ## 为什么要设计Java模块化系统
+## Java模块: 全局视图
+模块在module-info.java中声明分为3个部分:
+- module {module-name}，为模块声明一个名字
+- requires {module names} 依赖的模块名
+- exports {package names} 导出的包名
+## 使用Java模块系统开发应用
+
