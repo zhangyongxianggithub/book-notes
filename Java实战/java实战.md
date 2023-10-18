@@ -14,4 +14,13 @@ Java的模块化系统诞生于Jigsaw项目，从Java9开始引入，演进了�
 - requires {module names} 依赖的模块名
 - exports {package names} 导出的包名
 ## 使用Java模块系统开发应用
-
+创建一个例子应用
+```java
+module expense.application {}
+```
+执行下面的命令:
+```shell
+javac module-info.java com/exmaple/expenses/application/ExpensesApplication.java -d target
+jar cvfe expenses-application.jar com.exmaple.expenses.application.ExpensesApplication -C target .
+java --module-path expenses-application.jar --module expense.application/com.exmaple.expenses.application.ExpensesApplication
+```
