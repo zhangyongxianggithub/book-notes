@@ -24,3 +24,82 @@ javac module-info.java com/exmaple/expenses/application/ExpensesApplication.java
 jar cvfe expenses-application.jar com.exmaple.expenses.application.ExpensesApplication -C target .
 java --module-path expenses-application.jar --module expense.application/com.exmaple.expenses.application.ExpensesApplication
 ```
+## 使用多个模块
+exports的使用例子，其中都是包名而不是模块名，声明的包未公有类型，可以被其他模块访问和调用。默认情况下，模块内的所有包都是被封装的。
+```java
+module expenses.readers {
+    exports com.example.expenses.readers;
+    exports com.example.expenses.readers.file;
+    exports com.example.expenses.readers.http;
+}
+```
+requires的例子
+```java
+module expenses.readers {
+    requires java.base;
+    exports com.example.expenses.readers;
+    exports com.example.expenses.readers.file;
+    exports com.example.expenses.readers.http;
+}
+```
+指定本地模块对其他模块的依赖。默认依赖java.base的平台模块。它包含了Java主要的包(net、io、util)。Oracle推荐模块的命名与包的命名类似。即互联网域名规范的逆序。
+## 编译与打包
+每一个模块都能单独编译。2个模块。
+readers模块
+```java
+module expenses.readers {
+    requires java.base;
+    exports com.example.expenses.readers;
+    exports com.example.expenses.readers.file;
+    exports com.example.expenses.readers.http;
+}
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>expenses.readers</artifactId>
+    <packaging>jar</packaging>
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>expenses</artifactId>
+        <version>1.0</version>
+    </parent>
+</project>
+```
+application模块
+```java
+module expenses.application {
+    requires expenses.readers;
+    requires java.base;
+}
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>expenses.application</artifactId>
+    <packaging>jar</packaging>
+    <parent>
+        <groupId>com.example</groupId>
+        <artifactId>expenses</artifactId>
+        <version>1.0</version>
+    </parent>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.example</groupId>
+            <artifactId>expenses.readers</artifactId>
+            <version>1.0</version>
+        </dependency>
+    </dependencies>
+</project>
+```
+启动命令
+```shell
+java --module-path  ./expenses.application/target/expenses.application-1.0.jar:./expenses.readers/target/expenses.readers-1.0.jar --module  expenses.application/com.example.expenses.application.ExpensesApplication
+```
