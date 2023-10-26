@@ -1,3 +1,42 @@
+# Getting Started
+JsonPath库在Maven中央仓库中，需要提前添加:
+```xml
+<dependency>
+    <groupId>com.jayway.jsonpath</groupId>
+    <artifactId>json-path</artifactId>
+    <version>2.8.0</version>
+</dependency>
+```
+JsonPath始终表示一个JSON文档中的结构，工作方式类似XPath与XML。JsonPath中的根对象始终用`$`表示，不论对象是对象还是数组。JsonPath表达式使用点号标记`$.store.book[0].title`或者括号标记`$['store']['book'][0]['title']`
+# Operators
+|Operator|Description|
+|:---|:---|
+|$|根对象，是所有路径表达式的开始标记|
+|@|谓词filter正在处理的当前节点|
+|*|通配符，匹配任意的名字或者数组|
+|..|深度扫描，表示任意名字|
+|.<name>|点号标记的子节点|
+|['<name>' (, '<name>')]|括号标记的子节点|
+|[<number> (, <number>)]|数组下标|
+|[start:end]|数组切片|
+|[?(<expression>)]|filter表达式，表达式的值必须是一个boolean值|
+# Functions
+函数可以在path的最后调用，函数的输入是path表达式的输出，函数输出是函数本身定义的。
+|Function|Description|Output type|
+|:---|:---|:---|
+|min()|数字数组的最小值|Double|
+|max()|数字数组的最大值|Double|
+|avg()|数字数组的平均值|Double|
+|stddev()|数字数组的标准差|Double|
+|length()|数组的长度|Integer|
+|sum()|数字数组的总和|Double|
+|keys()|属性的key|Set|
+|concat(X)|使用X连接输出|类似输入|
+|append(X)|添加一个新的元素到输出的数组|input|
+|first()|数组的第一个元素||
+|last()|数组的最后一个元素||
+|index(X)|数组下标X处的元素||
+
 过滤器是逻辑表达式，用来过滤数组元素。典型的过滤器类似`[?(@.age > 18)]`，在这个表达式里面，`@`符号表示当前正被处理的元素，更复杂的过滤器可以通过逻辑运算符`&&`与`||`来组合。纯文本要用单引号或者双引号包起来`[?(@.color == 'blue')]`或者`[?(@.color == "blue")]`。
 |Operator|Description|
 |:---|:---|
