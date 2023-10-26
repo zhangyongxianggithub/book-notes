@@ -261,3 +261,76 @@ String newJson = JsonPath.parse(json).set("$['store']['book'][0]['author']", "Pa
   //Works fine (null is returned)
   String gender1 = JsonPath.using(conf2).parse(json).read("$[1]['gender']");
   ```
+- ALWAYS_RETURN_LIST，始终返回list
+  ```java
+  Configuration conf = Configuration.defaultConfiguration();
+
+  //ClassCastException thrown
+  List<String> genders0 = JsonPath.using(conf).parse(json).read("$[0]['gender']");
+  Configuration conf2 = conf.addOptions(Option.ALWAYS_RETURN_LIST);
+  //Works fine
+  List<String> genders0 = JsonPath.using(conf2).parse(json).read("$[0]['gender']");
+  ```
+- SUPPRESS_EXCEPTIONS，异常会被被传递，如果设置了ALWAYS_RETURN_LIST，返回空list，如果没有返回null
+- REQUIRE_PROPERTIES，当计算indefinite路径时，路径上需要属性名
+  ```java
+  Configuration conf = Configuration.defaultConfiguration();
+  //Works fine
+  List<String> genders = JsonPath.using(conf).parse(json).read("$[*]['gender']");
+  Configuration conf2 = conf.addOptions(Option.REQUIRE_PROPERTIES);
+  //PathNotFoundException thrown
+  List<String> genders = JsonPath.using(conf2).parse(json).read("$[*]['gender']");
+  ```
+# JsonProvider SPI
+JsonPath打包了5个不同的JsonProviders:
+- [JsonSmartJsonProvider](https://github.com/netplex/json-smart-v2)(default)
+- [JacksonJsonProvider](https://github.com/FasterXML/jackson)
+- [JacksonJsonNodeJsonProvider](https://github.com/FasterXML/jackson)
+- [GsonJsonProvider](https://code.google.com/p/google-gson/)
+- [JsonOrgjsonProvider](https://github.com/stleary/JSON-java)
+- [JakataJsonProvider](https://javaee.github.io/jsonp/)
+
+改变默认的配置应该在应用程序初始化时完成，不建议在运行时修改。
+```java
+Configuration.setDefaults(new Configuration.Defaults() {
+
+    private final JsonProvider jsonProvider = new JacksonJsonProvider();
+    private final MappingProvider mappingProvider = new JacksonMappingProvider();
+      
+    @Override
+    public JsonProvider jsonProvider() {
+        return jsonProvider;
+    }
+
+    @Override
+    public MappingProvider mappingProvider() {
+        return mappingProvider;
+    }
+    
+    @Override
+    public Set<Option> options() {
+        return EnumSet.noneOf(Option.class);
+    }
+});
+```
+# Cache SPI
+JsonPath 2.1.0引入了一个新的Cache SPI机制。这允许使用者自定义配置路径缓存。Cache必须在JsonPath第一次访问前配置，JsonPath打包了2个Cache实现
+- com.jayway.jsonpath.spi.cache.LRUCache，默认的，线程安全的
+- com.jayway.jsonpath.spi.cache.NOOPCache，mo cache
+自己实现
+```java
+CacheProvider.setCache(new Cache() {
+    //Not thread safe simple cache
+    private Map<String, JsonPath> map = new HashMap<String, JsonPath>();
+
+    @Override
+    public JsonPath get(String key) {
+        return map.get(key);
+    }
+
+    @Override
+    public void put(String key, JsonPath jsonPath) {
+        map.put(key, jsonPath);
+    }
+});
+```
