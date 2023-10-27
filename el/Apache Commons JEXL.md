@@ -12,7 +12,7 @@
 
 JEXL的名字表示Java EXpression Language。一个简单的EL，收到了Apache Velocity、JSTL 1.1中EL规范、JSP2.0规范的启发。JEXL2.0支持统一EL。语法类似ECMAScript与shell的混合。让他容易编写。API与EL使用了固定的Java命名模式，也就是暴露属性的getter/setter。属性声明为public也会参与计算。允许调用任意的可调用的方法。
 # A Detailed Example
-为了创建一个表达式或者脚本，需要一个`JexlEngine`。为了实例化一个，需要创建一个`JexlBuilder`，它用来描述`JexlPermissions`与`JexlFeatures`。这会决定表达式可以访问或者调用哪些类或者哪些方法以及表达式可以使用哪些语法元素。不要忽视这个配置。尤其是你的应用的安全权限可能依赖这个。一旦构建，JEXL引擎就会存储、共享与复用这些配置。它是线程安全的，表达式在求值过程中也是线程安全的。当求值时，JEXL将`JexlExpression`或者`JexlScript`与`JexlContext`合并。在最简单的形势下，使用`JexlEngine#createExpression()`创建脚本或者表达式。参数是一个有效的JEXL语法的字符串。最简单的JexlContext可以通过一个MapContext实例化。内部维护了一个map变量。JEXL的目的是与其托管平台紧密集成；脚本语法非常接近JScript，但（可能）利用Java暴露的任何公共类或方法。这种整合的紧密程度和丰富程度取决于您；派生JEXL API 类，最重要的是`JexlPermissions`、`JexlContext`、`JexlArithmetic`是实现这一目标的手段。
+为了创建一个表达式或者脚本，需要一个`JexlEngine`。为了实例化一个，需要创建一个`JexlBuilder`，它用来描述`JexlPermissions`与`JexlFeatures`。这会决定表达式可以访问或者调用哪些类或者哪些方法以及表达式可以使用哪些语法元素。不要忽视这个配置。尤其是你的应用的安全权限可能依赖这个。一旦构建，JEXL引擎就会存储、共享与复用这些配置。它是线程安全的，表达式在求值过程中也是线程安全的。当求值时，JEXL将`JexlExpression`或者`JexlScript`与`JexlContext`合并。在最简单的形势下，使用`JexlEngine#createExpression()`创建脚本或者表达式。参数是一个有效的JEXL语法的字符串。最简单的JexlContext可以通过一个MapContext实例化。内部维护了一个map变量。JEXL的目的是与其托管平台紧密集成；脚本语法非常接近JScript，但（可能）利用Java暴露的任何公共类或方法。这种整合的紧密程度和丰富程度取决于您；派生JEXL API 类，最重要的是`JexlPermissions`、`JexlContext`、`JexlArithmetic`是实现这一目标的手段。下面的例子展示了用法。
 ```java
 /**
  * A test around scripting streams.
@@ -96,3 +96,22 @@ public class StreamTest {
     }
 }
 ```
+# JSTL Expression Language的扩展
+JEXL额外具有Velocity社区带来的EL相关特性。JEXL不是标准EL的兼容实现。兼容实现是[Commons EL](https://commons.apache.org/el)。JEXL3.3更类似JScript。来源于JSTL中定义的EL，但是语法有提升:
+- 支持任意的方法调用
+- 支持setter/getter
+- new()允许实例化对象
+- size()可以作用于String、Map、List对象
+- empty()方法作用域Collections与Strings
+- 支持3目运算符`a?b:c`
+- 支持类perl的正则表达式匹配`=~`与`!~`
+- 支持startedWith/endsWith，操作符`=^`与`=$`
+- 支持用户自定义函数
+- "+"被重载可以用于字符串连接
+
+# Related Resources
+JEXL不是JCP的产品。但是提供了类似的el语法。
+- JSP 2.0 is covered by Java Specification Requests (JSR) JSR-152: JavaServer Pages 2.0 Specification.
+- Apache has an implementation of the expression language for JSP 2.0, called [EL](https://commons.apache.org/el/index.html)
+- JSTL 1.1 is covered by JSR 52: A Standard Tag Library for JavaServer Pages. See the JSTL API.
+- Apache has a [JSTL Implementation](http://tomcat.apache.org/taglibs/standard/).
