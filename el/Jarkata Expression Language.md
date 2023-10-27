@@ -40,6 +40,7 @@ ${myBean.addNewOrder('orderName')}
 - [Java Expression Language(JEXL)](http://commons.apache.org/proper/commons-jexl/),Java中使用的方便的动态与脚本化特性的实现。
 - [JUEL](https://juel.sourceforge.net/)统一EL的开源实现，也是JSP2.1，JSR-245规范的一部分。稳定且功能完整的，也可以用在非JSP的应用中。
 - [Apache Commons EL](https://commons.apache.org/dormant/commons-el/)来自于Apache的JSP2.0解析器。最新的版本是2003年发布的。
+- [expressly](https://github.com/eclipse-ee4j/expressly)eclipse的实现
 
 # 参考
 - [OGNL](https://en.wikipedia.org/wiki/OGNL), struts2常用的开源EL
@@ -48,3 +49,5 @@ ${myBean.addNewOrder('orderName')}
 - [Ant-Flaka](http://ant-flaka.bitio.org/)用于简化Ant构建脚本
 - [CEL](https://en.wikipedia.org/w/index.php?title=Common_Expression_Language&action=edit&redlink=1)google开发的开源EL
 
+# Jakarta Expression Language 5.0
+Jakarta Expression Language为java应用定义EL。
