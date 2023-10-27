@@ -21,3 +21,30 @@ EL释放了程序员，编写者不需要知道如何访问对象内容的细节
 EL的3.0版本(统一的EL不在需求了)在JSR规范提案中开发出来，这是独立于JSP与JSF的JSR-341规范。添加了新的特性。新的EL等价于Java8的stream与lambda表达式。
 ## EL 4.0
 4.0版本在2020-10-07发布，API从javax.el包移到了jakarta.el包。也是从Java EE转换为Jakarta EE的一部分。
+# Features
+统一EL是JSP与JSF EL的结合。除了已有的特性，还额外包括的特性有:
+- 延迟求值
+- 表达式可以设置值，也就是修改Java对象的内容，表达式可以调用Java的方法
+- 用于解析表达式的可插拔的API
+# Examples
+下面是一个统一EL的简单例子，主要用在JSTL的`c:out`标签中。
+```jsp
+<c:out value="${myBean.myField}" />
+
+```
+调用方法的表达式
+```java
+${myBean.addNewOrder('orderName')}
+```
+# Implementations
+- [Java Expression Language(JEXL)](http://commons.apache.org/proper/commons-jexl/),Java中使用的方便的动态与脚本化特性的实现。
+- [JUEL](https://juel.sourceforge.net/)统一EL的开源实现，也是JSP2.1，JSR-245规范的一部分。稳定且功能完整的，也可以用在非JSP的应用中。
+- [Apache Commons EL](https://commons.apache.org/dormant/commons-el/)来自于Apache的JSP2.0解析器。最新的版本是2003年发布的。
+
+# 参考
+- [OGNL](https://en.wikipedia.org/wiki/OGNL), struts2常用的开源EL
+- [MVEL](https://en.wikipedia.org/wiki/MVEL)，普通Java项目常用的EL
+- [SpEL](http://docs.spring.io/spring/docs/current/spring-framework-reference/html/expressions.html), Spring内置的EL。
+- [Ant-Flaka](http://ant-flaka.bitio.org/)用于简化Ant构建脚本
+- [CEL](https://en.wikipedia.org/w/index.php?title=Common_Expression_Language&action=edit&redlink=1)google开发的开源EL
+
