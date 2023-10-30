@@ -637,4 +637,295 @@ public interface Api {
 - 新的API是从Java9孵化的并被合并入Java SE API。新的API的包是`java.net.HTTP.*`
 - 新的HTTP协议被设计为提高性能，这是通过流的多路复用、header压缩与push promises来实现的
 - 从Java11开始，新的API支持异步请求，通过`CompletableFuture`来实现。`CompletableFuture`实现可以对每一步设置操作，在前面步骤完成的基础上。所以整个flow都是异步的。
+- 新的HTTP客户端API提供了标准化的方式来执行HTTP网络操作，支持现代的Web特性，比如HTTP/2,不需要添加第三方依赖
+- 新的API支持HTTP1.1/2的WebSocket协议
 
+核心类与接口如下:
+- java.net.http.HttpClient
+- java.net.http.HttpRequest
+- java.net.http.HttpResponse\<T>接口
+- java.net.http.WebSocket
+
+## Problems With the pre-java 11 HTTP Client
+HttpURLConnection API与相关的实现存在很多问题:
+- HttpURLConnection被设计为支持多种协议，很多协议基本用不到而且也不维护了
+- API早于HTTP/1.1，用起来非常麻烦
+- 只支持阻塞模式也就是每个请求/响应在一个线程中
+- 很难维护
+
+## HTTP Client API Overview
+与`HttpURLConnection`不同，HTTP Client支持同步与异步请求。API包含3个核心类
+- `HttpRequest`表示要被`HttpClient`发送的请求
+- `HttpClient`就像一个容器，存储了很多请求复用的配置信息
+- `HttpResponse`表示`HttpClient`请求的结果
+
+我们会在下面的小节中详细学习他们
+## HttpRequest
+`HttpRequest`表示要被发送的请求。可以使用`HttpRequest.Builder`创建实例。调用`HttpRequest.newBuilder()`,Builder类提供了大量的方法用于配置请求。在JDK16中，提供了`HttpRequest.newBuilder(HttpRequest request, BiPredicate<String,​String> filter)`方法来复制一个已经存在的请求。这个builder可以用来构建一个等价的`HttpRequest`，并且可以修改这个请求，比如移除头部:
+```java
+HttpRequest.newBuilder(request, (name, value) -> !name.equalsIgnoreCase("Foo-Bar"))
+```
+### Setting URI
+首先要做的是为请求提供一个URL。有2种方式
+- 构造函数`HttpRequest.newBuilder(new URI("https://postman-echo.com/get"))`
+- Builder的uri方法`HttpRequest.newBuilder().uri(new URI("https://postman-echo.com/get"))`
+
+### Specifying the HTTP Method
+调用Builder实例的方法
+- GET()
+- POST(BodyPublisher body)
+- PUT(BodyPublisher body)
+- DELETE()
+
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .GET()
+  .build();
+```
+此时，一个请求就构造完成了。如果需要添加额外的信息，下面这些是一些重要的配置
+### 设置HTTP协议版本
+API默认使用HTTP/2协议，可以配置自己想要使用的协议版本。
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .version(HttpClient.Version.HTTP_2)
+  .GET()
+  .build();
+```
+如果不支持HTTP/2,客户端会降级到HTTP/1.1协议版本
+### Setting Headers
+想要添加额外的headers，可以使用`heraders`或者`header`方法
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .headers("key1", "value1", "key2", "value2")
+  .GET()
+  .build();
+
+HttpRequest request2 = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .header("key1", "value1")
+  .header("key2", "value2")
+  .GET()
+  .build();
+
+```
+### Setting a Timeouut
+定义一个等待响应的最大时间。如果设置超时，那么`HttpTimeoutException`异常会抛出，默认的超时是无穷。
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .timeout(Duration.of(10, SECONDS))
+  .GET()
+  .build();
+```
+## Setting a Request Body
+向请求添加body`POST(BodyPublisher body)`, `PUT(BodyPublisher body)`与`DELETE()`新的API提供了大量的`BodyPublisher`实现，简化了传输body的过程
+- `StringProcessor`，从一个字符串中读取body，通过工厂方法`HttpRequest.BodyPublishers.ofString`来创建
+- `InputStreamProcessor`，从一个InputStream中读取body，通过工厂方法`HttpRequest.BodyPublishers.ofInputStream`来创建
+- `ByteArrayProcessor`，从一个byte数组读取body，通过工厂方法`HttpRequest.BodyPublishers.ofByteArray`来创建
+- `FileProcessor`，从给定的路径文件中读取body，通过工厂方法`HttpRequest.BodyPublishers.ofFile`
+
+如果请求不需要body，可以传递`HttpRequest.BodyPublishers.noBody()`:
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/post"))
+  .POST(HttpRequest.BodyPublishers.noBody())
+  .build();
+```
+在JDK16中，提供了一个`HttpRequest.BodyPublishers.concat(BodyPublisher…)`方法，用于将多个body的内容拼接到一起构成一个新的body。这个body等价于将所有body的bytes数组拼接到一起。
+### StringBodyPublisher
+BodyPublishers来构建body是非常简单的，
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/post"))
+  .headers("Content-Type", "text/plain;charset=UTF-8")
+  .POST(HttpRequest.BodyPublishers.ofString("Sample request body"))
+  .build();
+```
+### InputStreamBodyPublisher
+```java
+byte[] sampleData = "Sample request body".getBytes();
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/post"))
+  .headers("Content-Type", "text/plain;charset=UTF-8")
+  .POST(HttpRequest.BodyPublishers
+   .ofInputStream(() -> new ByteArrayInputStream(sampleData)))
+  .build();
+```
+### ByteArrayProcessor
+```java
+byte[] sampleData = "Sample request body".getBytes();
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/post"))
+  .headers("Content-Type", "text/plain;charset=UTF-8")
+  .POST(HttpRequest.BodyPublishers.ofByteArray(sampleData))
+  .build();
+```
+### FileProcessor
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/post"))
+  .headers("Content-Type", "text/plain;charset=UTF-8")
+  .POST(HttpRequest.BodyPublishers.fromFile(
+    Paths.get("src/test/resources/sample.txt")))
+  .build();
+```
+## HttpClient
+所有请求都是通过HttpClient发送的，可以使用`HttpClient.newBuilder()`或者`HttpClient.newHttpClient()`创建。提供了很多方法来处理请求与响应
+### Handling Response Body
+类似创建publisher的流式方法，也有专门的方法用于创建处理body类型的处理器
+>BodyHandlers.ofByteArray
+BodyHandlers.ofString
+BodyHandlers.ofFile
+BodyHandlers.discarding
+BodyHandlers.replacing
+BodyHandlers.ofLines
+BodyHandlers.fromLineSubscriber
+
+关注`BodyHandlers`工厂类中的方法的使用方法
+在Java11之前`HttpResponse<String> response = client.send(request, HttpResponse.BodyHandler.asString());`现在简化为`HttpResponse<String> response = client.send(request, BodyHandlers.ofString());`
+### Setting a Proxy
+可以为连接设置代理
+```java
+HttpResponse<String> response = HttpClient
+  .newBuilder()
+  .proxy(ProxySelector.getDefault())
+  .build()
+  .send(request, BodyHandlers.ofString());
+```
+### Setting the Redirect Policy
+接收到3xx状态码时，HttpClient可以自动重定向请求到返回的URI
+```java
+HttpResponse<String> response = HttpClient.newBuilder()
+  .followRedirects(HttpClient.Redirect.ALWAYS)
+  .build()
+  .send(request, BodyHandlers.ofString());
+```
+### Setting Authenticator for a Connection
+认证器是一个对象用于协商连接的证书也就是HTTP认证。提供了不同的认证模式，比如Basic认证与摘要认证。在大多数场景下，认证需要username与password，可以使用`PasswordAuthentication`.
+```java
+HttpResponse<String> response = HttpClient.newBuilder()
+  .authenticator(new Authenticator() {
+    @Override
+    protected PasswordAuthentication getPasswordAuthentication() {
+      return new PasswordAuthentication(
+        "username", 
+        "password".toCharArray());
+    }
+}).build()
+  .send(request, BodyHandlers.ofString());
+```
+`Authenticator`类提供了大量的getXXX方法，可以用来得到对应的值，
+### Send Requests – Sync vs Async
+- `send(…)`同步的，也就是直到响应返回前阻塞执行
+- `sendAsync(…) `异步的，不等待响应，非阻塞的
+
+```java
+HttpResponse<String> response = HttpClient.newBuilder()
+  .build()
+  .send(request, BodyHandlers.ofString());
+```
+阻塞的方式有很多缺点。尤其是处理大量数据时。可以使用`sendAsync(...) `方法，返回`CompletableFeature<HttpResponse>`
+```java
+CompletableFuture<HttpResponse<String>> response = HttpClient.newBuilder()
+  .build()
+  .sendAsync(request, HttpResponse.BodyHandlers.ofString());
+```
+```java
+List<URI> targets = Arrays.asList(
+  new URI("https://postman-echo.com/get?foo1=bar1"),
+  new URI("https://postman-echo.com/get?foo2=bar2"));
+HttpClient client = HttpClient.newHttpClient();
+List<CompletableFuture<String>> futures = targets.stream()
+  .map(target -> client
+    .sendAsync(
+      HttpRequest.newBuilder(target).GET().build(),
+      HttpResponse.BodyHandlers.ofString())
+    .thenApply(response -> response.body()))
+  .collect(Collectors.toList());
+```
+### Setting Executor for Asynchronous Calls
+可以为异步调用设置`Executor`，可以限制用于处理请求得分线程数量。
+```java
+ExecutorService executorService = Executors.newFixedThreadPool(2);
+
+CompletableFuture<HttpResponse<String>> response1 = HttpClient.newBuilder()
+  .executor(executorService)
+  .build()
+  .sendAsync(request, HttpResponse.BodyHandlers.ofString());
+
+CompletableFuture<HttpResponse<String>> response2 = HttpClient.newBuilder()
+  .executor(executorService)
+  .build()
+  .sendAsync(request, HttpResponse.BodyHandlers.ofString());
+```
+默认情况下，HttpClient使用`java.util.concurrent.Executors.newCachedThreadPool().`作为使用的executor。
+### Defining a CookieHandler
+可以为连接设置一个CookieHandler。使用`cookieHandler(CookieHandler cookieHandler) `来定义客户端相关的`CookieHandler`。`CookieManager`是其实现类，这个实现类将cookies的存储与cookie的接受与拒绝策略分开。我们在下面的例子中定义，不接受任何cookies
+```java
+HttpClient.newBuilder()
+  .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_NONE))
+  .build();
+```
+如果`CookieManager`允许cookies存储，可以通过`CookieHandler`来访问
+```java
+((CookieManager) httpClient.cookieHandler().get()).getCookieStore()
+```
+## HttpResponse
+`HttpResponse`表示响应。提供了大量的有用的方法，但是有2个特别重要:
+- `statusCode()`返回状态码
+- `body()`返回响应的内容，返回类型依赖传递给send方法的响应的`BodyHandler`。
+
+### URI of Response Object
+返回接收到响应的URI
+```java
+assertThat(request.uri()
+  .toString(), equalTo("http://stackoverflow.com"));
+assertThat(response.uri()
+  .toString(), equalTo("https://stackoverflow.com/"));
+```
+### Headers from Response
+```java
+HttpResponse<String> response = HttpClient.newHttpClient()
+  .send(request, HttpResponse.BodyHandlers.ofString());
+HttpHeaders responseHeaders = response.headers();
+```
+### Version of the Response
+```java
+HttpRequest request = HttpRequest.newBuilder()
+  .uri(new URI("https://postman-echo.com/get"))
+  .version(HttpClient.Version.HTTP_2)
+  .GET()
+  .build();
+HttpResponse<String> response = HttpClient.newHttpClient()
+  .send(request, HttpResponse.BodyHandlers.ofString());
+assertThat(response.version(), equalTo(HttpClient.Version.HTTP_1_1));
+```
+## Handling Push Promises in HTTP/2
+通过`PushPromiseHandler`接口支持push promises。允许server push内容到客户端。这些内容可以是除了主要资源外的额外资源。减少了请求的往返次数，在分页渲染方面提升了性能。它基于HTTP/2的多路复用特性。It is really the multiplexing feature of HTTP/2 that allows us to forget about resource bundling. For each resource, the server sends a special request, known as a push promise to the client.PushPromiseHandler用于处理接收到的Push Promises，如果为null，HttpClient拒绝所有Push Promises。
+```java
+private static PushPromiseHandler<String> pushPromiseHandler() {
+    return (HttpRequest initiatingRequest, 
+        HttpRequest pushPromiseRequest, 
+        Function<HttpResponse.BodyHandler<String>, 
+        CompletableFuture<HttpResponse<String>>> acceptor) -> {
+        acceptor.apply(BodyHandlers.ofString())
+            .thenAccept(resp -> {
+                System.out.println(" Pushed response: " + resp.uri() + ", headers: " + resp.headers());
+            });
+        System.out.println("Promise request: " + pushPromiseRequest.uri());
+        System.out.println("Promise request: " + pushPromiseRequest.headers());
+    };
+}
+httpClient.sendAsync(pageRequest, BodyHandlers.ofString(), pushPromiseHandler())
+    .thenAccept(pageResponse -> {
+        System.out.println("Page response status code: " + pageResponse.statusCode());
+        System.out.println("Page response headers: " + pageResponse.headers());
+        String responseBody = pageResponse.body();
+        System.out.println(responseBody);
+    })
+    .join();
+```
+## 
