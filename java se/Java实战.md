@@ -103,3 +103,15 @@ module expenses.application {
 ```shell
 java --module-path  ./expenses.application/target/expenses.application-1.0.jar:./expenses.readers/target/expenses.readers-1.0.jar --module  expenses.application/com.example.expenses.application.ExpensesApplication
 ```
+## 自动模块
+使用第三方库的时候，在maven的pom中引入依赖，同时使用`requires jar name`来添加模块依赖。Java会将这个jar包转换为自动模块。模块路径不带module-info.jave文件的jar都会被转换为自动模块。自动模块默认导出所有的包。自动模块的名字根据Jar的名字自动创建，此时运行程序的代码:
+```java
+java --module-path  ./expenses.application/target/expenses.application-1.0.jar:./expenses.readers/target/expenses.readers-1.0.jar:./expenses.readers/target/lombok-1.18.30.jar --module  expenses.application/com.example.expenses.application.ExpensesApplication
+```
+## 模块声明及子句
+- requires，设定此模块的依赖
+- exports，将包声明为公有类型，默认所有包不导出
+- requires的传递，`requires transitive com.iteratrlearning.core`
+- exports to,
+- open/opens, 使其他模块可以用反射的方式访问它所有的包。就是允许对模块进行反射访问。
+- uses/provides
