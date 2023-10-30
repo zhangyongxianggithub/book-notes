@@ -12,6 +12,7 @@
 - google-http-java-client
 - async-http-client
 - Unirest
+- JDK 11 HttpClient
 
 下面着重理解他们的使用方法与各自的特点与优缺点
 # Retrofit
@@ -622,5 +623,18 @@ public interface Api {
 ```
 #### Setting headers per target
 
+# JDK 11 HttpClient
+## Overview
+在这个指南中，我们会探索Java11的标准化Http Client API，新的API实现了HTTP/2协议与WebSocket协议。它的目标是为了替换java早期开发的历史遗留的`HttpUrlConnection`类。一直到最近，Java还是只内置`HttpUrlConnection`客户端。这个客户端需要了解HTTP底层细节，特性并不丰富而且用户不友好。因此，一些第三方库北广泛使用，比如[Apache HttpClient](https://hc.apache.org/httpcomponents-client-ga/)、[Jetty](https://eclipse.dev/jetty/documentation/jetty-9/index.html#http-client-api)、[RestTemplate](https://www.baeldung.com/rest-template)
+3个延伸文档
+- [Posting with Java HttpClient](https://www.baeldung.com/java-httpclient-post)
+- [Java HttpClient With SSL](https://www.baeldung.com/java-httpclient-ssl)
+- [Adding Parameters to Java HttpClient Requests](https://www.baeldung.com/java-httpclient-request-parameters)
 
+## Background
+这是JEP321规范的一部分。
+### Majar Changes as Part of JEP321
+- 新的API是从Java9孵化的并被合并入Java SE API。新的API的包是`java.net.HTTP.*`
+- 新的HTTP协议被设计为提高性能，这是通过流的多路复用、header压缩与push promises来实现的
+- 从Java11开始，新的API支持异步请求，通过`CompletableFuture`来实现。`CompletableFuture`实现可以对每一步设置操作，在前面步骤完成的基础上。所以整个flow都是异步的。
 
