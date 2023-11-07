@@ -1,4 +1,3 @@
-# CompletableFuture及反应式编程背后的概念
 # 14 Java模块化系统
 Java的模块化系统诞生于Jigsaw项目，从Java9开始引入，演进了很多年，具有很大意义，本章只做简单的介绍。
 ## 模块化的驱动力: 软件的推理
@@ -115,3 +114,32 @@ java --module-path  ./expenses.application/target/expenses.application-1.0.jar:.
 - exports to,
 - open/opens, 使其他模块可以用反射的方式访问它所有的包。就是允许对模块进行反射访问。
 - uses/provides
+
+# CompletableFuture及反应式编程背后的概念
+软件编写方式的变化:
+- 多核带来并行处理，大任务拆小任务
+- 软件的微服务化，小型化与分布式联网化
+
+并发是一种编程属性（重叠的执行），在单核的机器上也可以执行，并行是同时执行时一种硬件属性
+## 为支持并发而不断演进的Java
+- 最开始的版本提供了锁(synchronized)、runnable与线程
+- 2004，Java5引入了`java.util.concurrent`包，`ExecutorService`将任务提交与任务执行解耦，`Callable<T>`与`Future<T>`生成一个高度封装的`Runnable`与一个`Thread`变体。
+- Java7引入了fork/join实现分而治之算法新增了`java.util.concurrent.RecursiveTask`
+- Java8引入了流与流的并行处理与`CompletableFuture`
+- Java9分布式异步编程
+
+理念就是提供一种程序结构让相互独立的任务尽可能并发执行。
+Java线程的问题
+- java线程是操作系统线程，创建于销毁的代价很大(页表操作)
+- 操作系统的线程数目是有限的
+- 操作系统的线程于硬件的线程不是一回事，通常线程的最优数据等于硬件线程数目
+
+线程池的优势
+- 可以获取结果
+- 任务的执行与任务的提交分离，这样任务的执行可以以与硬件最匹配的方式执行，无需手动处理，降低编程的负担
+- 成本低，线程重复使用
+- 关于任务的处理提供了更多的可配置功能
+
+线程池的劣势
+- 线程池有并发执行的上限
+- 如果任务里面有阻塞或者事件等造成线程休眠，会降低线程池的并发性，其他任务得不到执行，避免提交可能阻塞的任务
