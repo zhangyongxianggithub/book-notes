@@ -1,6 +1,11 @@
 # 处理器方法
+@RequestMapping处理器方法的参数非常灵活，支持特别多的参数与返回值。
+## 方法参数
+下面的表格列出了支持的所有的控制器方法参数，JDK8的`Optional`也是支持的，与带有`required`属性的注解（`@RequestParam`，`@RequestHeader`或者其他的注解）一起使用，表示`required=false`。
+|Controller method argument|Description|
+|||
 ## Multipart
-如果开启了`MultipartResolver`，Content-Type=multipart/form-data的POST请求体的内容将会被解析并且可以使用常规的请求参数的方式访问。下面的例子展示了访问一个普通的表单field与一个上传文件的例子:
+如果开启了`MultipartResolver`，Content-Type=multipart/form-data的POST请求体的内容将会被解析并且可以使用常规的请求参数的方式访问。下面的例子展示了访问一个普通的表单项与一个上传文件的例子:
 ```java
 @Controller
 public class FileUploadController {
@@ -18,7 +23,7 @@ public class FileUploadController {
 	}
 }
 ```
-可以将参数声明为`List<MultipartFile>`，这样针对一个参数名可以解析多个上传的文件。当`@RequestParam`注解声明为`Map<String,MultipartFile>`或者`MultiValueMap<String,MultipartFile>`时，不需要在注解中指定参数名，文件与参数名会填充到map中。你也可以使用Servlet规范的multi形式，比如使用`jakarta.servlet.http.Part`参数代替`MultipartFile`，或者作为集合元素的元素类型。您还可以将multipart请求绑定到对象。例如，前面示例中的表单字段和文件可以是表单对象上的字段，如以下示例所示：
+可以将参数声明为`List<MultipartFile>`，这样针对一个参数名可以解析多个上传的文件。当`@RequestParam`注解声明为`Map<String,MultipartFile>`或者`MultiValueMap<String,MultipartFile>`时，不需要在注解中指定参数名，文件与参数名会填充到map中。你也可以使用Servlet规范的多媒体参数形式，比如使用`jakarta.servlet.http.Part`参数代替`MultipartFile`，或者作为集合元素的元素类型。您还可以将multipart请求绑定到对象。例如，前面示例中的表单字段和文件可以是表单对象上的字段，如以下示例所示：
 ```java
 class MyForm {
 
