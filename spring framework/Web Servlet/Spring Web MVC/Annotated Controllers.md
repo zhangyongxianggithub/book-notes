@@ -1,9 +1,32 @@
 # 处理器方法
-@RequestMapping处理器方法的参数非常灵活，支持特别多的参数与返回值。
+`@RequestMapping`处理器方法的参数非常灵活，支持特别多的参数与返回值。
 ## 方法参数
-下面的表格列出了支持的所有的控制器方法参数，JDK8的`Optional`也是支持的，与带有`required`属性的注解（`@RequestParam`，`@RequestHeader`或者其他的注解）一起使用，表示`required=false`。
+下面的表格列出了支持的所有的控制器方法参数，不支持任何响应式类型的参数。JDK8的`Optional`也是支持的，与带有`required`属性的注解（`@RequestParam`，`@RequestHeader`或者其他的注解）一起使用，表示`required=false`。
 |Controller method argument|Description|
-|||
+|`@PathVariable`|访问URI模板变量，可以参考[URI patterns](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html#mvc-ann-requestmapping-uri-templates)|
+|`@RequestParam`|访问Servlet请求参数，包括multipart文件，参数值会被转换为声明的方法参数类型，`@RequestParam`的参数也可以是[Multipart](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/multipart-forms.html)，对于简单的参数值来说，`@RequestParam`是可选的|
+|`@RequestHeader`|访问请求头，请求头会被转换为声明的参数类型|
+|其他参数|如果是简单类型的参数被认为是`@RequestParam`（由[BeanUtils.isSimpleProperty](https://docs.spring.io/spring-framework/docs/6.1.2/javadoc-api/org/springframework/beans/BeanUtils.html#isSimpleProperty-java.lang.Class-)）,其他情况下默认为`@ModelAttribute`参数|
+## @RequestHeader
+使用`@RequestHeader`注解绑定请求头到controller中的方法参数上。考虑下面的请求
+```http
+Host                    localhost:8080
+Accept                  text/html,application/xhtml+xml,application/xml;q=0.9
+Accept-Language         fr,en-gb;q=0.7,en;q=0.3
+Accept-Encoding         gzip,deflate
+Accept-Charset          ISO-8859-1,utf-8;q=0.7,*;q=0.7
+Keep-Alive              300
+```
+下面的例子获取`Accept-Encoding`与`Keep-Alive`请求头的值
+```java
+@GetMapping("/demo")
+public void handle(
+		@RequestHeader("Accept-Encoding") String encoding,
+		@RequestHeader("Keep-Alive") long keepAlive) {
+	//...
+}
+```
+`@RequestHeader`注解的参数不是String类型时，自动执行类型转换。如果是`Map<String, String>`, `MultiValueMap<String, String>`或者`HttpHeaders`类型，则用所有的请求头填充。Spring MVC支持将逗号分隔字符串转换为字符串数组或者Spring支持自动转换的类型的数组。
 ## Multipart
 如果开启了`MultipartResolver`，Content-Type=multipart/form-data的POST请求体的内容将会被解析并且可以使用常规的请求参数的方式访问。下面的例子展示了访问一个普通的表单项与一个上传文件的例子:
 ```java
@@ -83,6 +106,15 @@ public String handle(@Valid @RequestPart("meta-data") MetaData metadata,
 	// ...
 }
 ```
+## @ResponseBody
+`@ResponseBody`注解放到方法上会让返回值通过`HttpMessageConverter`转换为响应体。下面的列表是一个例子
+```java
+@GetMapping("/accounts/{id}")
+@ResponseBody
+public Account handle() {
+}
+```
+`@ResponseBody`也可以放到类上，被所有的方法继承。效果等于`@RestController`，它是一个`@Controller`与`@ResponseBody`注解组合在一起的元注解。`@ResponseBody`注解支持响应式类型，可以参考[Asynchronous Requests](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html)与[Reactive Types](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-reactive-types)。你可以使用[MVC Config](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-config.html)的[Message Converters](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-config/message-converters.html)可选项来自定义类型转换。你还可以配置`@ResponseBody`的JSON序列化器，参考[Jackson JSON](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/jackson.html)获取更多的细节。
 # 异常处理
 `@Controller/@ControllerAdvice`类可以使用`@ExceptionHandler`方法来处理controller方法抛出的异常。正如下面的例子所示:
 ```java
