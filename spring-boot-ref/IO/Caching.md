@@ -1,6 +1,6 @@
 [TOC]
-# 13 Caching
-Spring框架提供了为应用添加缓存的功能，这种支持是透明的，侵入性比较低，在spring frame核心的基础上，缓存抽象会应用到方法上，减少方法的执行，尽量使用缓存中的可用的信息。Spring Boot自动配置了缓存的一些基础设置，但是这些基础设置需要注解@EnableCaching才能生效。
+# Caching
+Spring框架提供了为应用添加缓存的功能，这种支持是透明的，侵入性比较低，在spring frame核心的基础上，缓存抽象会应用到方法上，减少方法的执行，尽量使用缓存中的可用的信息。Spring Boot自动配置了缓存的一些基础设置，但是这些基础设置需要注解`@EnableCaching`才能生效。
 可以检查Spring框架中的相关的细节。
 在一个应用中，添加缓存就是简单的在方法上放一个注解。
 ```java
@@ -15,9 +15,9 @@ public class MyMathService {
 }
 ```
 这个案例展示了使用缓存优化一个耗时比较高的接口的用法，在调用computePiDecimal前，缓存机制在piDecimals缓存中搜索匹配参数的结果，如果找到了这个参数代表的key，缓存中key的内容会立即返回给调用者，没找到就会执行方法更新缓存返回结果。你可以可以使用JSR-107标准，这里面也定义了一些缓存相关的注解，但是最好不要混用。可能造成未知的行为。
-如果你没有添加任何特定的缓存库，Spring Boot会自动配置一个内存map作为缓存提供者的简单CacheManager，当存储缓存时，提供者就会创建一个map代表缓存，生产环境尽量不要使用内存map的形式，可以用来学习或者测试，当你已经充分的学习了很多的缓存的提供者的使用后，需要做合适的配置；所有的缓存提供者都需要你明确的配置所用到的缓存，也可以提供一些默认缓存，在spring.cache.cache-names里面指定。
+如果你没有添加任何特定的缓存库，Spring Boot会自动配置一个内存map作为缓存提供者的简单`CacheManager`，当存储缓存时，提供者就会创建一个map代表缓存，生产环境尽量不要使用内存map的形式，可以用来学习或者测试，当你已经充分的学习了很多的缓存的提供者的使用后，需要做合适的配置；所有的缓存提供者都需要你明确的配置所用到的缓存，也可以提供一些默认缓存，在spring.cache.cache-names里面指定。
 ## 13.1 支持的换粗提供者
-缓存抽象没有提供实际的缓存存储，需要提供者实现Cache于CacheManager来实现缓存存储；如果你还没定义一个CacheManager类型的bean或者一个名叫cacheResolver的CacheResolver类型的bean（看CachingConfigurer）;Spring Boot会按照一下顺序检测缓存提供者：
+缓存抽象没有提供实际的缓存存储，需要提供者实现`Cache`与`CacheManager`来实现缓存存储；如果你还没定义一个`CacheManager`类型的bean或者一个名叫cacheResolver的`CacheResolver`类型的bean（看`CachingConfigurer`）;Spring Boot会按照以下顺序检测缓存提供者：
 - Generic
 - JCache
 - EhCache2.x
@@ -26,9 +26,11 @@ public class MyMathService {
 - Couchbase
 - Redis
 - Caffeine
+- Cache2k
 - Simple
-也可以通过spring.cache.type指定缓存提供者，你可以使用spring-boot-starter-cache来快速的添加几本的缓存依赖，starter引入了spring-context-support包，如果你手动添加依赖，还必须包含spring-context-support包，这是为了使用JCache、EhCache、Caffeine的功能。
-如果你使用的事Spring Boot自动配置的CacheManager，那么在他初始化前，你可以用=自定义的CacheManagerCustomizer来修改CacheManager的定义。下面的例子表示允许缓存null值
+
+也可以通过`spring.cache.type`指定缓存提供者，你可以使用`spring-boot-starter-cache`来快速的添加基本的缓存依赖，starter引入了spring-context-support包，如果你手动添加依赖，还必须包含spring-context-support包，这是为了使用JCache、EhCache、Caffeine的功能。
+如果你使用的是Spring Boot自动配置的`CacheManager`，那么在他初始化前，你可以用自定义的`CacheManagerCustomizer`来调整`CacheManager`。下面的例子表示不允许缓存null值
 ```java
 import org.springframework.boot.autoconfigure.cache.CacheManagerCustomizer;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
@@ -45,7 +47,7 @@ public class MyCacheManagerConfiguration {
 
 }
 ```
-上面的例子中自动配置了ConcurrentMapCacheManager的bean，如果不是这种类型的Customizer，则不会被调用。
+在前面的例子中自动配置了`ConcurrentMapCacheManager`，如果你提供了自己的CacheManager或者选择了不同类型的自动配置的CacheManager，则Customizer不会被调用。
 ### 13.1.1 Generic
 Generic Caching在context中包含Cache类型的bean时使用，一个包含所有Cache对象的GenericCacheManager会被创建。
 ### 13.1.2 JCache
@@ -100,7 +102,7 @@ spring:
 ```
 如果提供了一个CacheLoader类型的bean，它会自动在CaffeineCacheManager中使用的，因为·这个CacheLoader会被CaffeineCacheManager管理的所有的Cache使用，所以它必须被定义成CacheLoader\<Object,OBject>类型的，自动配置会忽略其他类型的CacheLoader bean。
 ### 13.1.9 Simple
-如果没有任何提供者被发现，会使用ConcurrentHashMap作为一个简单的实现，如果没有别的缓存包在classpath中，这个就是默认的实现，默认情况下，caches是按需创建的，你可以通过设置cache-names属性来限定cache的数量；比如，。如果你只需要cache1与cache2缓存，可以设置如下：
+如果没有任何提供者被发现，会使用ConcurrentHashMap作为一个简单的实现，如果没有别的缓存包在classpath中，这个就是默认的实现，默认情况下，caches是按需创建的，你可以通过设置cache-names属性来限定cache的数量；比如，如果你只需要cache1与cache2缓存，可以设置如下：
 ```yaml
 spring:
   cache:
@@ -108,7 +110,7 @@ spring:
 ```
 如果你这么做了，你的应用如果使用了没有在列表中的缓存时，在调用碰到这里时，它就会失败。
 ### 13.1.10 None
-当使用@EnableCaching开启缓存时，就需要一个合适的缓存配置，如果你需要在特定的环境下禁止缓存的相关的功能，设置属性type=none，spring就会使用一个no-op的CacheManager
+当使用`@EnableCaching`开启缓存时，就需要一个合适的缓存配置，如果你需要在特定的环境下禁止缓存的相关的功能，设置属性type=none，spring就会使用一个no-op的CacheManager
 ```yaml
 spring:
   cache:
