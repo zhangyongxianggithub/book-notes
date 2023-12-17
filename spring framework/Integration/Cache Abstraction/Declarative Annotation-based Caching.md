@@ -118,38 +118,102 @@ public Optional<Book> findBook(String name)
 |Argument name|Evaluation context|方法参数的名字，如果无法拿到名字（jvm没有开启debug选项），参数名字可以通过#a<#arg>指定，这里#arg这里表示参数的索引|#isbn,或者#a0,你也可以使用#p0或者#p<#arg>标记表示|
 |Result|Evaluation context|方法调用的结果，只可以在unless中使用，cache put表达式、cache evict表达式中使用|#result|
 
-6.8.2.2 @CachePut注解
-在方法没有执行的情况下，更新缓存，方法执行的结果放到缓存中，方法是一直执行的，执行一次放一次；与@Cacheable里面的一些参数相同，用来更新缓存，下面是一个例子：
+# @CachePut注解
+在不干扰方法执行的情况下更新缓存，方法总是执行并且执行的结果会被放到缓存中，方法是一直执行的，执行一次放一次；与`@Cacheable`里面的一些参数相同，用来更新缓存，下面是一个例子:
+```java
+@CachePut(cacheNames="book", key="#isbn")
+public Book updateBook(ISBN isbn, BookDescriptor descriptor)
+```
+在同样的方法上使用`@CachePut`与`@Cacheable`是强烈不建议的，因为他们有着完全不同的行为。从6.1版本开始支持`CompletableFuture`与响应式类型。
+## @CacheEvict注解
+缓存抽象不仅可以更新缓存，也可以执行缓存的清除，当需要移除过期的或者无用的数据时，非常有用，相比于`@Cacheable`、`@CacheEvict`定义为执行缓存的清除，标注的方法相当于一个触发器，`@CacheEvict`需要执行缓存清除支持的参数与`@Cacheable`的大部分相同，含义也一样；还支持一个额外的参数allEntries指定是否清除整个缓存；下面是一个清除整个缓存的例子:
+```java
+@CacheEvict(cacheNames="books", allEntries=true)
+public void loadBooks(InputStream batch)
+```
+当需要清除整个缓存区域时，此选项会派上用场。相比于逐出每个条目（这将花费很长时间，因为它效率低下），而是在一次操作中删除所有条目，如前面的示例所示。请注意，框架会忽略此场景中指定的任何键，因为它不适用（整个缓存被逐出，而不仅仅是一个条目）。您还可以使用`beforeInvocation`属性指示驱逐是应该在调用方法之后（默认值）还是之前发生。前者提供与其余注解相同的语义：一旦方法成功完成，缓存上的操作（在本例中为驱逐）就会运行。如果该方法未运行（因为它可能被缓存）或抛出异常，则不会发生驱逐。后者 (beforeInvocation=true) 导致驱逐总是在调用方法之前发生。这在驱逐不需要与方法结果相关联的情况下很有用。
+Void返回值的方法可以使用`@CacheEvict`标注，因为清除的方法相当于一个触发器。这是与`@Cacheable`与`@CachePut`完全不同的。
+# Caching注解
+有时候，方法上需要标注多个相同类型的注解比如多个`@CachePut`；这是因为每个涉及到的缓存以及key等都是不同的；`@Cachin`g让这种情况得以实现，下面是使用2个`@CacheEvict`的例子:
+```java
+@Caching(evict = { @CacheEvict("primary"), @CacheEvict(cacheNames="secondary", key="#p0") })
+public Book importBooks(String deposit, Date date)
+```
+# @CacheConfig注解
+到此为止，我们看到缓存操作提供了很多定制化的选项，你可以为每个操作设置这些选项；但是有的选项配置起来又多又麻烦特别是他们都是重复的时候需要配置多次；此时，这些共同的选项可以放到class上共享，只用配置一次；此时就需要使用`@CacheConfig`注解，下面是一个所有操作共享cache name设置的例子:
+```java
+@CacheConfig("books")
+public class BookRepositoryImpl implements BookRepository {
 
-在同样的方法上使用@CachePut与@Cacheable是强烈不建议的，因为他们有着完全不同的行为。
-6.8.2.3 @CacheEvict
-缓存抽象不仅可以更新缓存，也可以执行缓存的清除，当需要移除过期的或者无用的数据时，非常有用，相比于@Cacheable、@CacheEvict定义为执行缓存的清除，标注的方法相当于一个触发器，@CacheEvict需要执行缓存清除支持的参数与@Cacheable的大部分相同，含义也一样；还支持一个额外的参数allEntries指定是否清除整个缓存；下面是一个清除整个缓存的例子：
+	@Cacheable
+	public Book findBook(ISBN isbn) {...}
+}
+```
+`@CacheConfig`支持设置缓存名字、自定义的`KeyGenerator`、自定义的`CacheManager`、自定义的`CacheResolver`。`@CacheConfig`注解并不会打开缓存操作。方法级别上的设置可以覆盖`@CacheConfig`指定的设置；所以设置分为一下3个优先级：
+- 全局设置，CacheManager、KeyGenerator；
+- 类级别的；
+- 方法级别的。
 
-当需要清除整个缓存区域时，此选项会派上用场。 不是逐出每个条目（这将花费很长时间，因为它效率低下），而是在一次操作中删除所有条目，如前面的示例所示。 请注意，框架会忽略此场景中指定的任何键，因为它不适用（整个缓存被逐出，而不仅仅是一个条目）。
-您还可以使用 beforeInvocation 属性指示驱逐是应该在调用方法之后（默认值）还是之前发生。 前者提供与其余注解相同的语义：一旦方法成功完成，缓存上的操作（在本例中为驱逐）就会运行。 如果该方法未运行（因为它可能被缓存）或抛出异常，则不会发生驱逐。 后者 (beforeInvocation=true) 导致驱逐总是在调用方法之前发生。 这在驱逐不需要与方法结果相关联的情况下很有用。
-Void返回值的方法可以使用@CacheEvict标注，因为清除的方法相当于一个触发器。这是与@Cacheable与@CachePut完全不同的。
-6.8.2.4 Caching注解
-有时候，方法上需要标注多个相同类型的注解比如多个@CachePut；这是因为每个涉及到的缓存以及key等都是不同的；@Caching让这种情况得以实现，下面是使用2个@CacheEvict的例子
+特定的缓存提供者相关的设置在其`CacheManager`实现里面，这些设置是全局的。
+# 启用Caching注解
+需要注意的是，即使声明了缓存注解，不会自动触发缓存操作。就像Spring中的许多事情一样，该功能必须以声明方式启用（这意味着如果你怀疑缓存是罪魁祸首，你可以通过删除一行配置来禁用它而不需要删除代码中的所有注解）。
+为了启用缓存支持，需要在任意一个`@Configuation`配置类上加入`@EnableCaching`注解。注解上可以指定一些属性:
+```java
+@Configuration
+@EnableCaching
+public class AppConfig {
 
-6.8.2.5 @CacheConfig
-到此为止，缓存操作提供了很多定制化的选项，你可以为每个方法设置这些选项；但是有的选项配置起来又多又麻烦；这些共同的选项可以放到class上共享，只用配置一次；下面是一个所有操作共享cache name设置的例子：
+	@Bean
+	CacheManager cacheManager() {
+		CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+		cacheManager.setCacheSpecification(...);
+		return cacheManager;
+	}
+}
+```
+等价的XML形式:
+```xml
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:cache="http://www.springframework.org/schema/cache"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans https://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/cache https://www.springframework.org/schema/cache/spring-cache.xsd">
 
-方法级别上的设置可以覆盖@CacheConfig指定的设置；所以设置分为一下3个优先级：
-全局设置，CacheManager、KeyGenerator；
-类级别的；
-方法级别的。
-6.8.2.6 开启Caching注解
-需要注意的是，即使声明缓存注解不会自动触发它们的操作——就像 Spring 中的许多事情一样，该功能必须以声明方式启用（这意味着如果你怀疑缓存是罪魁祸首，你可以通过删除来禁用它 只有一个配置行而不是代码中的所有注释）。
-为了启用缓存支持，需要在任意一个@Configuation配置类上加入@EnableCaching注解。注解上可以指定一些属性：
-XML	Annotation	Default	Description
-Cache-manager	CachingConfigurer	cacheManager	使用的cacheManager的名字，系统会默认使用次manager初始化一个CacheResolver，如果想要对cache进行更细粒度的管理，考虑定义cacheResolver
-cache-resolver	CachingConfigurer	使用cacheManager的一个SimpleCacheResolver类型的对象	使用的CacheResolver的Bean名字。
-key-generator	CachingConfigurer	SimpleKeyGenerator	自定义的key generator的名字
-error-handler	CachingConfigurer	SimpleCacheErrorHandler	使用的缓存处理器的名字
-Mode	Mode	proxy	默认模式（代理）通过使用 Spring 的 AOP 框架（遵循代理语义，如前所述，仅适用于通过代理传入的方法调用）处理带注释的 bean。 替代模式 (aspectj) 将受影响的类与 Spring 的 AspectJ 缓存方面编织在一起，修改目标类字节码以应用于任何类型的方法调用。 AspectJ 编织需要类路径中的 spring-aspects.jar 以及启用加载时编织（或编译时编织）。 （有关如何设置加载时编织的详细信息，请参阅 Spring 配置。）
-proxy-target-class	proxyTargetClass	false	仅适用于代理模式。 控制为使用 @Cacheable 或 @CacheEvict 批注批注的类创建的缓存代理类型。 如果 proxy-target-class 属性设置为 true，则会创建基于类的代理。 如果 proxy-target-class 为 false 或省略该属性，则会创建标准的基于 JDK 接口的代理。 （有关不同代理类型的详细检查，请参阅代理机制。）
-Order	order	Order.LOWEST_PRECEDENCE	定义应用于用@Cacheable 或@CacheEvict 注释的bean 的缓存建议的顺序。 （有关与 AOP 通知排序相关的规则的更多信息，请参阅 Advice Ordering。）没有指定的排序意味着 AOP 子系统决定了通知的顺序。
-当您使用代理时，您应该仅将缓存注释应用于具有公共可见性的方法。 如果您使用这些注释对受保护的、私有的或包可见的方法进行注释，则不会引发错误，但带注释的方法不会显示配置的缓存设置。 如果您需要注释非公共方法，请考虑使用 AspectJ（请参阅本节的其余部分），因为它会更改字节码本身。
-Spring建议你只注解实际实现类里面的方法，当然，你可以把主机诶放到哦接口的方法上，但是这种情况只有在基于接口的代理模式下才有效；一个事实是，java注解并不能从接口继承，这意味着，当你使用基于类的代理模式时（proxy-target-class=’true’），或者基于织入的切面模式（mode=’aspectj’）时，缓存配置是识别不到的，不能正确包含到一个caching代理里面。
-6.8.2.7 使用自定义注解
-自定义注解在基于代理的模式下可以完美运行，在使用aspectj模式时，需要做一些微小的工作。缓存抽象可以让你使用自己定义的注解，这样可以把重复的注解声明提取出来，节省代码量；上面说的注解都可以作为元注解。
+	<cache:annotation-driven/>
+
+	<bean id="cacheManager" class="org.springframework.cache.caffeine.CaffeineCacheManager">
+		<property name="cacheSpecification" value="..."/>
+	</bean>
+</beans>
+```
+通过注解与XML的配置，你可以指定一些可选项，可以控制缓存行为如何通过AOP的方式添加到方法上。有点类似与`@Transactional`注解。处理缓存注解的默认的advise模式是proxy。也就是拦截方法调用只会通过代理。本地this调用不会被拦截。更高级的拦截选项，可以考虑使用aspectj模式与compile-time/load-time weaving。想要更多的定制化，可以考虑实现`CachingConfigurer`类。下面的列表是一些可选项配置
+|XML|Annotation Attribute|Default|Description|
+|:---|:---|:---|:---|
+|cache-manager|CachingConfigurer|cacheManager|使用的cacheManager的名字，系统会默认使用此manager初始化一个CacheResolver，如果想要对cache进行更细粒度的管理，考虑定义cacheResolver|
+|cache-resolver|CachingConfigurer|一个使用配置的cacheManager的`SimpleCacheResolver`|使用的CacheResolver的Bean名字，用来解析底层缓存，这个属性不是必须的|
+|key-generator|CachingConfigurer|SimpleKeyGenerator|自定义的key generator的名字|
+|error-handler|CachingConfigurer|SimpleCacheErrorHandler|使用的缓存error处理器的名字，默认情况下，任何异常都会抛到上层|
+|mode|mode|proxy|默认模式(代理)通过使用Spring的AOP框架实现代理(遵循代理语义，如前所述，仅适用于通过代理方法调用)。替代模式(aspectj)将受影响的类与Spring的AspectJ caching aspect编织在一起，修改目标类字节码以应用于任何类型的方法调用。AspectJ编织需要类路径中的spring-aspects.jar以及启用加载时编织(或编译时编织)。(有关如何设置加载时编织的详细信息，请参阅[Spring 配置](https://docs.spring.io/spring-framework/reference/core/aop/using-aspectj.html#aop-aj-ltw-spring))|
+|proxy-target-class|proxyTargetClass|false|仅适用于代理模式。控制为使用`@Cacheable`或 `@CacheEvict`注解的类创建的缓存代理类型。如果`proxy-target-class`属性设置为`true`，则会创建基于类的代理。如果`proxy-target-class`为`false`或省略该属性，则会创建标准的基于JDK接口的代理。(有关不同代理类型的详细检查，请参阅[代理机制](https://docs.spring.io/spring-framework/reference/core/aop/proxying.html))|
+|order|order|Order.LOWEST_PRECEDENCE|定义应用于用`@Cacheable`或`@CacheEvict`注解的bean的缓存advice的顺序。 （有关与 AOP 通知排序相关的规则的更多信息，请参阅 Advice Ordering。）没有指定的排序意味着 AOP 子系统决定了通知的顺序。|
+`<cache:annotation-driven/>`只会搜素在同一个application context中定义的beans中缓存注解，也就是说，如果你把`<cache:annotation-driven/>`放到WebApplicationContext中，它只会检查controllers中的缓存注解而没有service。具体可以参阅[the MVC section](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-servlet.html)。当您使用代理时，您应该仅将缓存注解应用于具有public可见性的方法。如果将注解放到protected、private或包可见的方法上，也不会引发错误，只是方法的执行不会应用缓存相关的设置。如果您需要这样做，请考虑使用AspectJ，因为它会更改字节码本身。Spring建议你只注解实际实现类里面的方法而不是接口，当然，你可以把注解放到接口或者接口的方法上，但是这种情况只有在基于接口的代理模式下才有效；一个事实是，java注解并不能从接口继承，这意味着，当你使用基于类的代理模式时（proxy-target-class='true'），或者基于aspectj的切面模式（mode='aspectj'）时，缓存配置是识别不到的，不能正确包含到一个caching代理里面。
+# 使用自定义注解
+自定义注解在基于代理的模式下可以完美运行，在使用aspectj模式时，需要做一些微小的工作。缓存抽象可以让你使用自己定义的注解来实现缓存相关的操作，通过一个模板机制可以很容易实现，这样可以把重复的注解声明提取出来，节省代码量；上面说的注解都可以作为元注解。
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD})
+@Cacheable(cacheNames="books", key="#isbn")
+public @interface SlowService {
+}
+```
+在前面得例子中，我们定义了自定义注解`@SlowService`，我们可以替换下面的声明:
+```java
+@Cacheable(cacheNames="books", key="#isbn")
+public Book findBook(ISBN isbn, boolean checkWarehouse, boolean includeUsed)
+```
+替换后:
+```java
+@SlowService
+public Book findBook(ISBN isbn, boolean checkWarehouse, boolean includeUsed)
+```
