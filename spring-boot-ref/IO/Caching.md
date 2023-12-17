@@ -88,11 +88,11 @@ public class MyRedisCacheManagerConfiguration {
 
 ```
 ### 13.1.8 Caffeine
-Caffeine时Guava cache的java8版本，如果Classpath中有Caffeine，一个CafffeineCacheManager就会被创建，可以在启动时就创建缓存，这是通过spring.cache.cache-names属性实现的，可以通过下面的方式定制化（按照说明的顺序）
-- 通过spring.cache.caffeine.spec属性设置
-- 提供一个CaffeineSpec的bean
-- 提供Caffeine类型的Bean
-举例来说，下面的配置创建了cache1于cache2缓存，缓存最大存储500个数据，ttl=10m
+Caffeine是Guava cache的java8版本，如果Classpath中有Caffeine，一个`CafffeineCacheManager`就会被自动创建，可以在启动时就创建缓存，这是通过spring.cache.cache-names属性实现的，可以通过下面的方式定制化缓存设置（按照说明的顺序）
+- 通过spring.cache.caffeine.spec属性设置的cache描述
+- 提供一个`CaffeineSpec`的bean
+- 提供`Caffeine`类型的Bean
+举例来说，下面的配置创建了cache1与cache2缓存，缓存最大存储500个数据，ttl=10m
 ```yaml
 spring:
   cache:
@@ -100,7 +100,7 @@ spring:
     caffeine:
       spec: "maximumSize=500,expireAfterAccess=600s"
 ```
-如果提供了一个CacheLoader类型的bean，它会自动在CaffeineCacheManager中使用的，因为·这个CacheLoader会被CaffeineCacheManager管理的所有的Cache使用，所以它必须被定义成CacheLoader\<Object,OBject>类型的，自动配置会忽略其他类型的CacheLoader bean。
+如果提供了一个`CacheLoader`类型的bean，它会自动在`CaffeineCacheManager`中使用的，因为·这个CacheLoader会被CaffeineCacheManager管理的所有的Cache使用，所以它必须被定义成CacheLoader\<Object,OBject>类型的，自动配置会忽略其他类型的CacheLoader bean。
 ### 13.1.9 Simple
 如果没有任何提供者被发现，会使用ConcurrentHashMap作为一个简单的实现，如果没有别的缓存包在classpath中，这个就是默认的实现，默认情况下，caches是按需创建的，你可以通过设置cache-names属性来限定cache的数量；比如，如果你只需要cache1与cache2缓存，可以设置如下：
 ```yaml
