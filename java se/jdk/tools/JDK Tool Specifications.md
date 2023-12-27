@@ -14,7 +14,7 @@ jmap命令打印指定的运行进程的详细信息。
 ## Options for the jmap Command
 - -clstats pid: 连接到一个运行的Java进程，打印Java堆的class loader的统计信息
 - -finalizerinfo pid: 连接到一个运行的Java进程，打印等待终止对象的的信息
-- histo[:live] pid: 连接到一个运行的Java进程, 打印Java对象堆的直方图或者柱状图，如果指定来了live子选项，则只计算live的对象
+- -histo[:live] pid: 连接到一个运行的Java进程, 打印Java对象堆的直方图或者柱状图，如果指定来了live子选项，则只计算live的对象
 - -dump:dump_options pid: 连接到一个运行的Java进程，转储Java堆，dump_options包括:
   - live: 只转储live的对象
   - format=b: 以hprof二进制格式转储Java堆
