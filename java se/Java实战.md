@@ -150,3 +150,60 @@ Java8的stream流并行的2个优势:
 - 内部迭代代替外部迭代
 - 不需要手动创建线程并管理线程，底层已经做好了
 
+函数`int f(int x)`与`int g(int x)`都是同步API，物理上返回时执行结果也一同返回。
+```java
+        var x = 1337;
+        int y = f(x);
+        int z = g(x);
+        System.out.println(y + z);
+```
+串行执行是2个方法之和，如果2个任务没有依赖关系。并发执行是2个中耗时最长的那个。有几种并发的方式
+- 直接使用`Thread`类，并使用`join`来等待，缺点是需要开发人员显式的操纵所有的线程
+- 使用`ExecutorService`线程池，缺点是需要手动多次调用submit来提交任务
+- 异步API，就是在返回结果之前就返回函数执行，使用`Future`或者增强版`CompletableFuture`
+- 异步API，就是在返回结果之前就返回函数执行，使用`java.util.concurrent.Flow`接口的响应式编程API
+
+1. Future风格的API
+   ```java
+    final Future<Integer> yf = fAsync(x);
+    final Future<Integer> zf = gAsync(x);
+    System.out.println(yf.get() + zf.get());
+   ```
+   方法返回一个Future对象包含一个继续执行方法体中原始内容的任务并立刻返回。`get()`方法等待执行完毕。
+2. 反应式风格的API
+   核心思想是使用回调风格的编程。
+   ```java
+   public class CallbackStyleExample {
+    public static void main(final String[] args) {
+        final int x = 1337;
+        final Result result = new Result();
+        f(x, y -> {
+            result.left = y;
+            System.out.println(result.left + result.right);
+        });
+        f(x, z -> {
+            result.right = z;
+            System.out.println(result.left + result.right);
+        });
+        
+    }
+    
+    private static class Result {
+        private int left;
+        private int right;
+    }
+    
+    private static void f(final int x, final IntConsumer dealWithResult) {
+        dealWithResult.accept(x * x);
+    }
+    
+    private static void g(final int x, final IntConsumer dealWithResult) {
+        dealWithResult.accept(x + x);
+    }
+    }
+
+   ```
+3. 有害的睡眠及其他阻塞式操作，任务在执行时占用系统资源，目标是让它们持续的处于运行状态，直到执行完毕释放资源，其中如果有阻塞操作，会阻塞整体任务的执行
+4. 如果使用异步API进行异常处理
+   
+   
