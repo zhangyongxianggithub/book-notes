@@ -206,4 +206,6 @@ Java8的stream流并行的2个优势:
 3. 有害的睡眠及其他阻塞式操作，任务在执行时占用系统资源，目标是让它们持续的处于运行状态，直到执行完毕释放资源，其中如果有阻塞操作，会阻塞整体任务的执行
 4. 如果使用异步API进行异常处理，可以使用`CompletableFuture`的`get()`方法返回异常信息或者通过`exceptionally()`处理异常信息。对于反应式异步API，需要使用回调函数来处理异常。比如`void f(int x, Consumer<Integer> dealWithResult,Consumer<Throwable> dealWithException);`多个回调函数可以封装到一个接口中，回调接口中中每个方法调用称作消息或者事件。
 
-## 线程-管道模型
+## 线框-管道模型
+使用图形表示并发系统就是线框-管道模型。
+## 为并发而生的CompletableFuture和结合器
