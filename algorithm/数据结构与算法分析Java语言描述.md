@@ -52,6 +52,18 @@
 泛型就是为了代码重用。不同类型的实现方法相同就可以用泛型机制。
 - 使用Object表示泛型，一个问题是使用时需要强制转化为特定的类型，否则无法使用，还有一个就是无法表示基本类型
 - 使用接口类型表示泛型
+## 利用Java5泛型特性实现泛型构件
+- 简单的泛型类与接口，只需要在菱形内声明类型参数，类型参数可以用于类内的域、方法的参数与返回值类型。使用泛型使以前只有在运行时才能报告的错误变成了编译时的错误
+- 自动装箱，编译器将通过Integer构造函数构造出Integer对象，自动拆箱，直接调用Integer的`intValue()`方法来得到int值
+- 菱形运算符
+- 泛型数组是协变的，也就是Square IS-A Shape，Square[] IS-A Shape[]，但是Collection\<Square> IS-NOT-A Collection\<Shape>，传递参数的时候会产生编译错误，Java使用通配符来解决这个问题。通配符来表示参数类型的子类或者超类，? extends Type，单独使用时表示 extends Object
+- 泛型static方法需要在返回值前声明类型参数
+- 类型限界` public static <AnyType> AnyType findMax(AnyType[] arr)`，类型限界可以在编译期就可以调用`compareTo()`方法而不用等到运行期再去判断，`public static <AnyType extends Comparable<AnyType>> AnyType findMax(nyType[] arr)`，`public static <AnyType extends Comparable<? super AnyType>> AnyType findMax(AnyType[] arr)`，假设Shape实现Comparable<Shape>，Square继承Shape，此时Square实现了Comparable<Shape>但是没实现Comparable<Square>，于是Shape IS-A Comparable<Shape>但是它 IS-NOT-A Comparable<Square>，所以应该声明AnyType IS-A Comparable<T>，T是AnyType的父类。
+- 类型擦除到类型限界，成为原始类，这是编译期干的
+- static域不能使用泛型因为类型擦除后，类型参数不存在，instanceof只针对原始类型进行，不能通过`new T()`的方式构造泛型对象，因为擦除后可能是一个接口；泛型数组也不能创建；
+
+## 函数对象
+没有数据只有一个方法的类的对象
 # 第二章 算法分析
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
