@@ -1,5 +1,23 @@
 [TOC]
-version=5.1.2
+version=5.2.3
+Spring Data for Elasticsearch是所有Spring Data项目的一部分。Spring Data项目致力于提供熟悉且一致的基于Spring的编程模型在此基础上保留存储特有的特性与能力。Spring Data Elasticsearch与es集成，Spring Data Elasticsearch的关键功能是代表ES Document的POJO中心模型与Repository风格的数据访问层。
+- Clients: 不同HTTP Clients的连接与配置
+- ElasticsearchTemplate与ReactiveElasticsearchTemplate: 帮助类，提供了ES索引操作与POJO之间的对象映射
+- Object Mapping: 功能强大的注解驱动的对象映射器
+- Entity Callbacks: save/update/delete的前后回调
+- Data Repositories: 支持自定义查询的Repositories接口
+- Join-Typs，Routing，Scripting: 集成特殊的ES特性
+
+Spring Data Elasticsearch为ES数据库提供了repository支持，通过一致性的编程模型简化了开发。
+- Versions: 版本兼容矩阵
+- Clients: ES客户端配置
+- Elasticsearch: Elasticsearch支持
+- Repositories: Elasticsearch Repositories
+- Migration: 迁移指南
+
+# Versions
+下面表格是Spring Data版本序列与其对应的Spring Data Elasticsearch版本使用ES与Spring版本
+![版本](elasticsearch/versions.png)
 # overview
 SDE是Spring Data项目的其中一部分。Spring Data项目为所有的数据存储中间件提供类似与一致性的基于Spring的编程模型。同时也支持数据存储库特有的特性与能力。SDE项目提供了与ES的整合。SDE的关键能力是POJO中心模型。使用POJO中心模型完成与ES文档的交互。使方便的编写Repository风格的数据访问层。
 ## Features
