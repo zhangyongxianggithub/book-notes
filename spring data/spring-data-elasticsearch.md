@@ -32,6 +32,134 @@ SDE是Spring Data项目的其中一部分。Spring Data项目为所有的数据�
 SDE项目应用Spring核心概念到ES的开发中。提供了:
 - Templates提供了高抽象度的文档存储、搜索、排序与聚合计算
 - Repositories提供了通过接口定义查询的能力
+
+# Elasticsearch Support
+Spring Data Elasticssearch包含了很多的特性
+- 为不同的Elasticsearch提供Spring配置支持
+- The ElasticsearchTemplate与 ReactiveElasticsearchTemplate帮助类提供了对象映射
+- 异常翻译为Spring的Data Access异常体系
+- 功能强大的对象映射功能
+- 映射注解，支持元注解
+- 基于Java的query、criteria与update DSLs
+- 命令式与响应式Repository接口的自动实现，支持自定义查询方法
+
+对于大多数面向数据的任务，你都可以使用`[Reactive]ElasticsearchTemplate`与`Repository`,他们都具有丰富的对象映射功能。
+## Elasticsearch Clients
+本章阐述ES Client实现的配置与使用。SDE在一个Elasticsearch client(由Elasticsearch client libraries提供)上操作，这个client连接了一个ES节点或者一个ES集群。虽然可以直接使用ES的client来与集群通信，但是使用SDE的应用通常使用更高的抽象层Elasticsearch Operations与Elasticsearch Repositories来与ES通信。
+### Imperative Rest Client
+为了使用命令式客户端，必须配置一个configuration bean如下:
+```java
+@Configuration
+public class MyClientConfig extends ElasticsearchConfiguration {
+
+	@Override
+	public ClientConfiguration clientConfiguration() {
+		return ClientConfiguration.builder() // builder方法的详细描述，参考https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/clients.html#elasticsearch.clients.configuration          
+			.connectedTo("localhost:9200")
+			.build();
+	}
+}
+```
+ElasticsearchConfiguration类可以做更多的配置，比如覆写`jsonMapper()`或者`transportOptions()`方法。下面的bean可以注入到其他的Spring组件中:
+```java
+@Autowired
+ElasticsearchOperations operations;     // 一个ElasticsearchOperations实现
+
+@Autowired
+ElasticsearchClient elasticsearchClient; // 一个co.elastic.clients.elasticsearch.ElasticsearchClient实例
+
+@Autowired
+RestClient restClient;                   // Elasticsearch库中的底层RestClient
+
+@Autowired
+JsonpMapper jsonpMapper;                 // Elasticsearch Transport使用JsonMapper
+```
+基本上你只需要使用`ElasticsearchOperations`来与ES集群交互就可以。实际上，Repositories也是实际使用的这个实例。
+### Reactive Rest Client
+使用到响应式技术栈时，配置类是不同的
+```java
+@Configuration
+public class MyClientConfig extends ReactiveElasticsearchConfiguration {
+
+	@Override
+	public ClientConfiguration clientConfiguration() {
+		return ClientConfiguration.builder()           
+			.connectedTo("localhost:9200")
+			.build();
+	}
+}
+```
+`ReactiveElasticsearchConfiguration`可以通过方法覆写做更多的配置。下面的beans可以注入其他的Spring组件
+```java
+@Autowired
+ReactiveElasticsearchOperations operations; //ReactiveElasticsearchOperations的实现
+
+@Autowired
+ReactiveElasticsearchClient elasticsearchClient;// org.springframework.data.elasticsearch.client.elc.ReactiveElasticsearchClient的实例，这是一个基于Elasticsearch客户端实现的响应式实现
+
+@Autowired
+RestClient restClient; // 同前面
+
+@Autowired
+JsonpMapper jsonpMapper; //同前面
+```
+基本上，你只需要使用`ReactiveElasticsearchOperations`来与ES集群交互。
+### Client Configuration
+客户端行为可以通过`ClientConfiguration`改变，可选的可以设置SSL、connect/socket超时、headers与其他的参数。
+```java
+HttpHeaders httpHeaders = new HttpHeaders();
+httpHeaders.add("some-header", "on every request")// 定义默认的headers
+
+ClientConfiguration clientConfiguration = ClientConfiguration.builder()
+  .connectedTo("localhost:9200", "localhost:9291") // 提供集群地址
+  .usingSsl()//开启ssl，这个方法存在重载的版本，可以传递SSLContext等
+  .withProxy("localhost:8888") // 设置一个代理
+  .withPathPrefix("ela")  // 设置一个路径前缀，当集群在反向代理后面时使用
+  .withConnectTimeout(Duration.ofSeconds(5))//设置connection超时
+  .withSocketTimeout(Duration.ofSeconds(3)) //设置socket超时
+  .withDefaultHeaders(defaultHeaders) //设置headers
+  .withBasicAuth(username, password)  // 添加basic认证
+  .withHeaders(() -> {     // 一个Supplier<HttpHeaders>对象，每次请求被发送到es前调用，
+    HttpHeaders headers = new HttpHeaders();
+    headers.add("currentTime", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+    return headers;
+  })
+  .withClientConfigurer(     // 用来配置已创建的client，可以添加多次
+    ElasticsearchClientConfigurationCallback.from(clientBuilder -> {
+  	  // ...
+      return clientBuilder;
+  	}))
+  . // ... other options
+  .build();
+```
+Supplier<HttpHeaders>的方式运行动态添加headers，比如认证的JWT tokens等。
+### Client configuration callbacks
+`ClientConfiguration`类提供了很多参数来配置客户端，如果这些参数还不够，用户可以使用`withClientConfigurer(ClientConfigurationCallback<?>)`添加回调函数。提供下面2种回调
+1. Configuration of the low level Elasticsearch RestClient
+   此回调提供了`org.elasticsearch.client.RestClientBuilder`，可用于配置Elasticsearch RestClient:
+   ```java
+    ClientConfiguration.builder()
+        .withClientConfigurer(ElasticsearchClients.ElasticsearchRestClientConfigurationCallback.from(restClientBuilder -> {
+            // configure the Elasticsearch RestClient
+            return restClientBuilder;
+        }))
+        .build();
+   ```
+2. Configuration of the HttpAsyncClient used by the low level Elasticsearch RestClient
+   此回调提供`org.apache.http.impl.nio.client.HttpAsyncClientBuilder`来配置`RestClient`使用的`HttpCLient`。
+   ```java
+    ClientConfiguration.builder()
+        .withClientConfigurer(ElasticsearchClients.ElasticsearchHttpClientConfigurationCallback.from(httpAsyncClientBuilder -> {
+            // configure the HttpAsyncClient
+            return httpAsyncClientBuilder;
+        }))
+        .build();
+   ```
+### Client Logging
+为了查看发送到服务器或者从服务器的返回，传输层上的Request/Response日志级别需要调整，设置`tracer`包的日志级别为trace
+```xml
+<logger name="tracer" level="trace"/>
+```
 # Elasticsearch Operations
 SDE使用几个接口定义了索引上的操作。
 - IndexOperations，定义了索引级别的行为，比如创建/删除索引;
