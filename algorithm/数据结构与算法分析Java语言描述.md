@@ -91,7 +91,97 @@
 ## 要分析的问题
 要分析的最重要的资源就是运行时间，收到算法本身与输入规模的影响
 ## 运行时间计算
-## 
+计算任何事情不要超过一次。
+最大子序列和问题的求解
+最开始的算法，穷举的区间算法，每次都是一个区间来计算。算法的时间复杂度是$O(N^{3})$
+```java
+    public static int maxSubSum1(final int[] a) {
+        int maxSum = 0;
+        for (int i = 0; i < a.length; i++) {
+            for (int j = i; j < a.length; j++) {
+                int thisSum = 0;
+                for (int k = i; k <= j; k++) {
+                    thisSum += a[k];
+                }
+                if (thisSum > maxSum) {
+                    maxSum = thisSum;
+                }
+            }
+        }
+        return maxSum;
+    }
+```
+一种改进的算法，通过使用历史结果方式降低了复杂度，$O(N^2)$
+```java
+    public static int maxSubSum2(final int[] a) {
+        int maxSum = 0;
+        for (int i = 0; i < a.length; i++) {
+            int thisSum = 0;
+            for (int j = i; j < a.length; j++) {
+                thisSum += a[j];
+                if (thisSum > maxSum) {
+                    maxSum = thisSum;
+                }
+            }
+        }
+        return maxSum;
+    }
+```
+一种$O(log_{2}{N}\times N)$复杂度的算法如下，使用了二叉树或者说折半算法的思想，分解问题，也可以说是分治法的思想:
+```java
+    public static int maxSubSum3(final int[] a) {
+        return maxSubSum3Rec(a, 0, a.length - 1);
+    }
+    
+    public static int maxSubSum3Rec(final int[] a, final int left,
+            final int right) {
+        if (left == right) {
+            if (a[left] > 0) {
+                return a[left];
+            }
+            return 0;
+        }
+        final int center = (left + right) / 2;
+        final int maxLeftSum = maxSubSum3Rec(a, left, center);
+        final int maxRightSum = maxSubSum3Rec(a, center + 1, right);
+        int maxLeftBorderSum = 0, leftBorderSum = 0;
+        for (int i = center; i >= left; i--) {
+            leftBorderSum += a[i];
+            if (leftBorderSum > maxLeftBorderSum) {
+                maxLeftBorderSum = leftBorderSum;
+            }
+        }
+        int maxRightBorderSum = 0, rightBorderSum = 0;
+        for (int i = center + 1; i <= right; i++) {
+            rightBorderSum += a[i];
+            if (rightBorderSum > maxRightBorderSum) {
+                maxRightBorderSum = rightBorderSum;
+            }
+        }
+        return Math.max(Math.max(maxLeftSum, maxRightSum),
+                maxLeftBorderSum + maxRightBorderSum);
+    }
+```
+更好的算法$O(N)$，只扫描一次数据，不需要记以前的数据，在任意时刻，算法都能对已经读入的数据给出子序列问题的正确答案，具有这种特性的算法叫做联机算法:
+```java
+    public static int maxSubSum4(final int[] a) {
+        int maxSum = 0, thisSum = 0;
+        for (int i : a) {
+            thisSum += i;
+            if (thisSum > maxSum) {
+                maxSum = thisSum;
+            } else if (thisSum < 0) {
+                thisSum = 0;
+            }
+        }
+        return maxSum;
+    }
+```
+具有对数特点的3个例子
+- 折半查找
+- 欧几里得算法
+- 幂运算
+
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
