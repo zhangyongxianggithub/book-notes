@@ -160,6 +160,29 @@ Supplier<HttpHeaders>的方式运行动态添加headers，比如认证的JWT tok
 ```xml
 <logger name="tracer" level="trace"/>
 ```
+## Elasticsearch Object Mapping
+SDE的对象映射指的的在领域实体的Java对象与ES中存储的JSON数据之间的互相映射。内部用来完成映射的类是`MappingElasticsearchConverter`。
+### Meta Model Object Mapping
+基于元模型的方式使用领域类型信息读写Elasticsearch。可以为特定领域类型映射注册`Converter`实例。
+#### 映射注解
+`MappingElasticsearchConverter`转换器使用元数据完成对象与doc之间的映射。元数据来自于注解的实体的属性。注解主要有:
+- @Document: 应用在类的级别，表示这个类药映射到索引，最重要的属性如下:
+  - indexName: 索引名字，可以包含一个SpEL模板表达式比如`log-#{T(java.time.LocalDate).now().toString()}`
+  - createIndex: 开关，是否在repository启动阶段创建索引，默认创建
+- @Id: field级别，标记field为id
+- @Transient、@ReadOnlyProperty、@WriteOnlyProperty: 控制哪些字段是只读的或者只写的,具体参考[Controlling which properties are written to and read from Elasticsearch](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/object-mapping.html#elasticsearch.mapping.meta-model.annotations.read-write)
+- `@PersistenceConstructor`: 标记一个构造函数作为实例化对象时使用，构造函数的参数通过检索到的文档中的同名字段的值传递。
+- `@Field`: 应用于field上，定义了field的属性，大多数的属性对应了es Mapping中的定义，下面的列表是不完整的，参考注解的JavaDoc:
+  - name: Field的名字，出现在es的doc中，如果没有设置，则是field的名字
+  - type: field的类型，可以是*ext, Keyword, Long, Integer, Short, Byte, Double, Float, Half_Float, Scaled_Float, Date, Date_Nanos, Boolean, Binary, Integer_Range, Float_Range, Long_Range, Double_Range, Date_Range, Ip_Range, Object, Nested, Ip, TokenCount, Percolator, Flattened, Search_As_You_Type*这些类型，可以参考官方文档，如果没有指定，默认是`FieldType.Auto`类型，也就是说这个es中不会存在这个属性的映射，当第一次存储数据时动态添加映射
+  - format: 一个或者多个内置的date格式化，参考下一节[Date format mapping](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/object-mapping.html#elasticsearch.mapping.meta-model.annotations.date-formats)
+  - pattern: 一个或者多个自定义date格式化，参考下一节[Date format mapping](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/object-mapping.html#elasticsearch.mapping.meta-model.annotations.date-formats)
+  - store: 是否在es中存储field原本的值，默认是false
+  - analyzer、searchAnalyzer、normalizer: 指定自定义的分析器与normalizer
+- `@GeoPoint`: 标记一个field是`geo_point`数据类型，如果field的类型是`GeoPoint`这个注解可以忽略
+- `@ValueConverter`: 定义一个类来转换属性类型，与注册的Spring的`Converter`不同，它只转换注解的属性不是领域类型的全部属性
+
+mapping元数据基础逻辑定义在spring-data-commons项目中。
 # Elasticsearch Operations
 SDE使用几个接口定义了索引上的操作。
 - IndexOperations，定义了索引级别的行为，比如创建/删除索引;
