@@ -183,6 +183,22 @@ SDE的对象映射指的的在领域实体的Java对象与ES中存储的JSON数�
 - `@ValueConverter`: 定义一个类来转换属性类型，与注册的Spring的`Converter`不同，它只转换注解的属性不是领域类型的全部属性
 
 mapping元数据基础逻辑定义在spring-data-commons项目中。
+#### 控制哪些属性从es中读写
+注解定义了属性的值是否要写入es或者从es中读取。
+- `@Transient`: 这个注解的属性不会被映射为es中的字段。它的值不会被发送到es，从es中读出的文档中，这个属性也没有值
+- `@ReadOnlyProperty`: 不会被写入到es，但是可以从es读出的doc中填充值
+- `@WriteOnlyProperty`: 与`@ReadOnlyProperty`相反
+#### Date format mapping
+`TemporalAccessor`的子类型或者`java.util.Date`类型要注解为es的`FieldType.Date`类型或者自定义一个转换器。下面的段落描述了`FieldType.Date`的用法。`@Field`注解有2个属性定义了date格式化。可以参考[Elasticsearch Built In Formats](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-date-format.html#built-in-date-formats)与[Elasticsearch Custom Date Formats](https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-date-format.html#custom-date-formats)。`format`属性用来定义至少一个预定义格式。如果没有定义，默认值是`_date_optional_time`与`epoch_millis`，pattern属性可以用来添加额外的自定义format格式。如果你只想要使用自定义日期格式，必须设置`format={}`。下面的表格展示了不同的属性下生成的mapping
+|annotation|format string in elasticsearch mapping|
+|:---|:---|
+|`@Field(type=FieldType.Date)`|date_optional_time||epoch_millis|
+|`@Field(type=FieldType.Date, format=DateFormat.basic_date)`|basic_date|
+|`@Field(type=FieldType.Date, format={DateFormat.basic_date, DateFormat.basic_time})`|basic_date||basic_time|
+|`@Field(type=FieldType.Date, pattern="dd.MM.uuuu")`|date_optional_time||epoch_millis||dd.MM.uuuu|
+|`@Field(type=FieldType.Date, format={}, pattern="dd.MM.uuuu")`|dd.MM.uuuu|
+
+如果你正在使用一个自定义的日期格式，你应该使用uuuu而不是yyyy来表示年，具体参考[change in Elasticsearch 7](https://www.elastic.co/guide/en/elasticsearch/reference/current/migrate-to-java-time.html#java-time-migration-incompatible-date-formats)
 # Elasticsearch Operations
 SDE使用几个接口定义了索引上的操作。
 - IndexOperations，定义了索引级别的行为，比如创建/删除索引;
