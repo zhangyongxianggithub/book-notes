@@ -199,6 +199,72 @@ mapping元数据基础逻辑定义在spring-data-commons项目中。
 |`@Field(type=FieldType.Date, format={}, pattern="dd.MM.uuuu")`|dd.MM.uuuu|
 
 如果你正在使用一个自定义的日期格式，你应该使用uuuu而不是yyyy来表示年，具体参考[change in Elasticsearch 7](https://www.elastic.co/guide/en/elasticsearch/reference/current/migrate-to-java-time.html#java-time-migration-incompatible-date-formats)
+#### Range types
+但一个field被定义为以下类型时`Integer_Range, Float_Range, Long_Range, Double_Range, Date_Range, Ip_Range`field必须是能够映射到es的range类型的一种类，比如:
+```java
+class SomePersonData {
+
+    @Field(type = FieldType.Integer_Range)
+    private ValidAge validAge;
+
+    // getter and setter
+}
+
+class ValidAge {
+    @Field(name="gte")
+    private Integer from;
+
+    @Field(name="lte")
+    private Integer to;
+
+    // getter and setter
+}
+```
+SDE提供了`Range<T>`类
+```java
+class SomePersonData {
+
+    @Field(type = FieldType.Integer_Range)
+    private Range<Integer> validAge;
+
+    // getter and setter
+}
+```
+支持的参数类型有`Integer`, `Long`, `Float`, `Double`, `Date`与实现`TemporalAccessor`接口的类
+#### Mapped field names
+字段名可以是类的属性名或者`@Field`中指定的名字，或者也可以定义自定义的命名策略`FieldNamingStrategy`，如果es客户端配置为`SnakeCaseFieldNamingStrategy`策略，命名会被映射为下划线风格。`@Field`中指定的名字具有最高优先级。
+#### Non-field-backed properties
+通常实体中的属性就是es中映射的字段，在有一些场景下，一个属性值是计算出来的并且应该store到es。这种场景下`@Field`可以放到Getter方法上，方法也必须使用注解`@AccessType(AccessType.Type.PROPERTY)`，第三个需要的注解是`@WriteOnlyProperty`，例子如下:
+```java
+@Field(type = Keyword)
+@WriteOnlyProperty
+@AccessType(AccessType.Type.PROPERTY)
+public String getProperty() {
+	return "some value that is calculated here";
+}
+```
+#### Other property annotations
+- `@IndexedIndexName`: 可以在实体的`String`属性上设置此注解。该属性不会写入映射，也不会存储在Elasticsearch中，也不会从 Elasticsearch文档中读取其值。持久保存实体后，例如调用`ElasticsearchOperations.save(T entity)`，从该调用返回的实体将包含索引的名称。当索引名称由bean动态设置或写入写入别名时，这非常有用。将一些值放入此类属性中不会设置存储实体要存储的索引！
+
+### Mapping Rules
+映射使用发送到服务器的文档中嵌入的类型提示来允许通用类型映射。这些类型提示在文档中表示为`_class`属性，并为每个聚合根编写。
+```
+public class Person {              
+  @Id String id;
+  String firstname;
+  String lastname;
+}
+
+Copied!
+{
+  "_class" : "com.example.Person", // 默认情况下，领域类型的class name就是类型暗示
+  "id" : "cb7bef",
+  "firstname" : "Sarah",
+  "lastname" : "Connor"
+}
+```
+使用`@TypeAlias`来自定义类型暗示。内嵌对象没有类型暗示，除非属性类型是`Object`。可以关系写类型暗示的功能，特别是使用的索引早就存在的情况下，里面可能没有类型映射并且映射类型设置为严格，此时写入类型暗示将会报错因为field不能动态的添加。
+
 # Elasticsearch Operations
 SDE使用几个接口定义了索引上的操作。
 - IndexOperations，定义了索引级别的行为，比如创建/删除索引;
