@@ -263,12 +263,134 @@ Copied!
   "lastname" : "Connor"
 }
 ```
-使用`@TypeAlias`来自定义类型暗示。内嵌对象没有类型暗示，除非属性类型是`Object`。可以关系写类型暗示的功能，特别是使用的索引早就存在的情况下，里面可能没有类型映射并且映射类型设置为严格，此时写入类型暗示将会报错因为field不能动态的添加。
+使用`@TypeAlias`来自定义类型暗示。内嵌对象没有类型暗示，除非属性类型是`Object`。可以关系写类型暗示的功能，特别是使用的索引早就存在的情况下，里面可能没有类型映射并且映射类型设置为严格，此时写入类型暗示将会报错因为field不能动态的添加。类型暗示可以全局关闭，只需要在继承`AbstractElasticsearchConfiguration`的配置类中覆盖方法`writeTypeHints()`，可以关闭单一索引的类型暗示
+```java
+@Document(indexName = "index", writeTypeHint = WriteTypeHint.FALSE)
+```
+我们强烈建议不要禁用类型提示。仅在必要时才禁用。禁用类型提示可能会导致在多态数据的情况下无法从Elasticsearch正确检索文档，或者文档检索可能完全失败。
 
-# Elasticsearch Operations
+地理空间类型`Point&GeoPoint`会被转换为lat/lon对
+```java
+public class Address {
+  String city, street;
+  Point location;
+}
+{
+  "city" : "Los Angeles",
+  "street" : "2800 East Observatory Road",
+  "location" : { "lat" : 34.118347, "lon" : -118.3026284 }
+}
+```
+SDE通过提供`GeoJson`接口来支持几何徒行并且支持不同几何图形实现
+```java
+public class Address {
+
+  String city, street;
+  GeoJsonPoint location;
+}
+{
+  "city": "Los Angeles",
+  "street": "2800 East Observatory Road",
+  "location": {
+    "type": "Point",
+    "coordinates": [-118.3026284, 34.118347]
+  }
+}
+```
+下面是`GeoJson`接口类型的实现
+- `GeoJsonPoint`
+- `GeoJsonMultiPoint`
+- `GeoJsonLineString`
+- `GeoJsonMultiLineString`
+- `GeoJsonPolygon`
+- `GeoJsonMultiPolygon`
+- `GeoJsonGeometryCollection`
+
+集合中的值都是相同的mapping规则
+```java
+public class Person {
+  List<Person> friends;
+}
+{
+  "friends" : [ { "firstname" : "Kyle", "lastname" : "Reese" } ]
+}
+```
+对于Maps内的值，在类型提示和自定义转换方面应用与聚合根相同的映射规则。然而，Map键需要一个字符串才能由Elasticsearch处理。
+```java
+public class Person {
+
+  // ...
+
+  Map<String, Address> knownLocations;
+
+}
+{
+  "knownLocations" : {
+    "arrivedAt" : {
+       "city" : "Los Angeles",
+       "street" : "2800 East Observatory Road",
+       "location" : { "lat" : 34.118347, "lon" : -118.3026284 }
+     }
+  }
+}
+```
+### Custom Conversions
+`ElasticsearchCustomConversions`允许注册特定类型的mapping规则。
+```java
+@Configuration
+public class Config extends ElasticsearchConfiguration  {
+
+	@NonNull
+	@Override
+	public ClientConfiguration clientConfiguration() {
+		return ClientConfiguration.builder() //
+				.connectedTo("localhost:9200") //
+				.build();
+	}
+
+  @Bean
+  @Override
+  public ElasticsearchCustomConversions elasticsearchCustomConversions() {
+    return new ElasticsearchCustomConversions(
+      Arrays.asList(new AddressToMap(), new MapToAddress()));   // 注册转换器实现    
+  }
+
+  @WritingConverter                   // 用来把DomianType写到es时的转换器                              
+  static class AddressToMap implements Converter<Address, Map<String, Object>> {
+
+    @Override
+    public Map<String, Object> convert(Address source) {
+
+      LinkedHashMap<String, Object> target = new LinkedHashMap<>();
+      target.put("ciudad", source.getCity());
+      // ...
+
+      return target;
+    }
+  }
+
+  @ReadingConverter            // 从es中读取结果时的转换器                                     
+  static class MapToAddress implements Converter<Map<String, Object>, Address> {
+
+    @Override
+    public Address convert(Map<String, Object> source) {
+
+      // ...
+      return address;
+    }
+  }
+}
+{
+  "ciudad" : "Los Angeles",
+  "calle" : "2800 East Observatory Road",
+  "localidad" : { "lat" : 34.118347, "lon" : -118.3026284 }
+}
+```
+
+## Elasticsearch Operations
 SDE使用几个接口定义了索引上的操作。
 - IndexOperations，定义了索引级别的行为，比如创建/删除索引;
-- DocumentOperations，定义了基于id存储、更新、检索文档的行为；
+- DocumentOperations，定义了基于id的存储、更新、检索文档的行为；
 - SearchOperations，定义了查询搜索文档的行为;
 - ElasticsearchOperations，将DocumentOperations与SearchOperations接口行为组合起来。
 
@@ -278,8 +400,8 @@ SDE使用几个接口定义了索引上的操作。
 - 查询/criteria API
 - 资源管理/异常处理
 
-IndexOperations接口可以通过ElasticsearchOperations获取，比如`operations.indexOps(clazz)`，通过IndexOperations可以创建索引、设置mapping或者存储模板等，索引的详细信息可以通过@Setting注解设置。参考[index setting](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获得更多的信息。这些操作都不是自动操作的。需要用户手动处理。自动操作需要使用SDE的Repository，可以参考[Automatic creation of indices with the corresponding mapping](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.repositories.autocreation)。
-## 例子
+`IndexOperations`接口可以通过ElasticsearchOperations获取，比如`operations.indexOps(clazz)`，通过`IndexOperations`可以创建索引、设置mapping、存储模板或者设置别名等，索引的详细信息可以通过`@Setting`注解设置。参考[index setting](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获得更多的信息。这些操作都不是自动操作的。需要用户手动处理。自动操作需要使用SDE的Repository，可以参考[Automatic creation of indices with the corresponding mapping](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.repositories.autocreation)。
+### 例子
 下面的例子展示了如何在Spring REST Controller中使用一个注入的ElasticsearchOperations对象。例子假设`Person`类具有注解`@Documents`，`@Id`等，可以参考[Mapping Annotation Overview](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.mapping.meta-model.annotations)
 ```java
 @RestController
@@ -305,8 +427,84 @@ public class TestController {
   }
 }
 ```
-## Reactive ES Operations
-`ReactiveElasticsearchOperations`是一个网关，通过`ReactiveElasticsearchClient`执行各种命令。`ReactiveElasticsearchTemplate`是`ReactiveElasticsearchOperations`的默认实现。使用`ReactiveElasticsearchOperations`需要知晓底层实际使用的客户端。请参考[Reactive Rest Client](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.clients.reactiverestclient)获取更多详细的信息。`ReactiveElasticsearchOperations`让你可以存储、find与删除你的领域对象，并且可以把领域对象映射到ES中的文档。下面是一个例子:
+### Search Result Types
+当文档通过`DocumentOperations`接口的方法检索时，只会返回发现的文档。当通过`SearchOperations`接口的方法搜索时，每个实体会返回一些额外的信息，比如每个实体的score与sortValues。为了返回这些信息，每个实体都会wrapped到一个`SearchHit`对象中，这个对象包含了实体相关的额外信息。这些`SearchHit`对象自身在一个`SearchHits`对象中返回，这个对象包含了这个搜索相关的额外的信息，比如maxScore或者请求的聚合信息。下面时涉及到的类与接口
+- `SearchHit<T>`包含的信息如下:
+  - id
+  - score
+  - Sort Values
+  - Highlight fields
+  - inner hists，一个内嵌的SearchHits对象
+  - 检索的实体类型T
+- `SearchHits<T>`包含的信息如下:
+  - Number of total hits
+  - Total hits relation
+  - Maximum score
+  - A list of SearchHit<T> objects
+  - Returned aggregations
+  - Returned suggest results
+- `SearchPage<T>`是一个Spring Data Page的实现，内部包含一个`SearchHits<T>`，可以通过repository方法用来分页访问
+- `SearchScrollHits<T>`是由底层的滚动API返回的，它在`SearchHits<T>`的基础上额外增加了滚动id。
+- `SearchHitsIterator<T>`是`SearchOperations`接口中的流式方法返回的迭代器。
+- `ReactiveSearchHits`: ReactiveSearchOperations has methods returning a Mono<ReactiveSearchHits<T>>, this contains the same information as a SearchHits<T> object, but will provide the contained SearchHit<T> objects as a Flux<SearchHit<T>> and not as a list.
+### Queries
+`SearchOperations`与`ReactiveSearchOperations`接口中定义的几乎所有的方法都使用`Query`参数，这个参数定义了要执行的搜索查询。它是一个接口，SDE提供了3种实现:
+#### CriteriaQuery
+`CriteriaQuery`查询允许在你不需要了解ES查询语法的情况创建搜索查询。通过链式或者组合式的方式创建Criteria对象查询，这个对象指定了要搜索的文档必须满足的断言。组合断言的时候，AND会转换为ES的must查询，OR会转化为ES中的should查询。`Criteria`以及其用法可以通过下面的例子解释:
+```java
+Criteria criteria = new Criteria("price").is(42.0);
+Query query = new CriteriaQuery(criteria);
+```
+条件可以组成链，这个链会转换为一个逻辑AND
+```java
+Criteria criteria = new Criteria("price").greaterThan(42.0).lessThan(34.0);
+Query query = new CriteriaQuery(criteria);
+```
+当链式组合`Criteria`的时候，默认使用AND逻辑
+```java
+Criteria criteria = new Criteria("lastname").is("Miller")// 第一个断言
+  .and("firstname").is("James") // and()创建了一个新的Criteria并把它链接到第一个                          
+Query query = new CriteriaQuery(criteria);
+```
+如果想要创建nested查询，你需要使用子查询。假设需要查询lastname=Miller，并且firstname=jack或者John的所有人。
+```java
+Criteria miller = new Criteria("lastName").is("Miller") // 为last name创建第一个Criteria 
+  .subCriteria(    // 使用AND连接一个subCriteria                                     
+    new Criteria().or("firstName").is("John") //sub Criteria是一个or表达式           
+      .or("firstName").is("Jack")                        
+  );
+Query query = new CriteriaQuery(criteria);
+```
+请参考`Criteria`类的API文档获得更多的操作信息。
+#### StringQuery
+这个类使用一个JSON字符串作为ES查询。下面的代码展示了一个搜索firstname=Jack的人的查询。
+```java
+Query query = new StringQuery("{ \"match\": { \"firstname\": { \"query\": \"Jack\" } } } ");
+SearchHits<Person> searchHits = operations.search(query, Person.class);
+```
+如果你之前已经有了es查询，那么使用StringQuery是合适的。
+#### NativeQuery
+`NativeQuery`是使用复杂查询时候该使用的，或者是使用`Criteria`API无法表达的时候应该使用的。比如，当构建查询或者使用聚合查询的时候，它允许使用来自官方包的所有的`co.elastic.clients.elasticsearch._types.query_dsl.Query`实现，因此命名为native。下面的代码展示了如何通过一个给定的firstname搜索人并且对于发现的人，做一个terms聚合操作，计算lastnames的出现次数。
+```java
+Query query = NativeQuery.builder()
+	.withAggregation("lastNames", Aggregation.of(a -> a
+		.terms(ta -> ta.field("last-name").size(10))))
+	.withQuery(q -> q
+		.match(m -> m
+			.field("firstName")
+			.query(firstName)
+		)
+	)
+	.withPageable(pageable)
+	.build();
+
+SearchHits<Person> searchHits = operations.search(query, Person.class);
+```
+这是query接口的特殊实现。
+#### SearchTemplateQuery
+这是`Query`接口的特殊实现，与一个保存的search template组合使用，可以参考[Search Template support](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/misc.html#elasticsearch.misc.searchtemplates)获取详细的信息。
+## Reactive Elasticsearch Operations
+`ReactiveElasticsearchOperations`是一个网关，通过`ReactiveElasticsearchClient`执行各种high level命令。`ReactiveElasticsearchTemplate`是`ReactiveElasticsearchOperations`的默认实现。使用`ReactiveElasticsearchOperations`需要知晓底层实际使用的客户端。请参考[Reactive Rest Client](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.clients.reactiverestclient)获取更多详细的信息。`ReactiveElasticsearchOperations`让你可以存储、find与删除你的领域对象，并且可以把领域对象映射到ES中的文档。下面是一个例子:
 ```java
 @Document(indexName = "marvel")
 public class Person {
@@ -337,78 +535,6 @@ operations.save(new Person("Bruce Banner", 42))// 插入一个person文档到mar
 > QjWCWWcBXiLAnp77ksfR
 > 0
 
-## Search Result Types
-当文档通过`DocumentOperations`接口的方法检索时，只会返回发现的文档。当通过`SearchOperations`接口的方法搜索时，可以使用每个实体的额外信息。比如每个实体的score与sortValues。为了返回这些信息，每个实体都会wrapped到一个`SearchHit`对象中，这个对象包含了实体相关的额外信息。这些`SearchHit`对象自身在一个`SearchHits`对象中返回，这个对象包含了这个搜索相关的额外的信息。比如maxScore或者请求的聚合信息。SearchHit<T>包含的信息如下:
-- id
-- score
-- Sort Values
-- Highlight fields
-- inner hists，也是SearchHits对象
-- 检索的实体类型T
-
-SearchHits<T>包含的信息如下:
-- Number of total hits
-- Total hits relation
-- Maximum score
-- A list of SearchHit<T> objects
-- Returned aggregations
-- Returned suggest results
-
-`SearchPage<T>`是一个Spring Data Page的实现，内部包含`SearchHits<T>`元素，可以通过repository方法用来分页的访问。`SearchScrollHits<T>`是由底层的滚动API返回的，它在`SearchHits<T>`的基础上额外增加了滚动id。`SearchHitsIterator<T>`是返回的迭代器。ReactiveSearchHits
-ReactiveSearchOperations has methods returning a Mono<ReactiveSearchHits<T>>, this contains the same information as a SearchHits<T> object, but will provide the contained SearchHit<T> objects as a Flux<SearchHit<T>> and not as a list.
-## Queries
-`SearchOperations`与`ReactiveSearchOperations`接口中定义的几乎所有的方法都使用`Query参数`，这个参数定义了要执行的搜索的查询。它是一个接口，SDE提供了3种实现:
-### CriteriaQuery
-`CriteriaQuery`查询允许你不需要了解ES查询的语法。通过链式或者流式的方式创建Criteria对象，这个对象指定了要搜索的文档必须满足的断言。组合断言的时候，AND会转换为ES的must条件，OR会转化为ES中的should条件。`Criteria`以及用法可以通过下面的例子解释:
-```java
-Criteria criteria = new Criteria("price").is(42.0);
-Query query = new CriteriaQuery(criteria);
-```
-条件可以组成链，这个链会转换为一个逻辑AND
-```java
-Criteria criteria = new Criteria("price").greaterThan(42.0).lessThan(34.0);
-Query query = new CriteriaQuery(criteria);
-```
-```java
-Criteria criteria = new Criteria("lastname").is("Miller")// 第一个断言
-  .and("firstname").is("James")                           
-Query query = new CriteriaQuery(criteria);
-```
-如果想要创建nested的查询，你需要使用子查询。假设需要查询lastname=Miller，并且firstname=jack或者John的所有人。
-```java
-Criteria miller = new Criteria("lastName").is("Miller") // 为last name创建第一个Criteria 
-  .subCriteria(    // 使用AND连接一个subCriteria                                     
-    new Criteria().or("firstName").is("John") //sub Criteria是一个or表达式           
-      .or("firstName").is("Jack")                        
-  );
-Query query = new CriteriaQuery(criteria);
-```
-请参考`Criteria`类的API文档获得更多的操作信息。
-### StringQuery
-这个类使用一个JSON字符串的ES查询。下面的代码展示了一个搜索firstname=Jack的人。
-```java
-Query query = new StringQuery("{ \"match\": { \"firstname\": { \"query\": \"Jack\" } } } ");
-SearchHits<Person> searchHits = operations.search(query, Person.class);
-```
-如果你之前已经有了es查询，那么使用StringQuery是合适的。
-### NativeQuery
-`NativeQuery`是使用复杂查询时候该使用的。或者是使用`Criteria`API无法表达的时候应该使用的。比如，当构建查询或者使用聚合的时候，它允许使用来自官方包的所有的`co.elastic.clients.elasticsearch._types.query_dsl.Query`实现，因此命名为native。下面的代码展示了如何如何通过一个给定的firstname搜索人并且对于发现的人，做一个terms聚合操作，计算lastnames的出现次数。
-```java
-Query query = NativeQuery.builder()
-	.withAggregation("lastNames", Aggregation.of(a -> a
-		.terms(ta -> ta.field("last-name").size(10))))
-	.withQuery(q -> q
-		.match(m -> m
-			.field("firstName")
-			.query(firstName)
-		)
-	)
-	.withPageable(pageable)
-	.build();
-
-SearchHits<Person> searchHits = operations.search(query, Person.class);
-```
-这是query接口的特殊实现。
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
