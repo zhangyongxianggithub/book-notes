@@ -896,7 +896,94 @@ SearchHits<Statement> hasVotes() {
 }
 ```
 ## Routing values
-当Elasticsearch存储文档到一个有多个分片的索引时，基于文档的id来决定要存储的分片，有时候需要让一组文档保存到统一个分片上，比如`join`数据类型的具有相关关系的文档。
+当Elasticsearch存储文档到一个有多个分片的索引时，基于文档的id来决定要存储的分片，有时候需要让一组文档保存到统一个分片上，比如`join`数据类型的具有相关关系的文档。为此，Elasticsearch提供了定义路由的可能性，该路由是用来计算分片的值，而不是id。
+SDE支持通过入的方式定义路由
+### Routing on join-types
+当使用join数据类型时，SDE将会自动使用`JoinField`属性的parent属性值作为路由值。当父子关系之后一级时，这是正确的。如果深度高于1级，路由需要另外一种机制来决定。
+### Custom routing values
+为了定义一个实体的自定义路由值。SDE提供了`@Routing`注解
+```java
+@Document(indexName = "statements")
+@Routing("routing")// 定义routing作为路由值
+public class Statement {
+    @Id
+    private String id;
+    @Field(type = FieldType.Text)
+    private String text;
+    @JoinTypeRelations(
+        relations =
+            {
+                @JoinTypeRelation(parent = "question", children = {"answer", "comment"}),
+                @JoinTypeRelation(parent = "answer", children = "vote")
+            }
+    )
+    private JoinField<String> relation;
+    @Nullable
+    @Field(type = FieldType.Keyword)
+    private String routing;//routing属性
+    // getter/setter...
+}
+```
+如果注解的路由定义是一个普通的字符串而不是一个SpEL表达式，它被解释为实体的一个属性，也可以使用SpEL表达式
+```java
+@Document(indexName = "statements")
+@Routing("@myBean.getRouting(#entity)")
+public class Statement{
+    // all the needed stuff
+}
+```
+在这个场景下，用户需要提供一个叫做myBean的bean，它有一个方法`String getRouting(Object)`通过#entity的方式引用实体对象，如果普通属性与SpEL不足以表达路由需求。可以提供了一个实现了`RoutingResolver`接口的类，可以在`Elasticsearch`对象中设置。
+```java
+RoutingResolver resolver = ...;
+ElasticsearchOperations customOperations= operations.withRouting(resolver);
+```
+`withRouting()`方法返回原来的`ElasticsearchOperations`实例的copy，当在一个实体上定义了路由并保存到es时，检索或者删除操作也必须指定相同的值。对于不使用实体的方法，比如`get(ID)`或者`delete(ID)`可以使用`ElasticsearchOperations.withRouting(RoutingResolver)`方法
+```java
+String id = "someId";
+String routing = "theRoutingValue";
+
+// get an entity
+Statement s = operations
+                .withRouting(RoutingResolver.just(routing))
+                .get(id, Statement.class);
+
+// delete an entity
+operations.withRouting(RoutingResolver.just(routing)).delete(id);
+```
+## 其他的ES操作支持
+这个章节介绍`Repository`不支持的es操作的额外支持，建议把这些操作添加为自定义实现[Custom Repository Implementations](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/custom-implementations.html)。
+### Index settings
+当使用SDE创建索引时，不同的索引设置可以通过`@Setting`注解定义。可以使用的参数如下:
+- `useServerConfiguration`: 不发送任何的setting参数，由ES服务器配置决定他们
+- `settingPath`: 引用一个json文件，文件中定义了相关的setting，文件必须是相对于classpath的。
+- `shards`: 分片数量，默认是1
+- `replicas`: 副本数量，默认是1
+- `refreshIntervall`: 默认是1s
+- `indexStoreType`: 默认是`fs`
+
+也可以定义索引排序
+```java
+@Document(indexName = "entities")
+@Setting(
+  sortFields = { "secondField", "firstField" },//
+  sortModes = { Setting.SortMode.max, Setting.SortMode.min },//
+  sortOrders = { Setting.SortOrder.desc, Setting.SortOrder.asc },
+  sortMissingValues = { Setting.SortMissing._last, Setting.SortMissing._first })
+class Entity {
+    @Nullable
+    @Id private String id;
+
+    @Nullable
+    @Field(name = "first_field", type = FieldType.Keyword)
+    private String firstField;
+
+    @Nullable @Field(name = "second_field", type = FieldType.Keyword)
+    private String secondField;
+
+    // getter and setter...
+}
+```
+>>>>>>> 05cf11a (update)
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
