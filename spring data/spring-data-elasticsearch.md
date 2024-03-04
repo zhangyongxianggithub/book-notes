@@ -896,7 +896,7 @@ SearchHits<Statement> hasVotes() {
 }
 ```
 ## Routing values
-
+当Elasticsearch存储文档到一个有多个分片的索引时，基于文档的id来决定要存储的分片，有时候需要让一组文档保存到统一个分片上，比如`join`数据类型的具有相关关系的文档。
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
