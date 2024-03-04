@@ -532,6 +532,371 @@ operations.save(new Person("Bruce Banner", 42))// 插入一个person文档到mar
 > 0
 ## Entity Callbacks
 Spring Data基础组件提供了在特定的方法调用发生前/后修改实体的钩子。这些被称为`EntityCallback`的东西提供了方便的回调风格的方式来检查或者修改实体。一个`EntityCallbacl`就类似一个一个特定的`ApplicationListener`，一些Spring Data模块也会发布存储相关的事件(比如`BeforeSaveEvent`)，事件处理器可以修改给定的实体。在一些场景下，比如数据是不可修改的类型，这些事件会发生问题。同时，事件发布依赖`ApplicationEventMulticaster`。如果配置了一个异步的`TaskExecutor`，可能会导致无法预料的后果，因为事件处理在另外一个线程中。实体回调是通过API类型区分的。也就是说同步的API只会识别同步的实体回调，响应式的API只会识别响应式的实体回调。实体回调API是在Spring Data Commons 2.2开始引入的。修改实体推荐这种方式。实体相关的
+### 实现实体回调
+`EntityCallback`与他的泛型类型参数所表示的领域类型直接相关。每一个Spring Data模块都预定义了一些`EntityCallback`接口涵盖实体的所有生命周期
+```java
+@FunctionalInterface
+public interface BeforeSaveCallback<T> extends EntityCallback<T> {
+
+	/**
+	 * Entity callback method invoked before a domain object is saved.
+	 * Can return either the same or a modified instance.
+	 *
+	 * @return the domain object to be persisted.
+	 */
+	// BeforeSaveCallback方法在实体被保存前调用，返回一个可能被修改的对象
+	T onBeforeSave(T entity,// 保存前的实体
+		String collection);// store相关的参数
+}
+```
+```java
+@FunctionalInterface
+public interface ReactiveBeforeSaveCallback<T> extends EntityCallback<T> {
+
+	/**
+	 * Entity callback method invoked on subscription, before a domain object is saved.
+	 * The returned Publisher can emit either the same or a modified instance.
+	 *
+	 * @return Publisher emitting the domain object to be persisted.
+	 */
+	// subscription上调用，在实体被保存前，发出一个可能修改的对象实例
+	Publisher<T> onBeforeSave(T entity,
+		String collection);
+}
+```
+可选的实体回调参数由实现Spring Data的模块所定义，并从`EntityCallback.callback()`的调用站点推断。实现满足你需求的接口，比如下面的例子:
+```java
+class DefaultingEntityCallback implements BeforeSaveCallback<Person>, Ordered {
+
+	@Override
+	public Object onBeforeSave(Person entity, String collection) {//
+
+		if(collection == "user") {
+		    return // ...
+		}
+
+		return // ...
+	}
+
+	@Override
+	public int getOrder() {// 实体回调的顺序，
+		return 100;
+	}
+}
+```
+### Registering Entity Callbacks
+`EntityCallback`beans需要注册到`ApplicationContext`中，然后就会被自动应用。大多数的API都实现了`ApplicationContextAware`接口因此可以访问`ApplicationContext`。下面的例子是注册的:
+```java
+@Order(1)//BeforeSaveCallback从`@Order`定义顺序
+@Component
+class First implements BeforeSaveCallback<Person> {
+
+	@Override
+	public Person onBeforeSave(Person person) {
+		return // ...
+	}
+}
+
+@Component
+class DefaultingEntityCallback implements BeforeSaveCallback<Person>,
+                                                           Ordered {// 从Ordered接口获得顺序
+
+	@Override
+	public Object onBeforeSave(Person entity, String collection) {
+		// ...
+	}
+
+	@Override
+	public int getOrder() {
+		return 100;
+	}
+}
+
+@Configuration
+public class EntityCallbackConfiguration {
+    // beforeSaveback使用了一个lambda表达式，默认是无序的并且会被最后调用。lambda表达式实现的回调不会暴露类型信息因此使用不可分配的实体调用这些回调会影响回调吞吐量。 使用类或枚举来启用回调 bean 的类型过滤。
+    @Bean
+    BeforeSaveCallback<Person> unorderedLambdaReceiverCallback() {
+        return (BeforeSaveCallback<Person>) it -> // ...
+    }
+}
+
+@Component
+class UserCallbacks implements BeforeConvertCallback<User>,//在一个实现类中实现多个实体回调接口
+                                        BeforeSaveCallback<User> {
+
+	@Override
+	public Person onBeforeConvert(User user) {
+		return // ...
+	}
+
+	@Override
+	public Person onBeforeSave(User user) {
+		return // ...
+	}
+}
+```
+### Store specific EntityCallbacks
+Spring Data Elasticsearch使用`EntityCallback`API来完成用户支持，支持的实体回调如下表
+|Callback|Method|Description|Order|
+|:---|:---|:---|:---|
+|Reactive/BeforeConvertCallback|onBeforeConvert(T entity, IndexCoordinates index)|在一个领域对象被转换为一个`org.springframework.data.elasticsearch.core.document.Document`前调用|Ordered.LOWEST_PRECEDENCE|
+|Reactive/AfterLoadCallback|onAfterLoad(Document document, Class<T> type, IndexCoordinates indexCoordinates)|es中的结果读取到`org.springframework.data.elasticsearch.core.document.Document`之后调用|Ordered.LOWEST_PRECEDENCE|
+|Reactive/AfterConvertCallback|onAfterConvert(T entity, Document document, IndexCoordinates indexCoordinates)|`org.springframework.data.elasticsearch.core.document.Document`被转换为领域对象后调用|Ordered.LOWEST_PRECEDENCE|
+|Reactive/AuditingEntityCallback|onBeforeConvert(Object entity, IndexCoordinates index)||100|
+|Reactive/AfterSaveCallback|T onAfterSave(T entity, IndexCoordinates index)|一个领域对象被保存后调用|Ordered.LOWEST_PRECEDENCE|
+## Elasticsearch Auditing
+为了判断一个实体对象是否是新的，实体需要实现`Persistable<ID>`接口:
+```java
+package org.springframework.data.domain;
+public interface Persistable<ID> {
+    @Nullable
+    ID getId();
+
+    boolean isNew();
+}
+```
+Id的存在并不能决定一个实体是否是新的，需要额外的信息，一种方式是使用创建实体时的用户信息来辅助决策，比如:
+```java
+@Document(indexName = "person")
+public class Person implements Persistable<Long> {
+    @Id private Long id;
+    private String lastName;
+    private String firstName;
+    @CreatedDate
+    @Field(type = FieldType.Date, format = DateFormat.basic_date_time)
+    private Instant createdDate;
+    @CreatedBy
+    private String createdBy
+    @Field(type = FieldType.Date, format = DateFormat.basic_date_time)
+    @LastModifiedDate
+    private Instant lastModifiedDate;
+    @LastModifiedBy
+    private String lastModifiedBy;
+
+    public Long getId() {
+        return id;
+    }
+
+    @Override
+    public boolean isNew() {
+        return id == null || (createdDate == null && createdBy == null);
+    }
+}
+```
+用户相关信息可以通过`AuditorAware`与`ReactiveAuditorAware`接口提供，在一个configuration类上注解`@EnableElasticsearchAuditing`来开启用户信息功能
+```java
+@Configuration
+@EnableElasticsearchRepositories
+@EnableElasticsearchAuditing
+class MyConfiguration {
+   // configuration code
+}
+```
+```java
+@Configuration
+@EnableReactiveElasticsearchRepositories
+@EnableReactiveElasticsearchAuditing
+class MyConfiguration {
+   // configuration code
+}
+```
+如果应用中包含多个为不同领域类型准备的`AuditorAware`，你必须提供bean的名字到`@EnableElasticsearchAuditing`注解的`auditorAwareRef`参数上。
+## Join-Type实现
+SDE支持ES的join数据类型。对于一个使用父子关系的实体，必须有个类型`JoinField`的属性假设`Statement`实体，可能是一个question、answer、comment或者一个vote。
+```java
+@Document(indexName = "statements")
+@Routing("routing")//这是一个路由信息
+public class Statement {
+    @Id
+    private String id;
+
+    @Field(type = FieldType.Text)
+    private String text;
+
+    @Field(type = FieldType.Keyword)
+    private String routing;
+
+    @JoinTypeRelations(
+        relations =
+            {
+                @JoinTypeRelation(parent = "question", children = {"answer", "comment"}),
+                @JoinTypeRelation(parent = "answer", children = "vote")
+            }
+    )
+    private JoinField<String> relation;//一个question可能有answer或者comments，一个answer可能有votes，JoinField属性用于将关系的名称（问题、答案、评论或投票）与父ID组合起来。泛型类型必须与@Id注解的属性相同。
+
+    private Statement() {
+    }
+
+    public static StatementBuilder builder() {
+        return new StatementBuilder();
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getRouting() {
+        return routing;
+    }
+
+    public void setRouting(Routing routing) {
+        this.routing = routing;
+    }
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
+    }
+
+    public JoinField<String> getRelation() {
+        return relation;
+    }
+
+    public void setRelation(JoinField<String> relation) {
+        this.relation = relation;
+    }
+
+    public static final class StatementBuilder {
+        private String id;
+        private String text;
+        private String routing;
+        private JoinField<String> relation;
+
+        private StatementBuilder() {
+        }
+
+        public StatementBuilder withId(String id) {
+            this.id = id;
+            return this;
+        }
+
+        public StatementBuilder withRouting(String routing) {
+            this.routing = routing;
+            return this;
+        }
+
+        public StatementBuilder withText(String text) {
+            this.text = text;
+            return this;
+        }
+
+        public StatementBuilder withRelation(JoinField<String> relation) {
+            this.relation = relation;
+            return this;
+        }
+
+        public Statement build() {
+            Statement statement = new Statement();
+            statement.setId(id);
+            statement.setRouting(routing);
+            statement.setText(text);
+            statement.setRelation(relation);
+            return statement;
+        }
+    }
+}
+```
+产生的mapping如下：
+```json
+{
+  "statements": {
+    "mappings": {
+      "properties": {
+        "_class": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "routing": {
+          "type": "keyword"
+        },
+        "relation": {
+          "type": "join",
+          "eager_global_ordinals": true,
+          "relations": {
+            "question": [
+              "answer",
+              "comment"
+            ],
+            "answer": "vote"
+          }
+        },
+        "text": {
+          "type": "text"
+        }
+      }
+    }
+  }
+}
+```
+下面是增删改查的代码:
+```java
+void init() {
+    repository.deleteAll();
+
+    Statement savedWeather = repository.save(
+        Statement.builder()
+            .withText("How is the weather?")
+            .withRelation(new JoinField<>("question"))// 创建一个question
+            .build());
+
+    Statement sunnyAnswer = repository.save(
+        Statement.builder()
+            .withText("sunny")
+            .withRelation(new JoinField<>("answer", savedWeather.getId()))// 第一个answer
+            .build());
+
+    repository.save(
+        Statement.builder()
+            .withText("rainy")
+            .withRelation(new JoinField<>("answer", savedWeather.getId()))//第二个answer
+            .build());
+
+    repository.save(
+        Statement.builder()
+            .withText("I don't like the rain")
+            .withRelation(new JoinField<>("comment", savedWeather.getId()))//comment
+            .build());
+
+    repository.save(
+        Statement.builder()
+            .withText("+1 for the sun")
+            ,withRouting(savedWeather.getId())
+            .withRelation(new JoinField<>("vote", sunnyAnswer.getId()))
+            .build());
+}
+```
+必须使用native query来检索数据，目前还不支持标准`Repository`的方式，也可以使用[自定义Repository实现](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/custom-implementations.html)的方式.
+```java
+SearchHits<Statement> hasVotes() {
+
+	Query query = NativeQuery.builder()
+		.withQuery(co.elastic.clients.elasticsearch._types.query_dsl.Query.of(qb -> qb
+			.hasChild(hc -> hc
+				.queryName("vote")
+				.query(matchAllQueryAsQuery())
+				.scoreMode(ChildScoreMode.None)
+			)))
+		.build();
+
+	return operations.search(query, Statement.class);
+}
+```
+## Routing values
+
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
