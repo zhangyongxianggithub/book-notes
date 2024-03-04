@@ -514,12 +514,8 @@ public class Person {
   private int age;
   // Getter/Setter omitted...
 }
-
 ReactiveElasticsearchOperations operations;
-
-// ...
-
-operations.save(new Person("Bruce Banner", 42))// 插入一个person文档到marvel索引中，id是由es生成的，并放到返回的对象中                    
+operations.save(new Person("Bruce Banner", 42))// 插入一个person文档到marvel索引中，id是由es服务端生成，并放到返回的对象中                    
   .doOnNext(System.out::println)
   .flatMap(person -> operations.get(person.id, Person.class))//在marvel索引中通过id匹配查询Person      
   .doOnNext(System.out::println)
@@ -534,7 +530,8 @@ operations.save(new Person("Bruce Banner", 42))// 插入一个person文档到mar
 > Person(id=QjWCWWcBXiLAnp77ksfR, name=Bruce Banner, age=42)
 > QjWCWWcBXiLAnp77ksfR
 > 0
-
+## Entity Callbacks
+Spring Data基础组件提供了在特定的方法调用发生前/后修改实体的钩子。这些被称为`EntityCallback`的东西提供了方便的回调风格的方式来检查或者修改实体。一个`EntityCallbacl`就类似一个一个特定的`ApplicationListener`，一些Spring Data模块也会发布存储相关的事件(比如`BeforeSaveEvent`)，事件处理器可以修改给定的实体。在一些场景下，比如数据是不可修改的类型，这些事件会发生问题。同时，事件发布依赖`ApplicationEventMulticaster`。如果配置了一个异步的`TaskExecutor`，可能会导致无法预料的后果，因为事件处理在另外一个线程中。实体回调是通过API类型区分的。也就是说同步的API只会识别同步的实体回调，响应式的API只会识别响应式的实体回调。实体回调API是在Spring Data Commons 2.2开始引入的。修改实体推荐这种方式。实体相关的
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
