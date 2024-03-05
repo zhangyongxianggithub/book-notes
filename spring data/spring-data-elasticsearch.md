@@ -983,7 +983,142 @@ class Entity {
     // getter and setter...
 }
 ```
->>>>>>> 05cf11a (update)
+### Inde Mapping
+当SDE通过`IndexOperations.createMapping()`方法创建索引mapping，它会使用到前面讲述的注解，尤其是`@Field`注解，此外，也可以向类添加一个`@Mapping`注解，注解有如下的属性:
+  - `mappingPath`: JSON格式的classpath资源，如果不是空的，将会认为是mapping，二期不会处理其他的mapping情况
+  - `enabled`: 当设置为false，this flag is written to the mapping and no further processing is done.
+  - `dateDetection`与`numericDetection`:  set the corresponding properties in the mapping when not set to DEFAULT.
+  - `dynamicDateFormats`: 不是空的，定义了自动检测的date数据的日期格式
+  - `runtimeFieldsPath`: 一个JSON格式的classpath资源，包含了所有的运行时fields的定义，比如:
+     ```json
+      {
+        "day_of_week": {
+          "type": "keyword",
+          "script": {
+            "source": "emit(doc['@timestamp'].value.dayOfWeekEnum.getDisplayName(TextStyle.FULL, Locale.ROOT))"
+          }
+        }
+      }
+     ```
+### Filter Builder
+Filter Builder提高查询速度
+```java
+private ElasticsearchOperations operations;
+
+IndexCoordinates index = IndexCoordinates.of("sample-index");
+
+Query query = NativeQuery.builder()
+	.withQuery(q -> q
+		.matchAll(ma -> ma))
+	.withFilter( q -> q
+		.bool(b -> b
+			.must(m -> m
+				.term(t -> t
+					.field("id")
+					.value(documentId))
+			)))
+	.build();
+
+SearchHits<SampleEntity> sampleEntities = operations.search(query, SampleEntity.class, index);
+```
+### Using Scroll For Big Result Set
+ES提供滚动式API以便以分块的形式获取大数据集的所有数据。SDE使用滚动式API实现了`<T> SearchHitsIterator<T> SearchOperations.searchForStream(Query query, Class<T> clazz, IndexCoordinates index)`方法。
+```java
+IndexCoordinates index = IndexCoordinates.of("sample-index");
+Query searchQuery = NativeQuery.builder()
+    .withQuery(q -> q
+        .matchAll(ma -> ma))
+    .withFields("message")
+    .withPageable(PageRequest.of(0, 10))
+    .build();
+SearchHitsIterator<SampleEntity> stream = elasticsearchOperations.searchForStream(searchQuery, SampleEntity.class,
+index);
+List<SampleEntity> sampleEntities = new ArrayList<>();
+while (stream.hasNext()) {
+  sampleEntities.add(stream.next());
+}
+stream.close();
+```
+`SearchOperations`API并没有提供访问scroll id的方法，如果需要访问scroll id，可以使用`AbstractElasticsearchTemplate`的几个方法，这个类是不同的`ElasticsearchOperations`实现的基类。
+```java
+@Autowired ElasticsearchOperations operations;
+
+AbstractElasticsearchTemplate template = (AbstractElasticsearchTemplate)operations;
+
+IndexCoordinates index = IndexCoordinates.of("sample-index");
+
+Query query = NativeQuery.builder()
+    .withQuery(q -> q
+        .matchAll(ma -> ma))
+    .withFields("message")
+    .withPageable(PageRequest.of(0, 10))
+    .build();
+
+SearchScrollHits<SampleEntity> scroll = template.searchScrollStart(1000, query, SampleEntity.class, index);
+
+String scrollId = scroll.getScrollId();
+List<SampleEntity> sampleEntities = new ArrayList<>();
+while (scroll.hasSearchHits()) {
+  sampleEntities.addAll(scroll.getSearchHits());
+  scrollId = scroll.getScrollId();
+  scroll = template.searchScrollContinue(scrollId, 1000, SampleEntity.class);
+}
+template.searchScrollClear(scrollId);
+```
+想要`Repository`方法使用scrollAPI，返回类型必须定义为`Stream`。然后，该方法的实现将使用`ElasticsearchTemplate`中的scroll方法。
+```java
+interface SampleEntityRepository extends Repository<SampleEntity, String> {
+
+    Stream<SampleEntity> findBy();
+
+}
+```
+### Sort options
+除了[Paging and Sorting](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/query-methods-details.html#repositories.paging-and-sorting)中描述的默认sort选项以外，SDE提供了继承`org.springframework.data.domain.Sort.Order`的`org.springframework.data.elasticsearch.core.query.Order`它提供了额外的排序参数。`org.springframework.data.elasticsearch.core.query.GeoDistanceOrder`提供了基于地理距离的排序。
+### Runtime Fields
+ES从7.12版本开始支持运行时field，SDE通过2种方式支持:
+1. Runtime field definitions in the index mappings: 这是第一种方式，也就是几那个定义添加到index的mapping中，mapping必须是JSON文件的方式提供
+   ```json
+    {
+      "day_of_week": {
+        "type": "keyword",
+        "script": {
+          "source": "emit(doc['@timestamp'].value.dayOfWeekEnum.getDisplayName(TextStyle.FULL, Locale.ROOT))"
+        }
+      }
+    }
+   ```
+   JSON文件必须出现在classpath中，然后在`@Mapping`注解中设置
+   ```java
+    @Document(indexName = "runtime-fields")
+    @Mapping(runtimeFieldsPath = "/runtime-fields.json")
+    public class RuntimeFieldEntity {
+      // properties, getter, setter,...
+    }
+   ```
+2. Runtime fields definitions set on a Query: 这种方式是把runtime fields定义添加到一个搜索查询。
+   ```java
+    @Document(indexName = "some_index_name")
+    public class SomethingToBuy {
+
+      private @Id @Nullable String id;
+      @Nullable @Field(type = FieldType.Text) private String description;
+      @Nullable @Field(type = FieldType.Double) private Double price;
+
+      // getter and setter
+    }
+   ```
+   以下查询使用一个运行时field，该field通过在价格上添加19%来计算PriceWithTax值，并在搜索查询中使用该值来查找PriceWithTax高于或等于给定值的所有实体:
+   ```java
+    RuntimeField runtimeField = new RuntimeField("priceWithTax", "double", "emit(doc['price'].value * 1.19)");
+    Query query = new CriteriaQuery(new Criteria("priceWithTax").greaterThanEqual(16.5));
+    query.addRuntimeField(runtimeField);
+
+    SearchHits<SomethingToBuy> searchHits = operations.search(query, SomethingToBuy.class);
+   ```
+   每种query接口的实现都可以这么使用。
+### Point In Time(PIT)API
+
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
