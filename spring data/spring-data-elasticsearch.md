@@ -1118,6 +1118,115 @@ ES从7.12版本开始支持运行时field，SDE通过2种方式支持:
    ```
    每种query接口的实现都可以这么使用。
 ### Point In Time(PIT)API
+`ElasticsearchOperations`支持ES的时刻API，下面的代码片段展示了如何使用这个API:
+```java
+ElasticsearchOperations operations; // autowired
+Duration tenSeconds = Duration.ofSeconds(10);
+
+String pit = operations.openPointInTime(IndexCoordinates.of("person"), tenSeconds);//创建一个point in time，a keep-alive duration and retrieve its id 
+
+// create query for the pit
+Query query1 = new CriteriaQueryBuilder(Criteria.where("lastName").is("Smith"))
+    .withPointInTime(new Query.PointInTime(pit, tenSeconds))//把id输入到查询中，来搜索下一个keep-alive的value
+    .build();
+SearchHits<Person> searchHits1 = operations.search(query1, Person.class);
+// do something with the data
+
+// create 2nd query for the pit, use the id returned in the previous result
+Query query2 = new CriteriaQueryBuilder(Criteria.where("lastName").is("Miller"))
+    .withPointInTime(
+        new Query.PointInTime(searchHits1.getPointInTimeId(), tenSeconds))//对于下一个查询，使用从前面搜索中返回的id
+    .build();
+SearchHits<Person> searchHits2 = operations.search(query2, Person.class);
+// do something with the data
+
+operations.closePointInTime(searchHits2.getPointInTimeId());//结束时，使用最后返回的id关闭point in time
+```
+### Search Template support
+支持搜索模板，为了使用搜索模板，首先需要创建一个存储脚本。`ElasticsearchOperations`接口继承了`ScriptOperations`接口，所以提供脚本相关的功能。下面的例子假设一个`Person`实体，一个搜索模板脚本如下:
+```java
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.script.Script;
+
+operations.putScript(                            (1)使用putScript()方法来存储搜索模板脚本
+  Script.builder()
+    .withId("person-firstname")                  (2)脚本的名字或者ID
+    .withLanguage("mustache")                    (3)搜索模板中的脚本语言必须是mustache语言
+    .withSource("""                              (4)脚本source
+      {
+        "query": {
+          "bool": {
+            "must": [
+              {
+                "match": {
+                  "firstName": "{{firstName}}"   (5)脚本中的搜索参数
+                }
+              }
+            ]
+          }
+        },
+        "from": "{{from}}",                      (6)分页参数
+        "size": "{{size}}"                       (7)分页参数
+      }
+      """)
+    .build()
+);
+```
+为了在一个搜索查询中使用搜索模板，SDE提供了`Query`的实现`SearchTemplateQuery`类型，在下面的代码中，我们会在自定义`Repository`实现中添加搜索模板的调用。首先定义接口
+```java
+interface PersonCustomRepository {
+	SearchPage<Person> findByFirstNameWithSearchTemplate(String firstName, Pageable pageable);
+}
+```
+```java
+public class PersonCustomRepositoryImpl implements PersonCustomRepository {
+
+  private final ElasticsearchOperations operations;
+
+  public PersonCustomRepositoryImpl(ElasticsearchOperations operations) {
+    this.operations = operations;
+  }
+
+  @Override
+  public SearchPage<Person> findByFirstNameWithSearchTemplate(String firstName, Pageable pageable) {
+
+    var query = SearchTemplateQuery.builder()// 创建一个SearchTemplateQuery
+      .withId("person-firstname")//提供搜索模板的ID
+      .withParams(
+        Map.of(//参数通过Map传递
+          "firstName", firstName,
+          "from", pageable.getOffset(),
+          "size", pageable.getPageSize()
+          )
+      )
+      .build();
+
+    SearchHits<Person> searchHits = operations.search(query, Person.class);//执行搜索
+
+    return SearchHitSupport.searchPageFor(searchHits, pageable);
+  }
+}
+```
+### Nested sort
+SDE支持内嵌对象的排序。下面的例子来自于`org.springframework.data.elasticsearch.core.query.sort.NestedSortIntegrationTests`类，展示了如何定义内嵌排序
+```java
+var filter = StringQuery.builder("""
+	{ "term": {"movies.actors.sex": "m"} }
+	""").build();
+var order = new org.springframework.data.elasticsearch.core.query.Order(Sort.Direction.DESC,
+	"movies.actors.yearOfBirth")
+	.withNested(
+		Nested.builder("movies")
+			.withNested(
+				Nested.builder("movies.actors")
+					.withFilter(filter)
+					.build())
+			.build());
+
+var query = Query.findAll().addSort(Sort.by(order));
+```
+关于过滤查询，不能在这里使用`CriteriaQuery`，因为这个查询将会被转换为ES的内嵌查询，内嵌查询不能工作在filter上下文中，所以，只有`StringQuery`与`NativeQuery`可以在这里使用，当使用他们之一时，比如上面的term query，elasticsearch field会被使用到。
+## Scripted and runtime fields
 
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
