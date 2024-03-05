@@ -190,7 +190,7 @@ abstract data type(ADT)是带有一组操作的一些对象的集合。抽象是
 - 链表实现，双向链表，方便插入删除不方便查询
 
 ## Java Collections API中的表
-`java.util.Collection`接口是表的概念。实现`Iterable`的所有类支持增强的for循环。
+`java.util.Collection`接口是表的概念。实现`Iterable`的所有类支持增强的for循环。实现`Iterable`的所有类都会实现一个`iterator()`返回一个实现了`Iterator`接口的对象，可以迭代处理集合中的元素或者移除元素。
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
