@@ -1227,6 +1227,11 @@ var query = Query.findAll().addSort(Sort.by(order));
 ```
 关于过滤查询，不能在这里使用`CriteriaQuery`，因为这个查询将会被转换为ES的内嵌查询，内嵌查询不能工作在filter上下文中，所以，只有`StringQuery`与`NativeQuery`可以在这里使用，当使用他们之一时，比如上面的term query，elasticsearch field会被使用到。
 ## Scripted and runtime fields
+SDE支持脚本field与runtime field。关于这2个field的定义，可以参考es的官方文档https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting.html与https://www.elastic.co/guide/en/elasticsearch/reference/8.9/runtime.html。使用SDE，你可以:
+- scripted fields: 基于结果文档计算出来的字段并被添加到返回的文档中
+- runtime fields: 基于已存储的文档计算出来的结果，可以用在查询或者返回的搜索结果中
+
+下面的代码片段将会展示你可以做的事情
 
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
