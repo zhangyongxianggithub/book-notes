@@ -1,0 +1,109 @@
+# Baeldung的CompletableFuture指南
+## introduction
+这个指南是一个`CompletableFuture`类的功能与用例指导。从Java8开始使用。
+## Java中的异步计算
+异步计算很难推理。 通常，我们希望将任何计算视为一系列步骤，但在异步计算的情况下，表示为回调的操作往往要么分散在代码中，要么彼此深度嵌套。当需要处理其中一个步骤中可能发生的错误时，事情会变得更糟。`Future`接口是在Java5添加的，表示一个异步计算的结果。但是它没有任何方法组合各种计算或者处理可能发生的错误。Java8添加了`CompletableFuture`类，除了实现`Future`接口，它还实现了`CompletionStage`接口，该接口定义了异步计算步骤的契约，我们可以将其与其他步骤结合起来。`CompletableFuture`同时也是一个构建块和一个框架，具有大 50种不同的方法来composing、combining和执行异步计算步骤以及处理错误。如此庞大的API可能会让人不知所措，但这些API大多属于几个清晰且不同的用例。
+## Using CompletableFuture as a Simple Future
+首先，`CompletableFuture`类实现了`Future`接口，以便我们可以将其用作`Future`实现，但具有额外的完成逻辑。例如，我们可以使用无参数构造函数创建此类的实例来表示未来的某些结果，将其分发给使用者，并在将来的某个时间使用`complete()`方法完成它。消费者可以使用`get`方法来阻塞当前线程，直到提供该结果。在下面的示例中，我们有一个方法创建一个`CompletableFuture`实例，然后在另一个线程中进行一些计算并立即返回 Future。计算完成后，该方法通过将结果提供给`complete`方法来完成Future：
+```java
+public Future<String> calculateAsync() throws InterruptedException {
+    CompletableFuture<String> completableFuture = new CompletableFuture<>();
+
+    Executors.newCachedThreadPool().submit(() -> {
+        Thread.sleep(500);
+        completableFuture.complete("Hello");
+        return null;
+    });
+
+    return completableFuture;
+}
+```
+为了分拆计算，我们使用`Executor`API。这种创建和完成`CompletableFuture`的方法可以与任何并发机制或API一起使用，包括原始线程。请注意，`calculateAsync`方法返回一个`Future`实例。我们只需调用该方法，接收`Future`实例，并在准备好阻止结果时调用它的`get`方法。另外，观察`get`方法抛出一些已检查的异常，即`ExecutionException`（封装计算期间发生的异常）和`InterruptedException`（表示线程在活动之前或活动期间被中断的异常）：
+```java
+Future<String> completableFuture = calculateAsync();
+String result = completableFuture.get();
+assertEquals("Hello", result);
+```
+如果我们早就知道计算的结果，我们可以使用`completedFuture`方法直接设置计算结果，随后，`get`方法不会阻塞并立即返回:
+```java
+Future<String> completableFuture = 
+  CompletableFuture.completedFuture("Hello");
+// ...
+String result = completableFuture.get();
+assertEquals("Hello", result);
+```
+## 封装计算逻辑
+上面的代码允许我们选择任何并发执行机制，但是如果我们想跳过这个样板文件并异步执行一些代码怎么办？静态方法`runAsync`和`SupplyAsync`允许我们相应地从`Runnable`和`Supplier`函数类型创建`CompletableFuture`实例。`Runnable`和`Supplier`是函数式接口，借助新的Java 8功能，允许将其实例作为lambda表达式传递。`Runnable`接口与线程中使用的旧接口相同，并且不允许返回值。`Supplier`接口是一个通用函数接口，具有单个方法，没有参数并返回参数化类型的值。这允许我们提供`Supplier`的实例作为lambda 表达式来执行计算并返回结果。它很简单:
+```java
+CompletableFuture<String> future
+  = CompletableFuture.supplyAsync(() -> "Hello");
+
+// ...
+
+assertEquals("Hello", future.get());
+```
+## 处理异步计算的结果
+处理异步计算的结果的最最常见的方式是传递到一个函数中，`thenApply`方法就是干这个的，它接受一个`Function`实例作为参数，使用它来处理结果，返回一个`Future`来存储函数返回的值
+```java
+CompletableFuture<String> completableFuture
+  = CompletableFuture.supplyAsync(() -> "Hello");
+
+CompletableFuture<String> future = completableFuture
+  .thenApply(s -> s + " World");
+
+assertEquals("Hello World", future.get());
+```
+如果我们不需要返回值，可以使用`Consumer`函数接口，它只消费不产生返回值。`CompletableFuture`中的`thenAccept`方法就是处理这种情况的
+```java
+CompletableFuture<String> completableFuture
+  = CompletableFuture.supplyAsync(() -> "Hello");
+
+CompletableFuture<Void> future = completableFuture
+  .thenAccept(s -> System.out.println("Computation returned: " + s));
+
+future.get();
+```
+最后，如果我们既不需要计算的值，也不想在链的末尾返回某个值，那么我们可以将`Runnable`lambda传递给`thenRun`方法。在下面的示例中，我们在调用`future.get()`后简单地在控制台中打印一行：
+```java
+CompletableFuture<String> completableFuture 
+  = CompletableFuture.supplyAsync(() -> "Hello");
+CompletableFuture<Void> future = completableFuture
+  .thenRun(() -> System.out.println("Computation finished."));
+
+future.get();
+```
+## Combining Futures
+组合各种计算步骤，`CompletableFuture`最好的地方就是能够在一个计算步骤chain中组合各种`CompletableFuture`实例。这个chain后的结果也是一个`CompletableFuture`，允许再次chaining与combining，这种方式在函数式编程语言中是普遍存在的，通常被称作一元设计模式。在下面的例子中，我们使用`thenCompose`方法来顺序的chain2个`Future`，请注意，这个方法的是一个返回`CompletableFuture`实例的`Function`，函数的参数是前面计算步骤的结果
+```java
+CompletableFuture<String> completableFuture 
+  = CompletableFuture.supplyAsync(() -> "Hello")
+    .thenCompose(s -> CompletableFuture.supplyAsync(() -> s + " World"));
+
+assertEquals("Hello World", completableFuture.get());
+```
+`thenCompose`方法与`thenApply`方法一起实现了一元设计模式的基本构建块。它们与`Stream`和`Optional`类的`map`和`flatMap`方法密切相关，这些方法在 Java 8 中也可用。这两个方法都接收一个`Function`并将其应用于计算结果，但`thenCompose (flatMap)`方法接收一个返回相同类型的另一个对象的函数。这种功能结构允许将这些类的实例组成为构建块。如果我们想要执行两个独立的`Future`并对其结果执行某些操作，我们可以使用`thenCombine`方法，该方法接受`Future`和带有两个参数的`Function`来处理这两个结果:
+```java
+CompletableFuture<String> completableFuture 
+  = CompletableFuture.supplyAsync(() -> "Hello")
+    .thenCombine(CompletableFuture.supplyAsync(
+      () -> " World"), (s1, s2) -> s1 + s2));
+assertEquals("Hello World", completableFuture.get());
+```
+一个更简单的情况是，当我们想要对两个`Future`的结果执行某些操作，但不需要将任何结果值传递到`Future`链上时。`thenAcceptBoth`方法可以提供帮助:
+```java
+CompletableFuture future = CompletableFuture.supplyAsync(() -> "Hello")
+  .thenAcceptBoth(CompletableFuture.supplyAsync(() -> " World"),
+    (s1, s2) -> System.out.println(s1 + s2));
+```
+## Difference Between thenApply() and thenCompose()
+在我们前面的小节中，我们展示了`thenApply()`与`thenCompose()`API，2个API帮助chain不同的`CompletableFuture`调用，但是2个API的使用场景是不同的
+- `thenApply()`: 我们可以使用这个方法来操作前一个调用的结果，然而，需要记住的关键点是返回类型是所有组合调用后的结果，所以这个方法用来转换`CompletableFuture`调用的结果`CompletableFuture<Integer> finalResult = compute().thenApply(s-> s + 1);`
+- `thenCompose()`: `thenCompose()`方法与`thenApply()`方法类似，都返回一个新的`CompletionStage`，然而，`thenCompose()`使用前一个stage作为参数，它会flatten并返回一个Future
+  ```java
+    CompletableFuture<Integer> computeAnother(Integer i){
+        return CompletableFuture.supplyAsync(() -> 10 + i);
+    }
+    CompletableFuture<Integer> finalResult = compute().thenCompose(this::computeAnother);
+  ```
+  所以如果想要chain多个`CompletableFuture`,使用这个方法
+## Running Multiple Futures in Parallel
