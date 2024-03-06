@@ -1339,7 +1339,7 @@ public class PersonService {
                         .where("gender").is(gender)
                         .and("age").lessThanEqual(maxAge))
                 .withRuntimeFields(List.of(runtimeField))//当使用Query时，添加运行时字段
-                .withFields("age")
+                .withFields("age")// 
                 .withSourceFilter(FetchSourceFilter.of(b -> b.withIncludes("*")))
                 .build();
 
