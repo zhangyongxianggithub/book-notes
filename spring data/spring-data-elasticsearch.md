@@ -1232,7 +1232,126 @@ SDE支持脚本field与runtime field。关于这2个field的定义，可以参�
 - runtime fields: 基于已存储的文档计算出来的结果，可以用在查询或者返回的搜索结果中
 
 下面的代码片段将会展示你可以做的事情
+在这些例子中使用的实体是`Person`，这个实体拥有`birthDate`与`age`属性，其中`birthDate`是固定的，`age`依赖查询发起的时间是动态计算出来的。
+```java
+@Document(indexName = "persons")
+public record Person(
+        @Id
+        @Nullable
+        String id,
+        @Field(type = Text)
+        String lastName,
+        @Field(type = Text)
+        String firstName,
+        @Field(type = Keyword)
+        String gender,
+        @Field(type = Date, format = DateFormat.basic_date)
+        LocalDate birthDate,
+        @Nullable
+        @ScriptedField Integer age                   // age属性是计算出来的并且在搜索的结果中
+  ) {
+    public Person(String id,String lastName, String firstName, String gender, String birthDate) {
+        this(id,                                     // 一个方便的构造函数用来设置测试数据
+            lastName,
+            firstName,
+            LocalDate.parse(birthDate, DateTimeFormatter.ISO_LOCAL_DATE),
+            gender,
+            null);
+    }
+}
+```
+`age`属性使用`@ScriptedField`修饰，这个字段不会写入到mapping中而是根据搜索结果计算出来的。
+例子中使用的`Repository`
+```java
+public interface PersonRepository extends ElasticsearchRepository<Person, String> {
 
+    SearchHits<Person> findAllBy(ScriptedField scriptedField);
+
+    SearchHits<Person> findByGenderAndAgeLessThanEqual(String gender, Integer age, RuntimeField runtimeField);
+}
+```
+service类注入了一个`Repository`和一个`ElasticsearchOperations`实例，以显示填充和使用`age`属性的多种方法。我们将代码分成不同的部分以将解释
+```java
+@Service
+public class PersonService {
+    private final ElasticsearchOperations operations;
+    private final PersonRepository repository;
+
+    public PersonService(ElasticsearchOperations operations, SaRPersonRepository repository) {
+        this.operations = operations;
+        this.repository = repository;
+    }
+
+    public void save() { (1)
+        List<Person> persons = List.of(
+                new Person("1", "Smith", "Mary", "f", "1987-05-03"),
+                new Person("2", "Smith", "Joshua", "m", "1982-11-17"),
+                new Person("3", "Smith", "Joanna", "f", "2018-03-27"),
+                new Person("4", "Smith", "Alex", "m", "2020-08-01"),
+                new Person("5", "McNeill", "Fiona", "f", "1989-04-07"),
+                new Person("6", "McNeill", "Michael", "m", "1984-10-20"),
+                new Person("7", "McNeill", "Geraldine", "f", "2020-03-02"),
+                new Person("8", "McNeill", "Patrick", "m", "2022-07-04"));
+
+        repository.saveAll(persons);
+    }
+```
+下面的代码片段将展示如何使用脚本字段来计算并返回人员的年龄。脚本字段只能向返回的数据添加一些内容，年龄不能在查询中使用（请参阅运行时字段）。
+```java
+    public SearchHits<Person> findAllWithAge() {
+
+        var scriptedField = ScriptedField.of("age",// 定义一个ScriptedField计算一个人的年龄
+                ScriptData.of(b -> b
+                        .withType(ScriptType.INLINE)
+                        .withScript("""
+                                Instant currentDate = Instant.ofEpochMilli(new Date().getTime());
+                                Instant startDate = doc['birth-date'].value.toInstant();
+                                return (ChronoUnit.DAYS.between(startDate, currentDate) / 365);
+                                """)));
+
+        // version 1: use a direct query
+        var query = new StringQuery("""
+                { "match_all": {} }
+                """);
+        query.addScriptedField(scriptedField);// 当使用`Query`时，添加脚本字段到query中，
+        query.addSourceFilter(FetchSourceFilter.of(b -> b.withIncludes("*")));// 当添加一个脚本字段到一个Query中时，需要一个额外的source filter从文档中检索出字段
+
+        var result1 = operations.search(query, Person.class);//获取数据
+
+        // version 2: use the repository
+        var result2 = repository.findAllBy(scriptedField);// 如果使用Repository，需要做的就只是将脚本字段作为参数传输
+
+        return result1;
+    }
+```
+使用运行时字段时，可以在查询本身中使用计算值。在以下代码中，它用于运行针对给定性别和最大年龄的人员的查询：
+```java
+    public SearchHits<Person> findWithGenderAndMaxAge(String gender, Integer maxAge) {
+       // 定义了运行时字段，计算一个人的给定年龄
+        var runtimeField = new RuntimeField("age", "long", """ 
+                                Instant currentDate = Instant.ofEpochMilli(new Date().getTime());
+                                Instant startDate = doc['birth-date'].value.toInstant();
+                                emit (ChronoUnit.DAYS.between(startDate, currentDate) / 365);
+                """);
+
+        // variant 1 : use a direct query
+        var query = CriteriaQuery.builder(Criteria
+                        .where("gender").is(gender)
+                        .and("age").lessThanEqual(maxAge))
+                .withRuntimeFields(List.of(runtimeField))//当使用Query时，添加运行时字段
+                .withFields("age")
+                .withSourceFilter(FetchSourceFilter.of(b -> b.withIncludes("*")))
+                .build();
+
+        var result1 = operations.search(query, Person.class);
+
+        // variant 2: use the repository
+        var result2 = repository.findByGenderAndAgeLessThanEqual(gender, maxAge, runtimeField);
+
+        return result1;
+    }
+}
+```
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。
 ```java
