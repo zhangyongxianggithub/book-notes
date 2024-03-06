@@ -190,7 +190,196 @@ abstract data type(ADT)是带有一组操作的一些对象的集合。抽象是
 - 链表实现，双向链表，方便插入删除不方便查询
 
 ## Java Collections API中的表
-`java.util.Collection`接口是表的概念。实现`Iterable`的所有类支持增强的for循环。实现`Iterable`的所有类都会实现一个`iterator()`返回一个实现了`Iterator`接口的对象，可以迭代处理集合中的元素或者移除元素。对迭代器做结构上的改变
+`java.util.Collection`接口是表的概念。实现`Iterable`的所有类支持增强的for循环。实现`Iterable`的所有类都会实现一个`iterator()`返回一个实现了`Iterator`接口的对象，可以迭代处理集合中的元素或者移除元素。对迭代器做结构上的改变不要使用迭代器。
+List接口实现了表，继承了`Coolection`接口并添加了一些额外的基于位置的操作方法，分为2种实现:
+- ArrayList: 可增长数组的实现方式
+- LinkedList: 双链表实现方式
+
+## ArrayList类的实现
+```java
+public class MyArrayList<AnyType> implements List<AnyType> {
+    
+    private static final int DEFAULT_CAPACITY = 10;
+    
+    private int theSize;
+    
+    private AnyType[] theItems;
+    
+    public MyArrayList() {
+        doClear();
+    }
+    
+    private void doClear() {
+        theSize = 0;
+        ensureCapacity(DEFAULT_CAPACITY);
+    }
+    
+    private void ensureCapacity(final int newCapacity) {
+        if (newCapacity < theSize) {
+            return;
+        }
+        final AnyType[] old = theItems;
+        theItems = (AnyType[]) new Object[newCapacity];
+        for (int i = 0; i < size(); i++) {
+            theItems[i] = old[i];
+        }
+    }
+    
+    @Override
+    public int size() {
+        return theSize;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return size() == 0;
+    }
+    
+    @Override
+    public boolean contains(final Object o) {
+        return false;
+    }
+    
+    @Override
+    public Iterator<AnyType> iterator() {
+        return new ArrayListIterator();
+    }
+    
+    private class ArrayListIterator implements Iterator<AnyType> {
+        
+        private int current = 0;
+        
+        @Override
+        public boolean hasNext() {
+            return current < size();
+        }
+        
+        @Override
+        public AnyType next() {
+            return theItems[current++];
+        }
+        
+        @Override
+        public void remove() {
+            MyArrayList.this.remove(--current);
+        }
+    }
+    
+    @Override
+    public Object[] toArray() {
+        return new Object[0];
+    }
+    
+    @Override
+    public <T> T[] toArray(final T[] a) {
+        return null;
+    }
+    
+    @Override
+    public boolean add(final AnyType anyType) {
+        add(size(), anyType);
+        return true;
+    }
+    
+    @Override
+    public boolean remove(final Object o) {
+        return false;
+    }
+    
+    @Override
+    public boolean containsAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean addAll(final Collection<? extends AnyType> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean addAll(final int index,
+            final Collection<? extends AnyType> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean removeAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean retainAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public void clear() {
+        doClear();
+    }
+    
+    @Override
+    public AnyType get(final int index) {
+        if (index < 0 || index >= size()) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+        return theItems[index];
+    }
+    
+    @Override
+    public AnyType set(final int index, final AnyType element) {
+        if (index < 0 || index >= size()) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+        final AnyType old = theItems[index];
+        theItems[index] = element;
+        return old;
+    }
+    
+    @Override
+    public void add(final int index, final AnyType element) {
+        if (theItems.length == size()) {
+            ensureCapacity(size() * 2 + 1);
+        }
+        for (int i = theSize; i > index; i--) {
+            theItems[i] = theItems[i - 1];
+        }
+        theItems[index] = element;
+        theSize++;
+    }
+    
+    @Override
+    public AnyType remove(final int index) {
+        final AnyType removedItem = theItems[index];
+        for (int i = index; i < size() - 1; i++) {
+            theItems[index] = theItems[i + 1];
+        }
+        theSize--;
+        return removedItem;
+    }
+    
+    @Override
+    public int indexOf(final Object o) {
+        return 0;
+    }
+    @Override
+    public int lastIndexOf(final Object o) {
+        return 0;
+    }
+    @Override
+    public ListIterator<AnyType> listIterator() {
+        return null;
+    }
+    @Override
+    public ListIterator<AnyType> listIterator(final int index) {
+        return null;
+    }
+
+    @Override
+    public List<AnyType> subList(final int fromIndex, final int toIndex) {
+        return null;
+    }
+}
+```
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
