@@ -107,3 +107,65 @@ CompletableFuture future = CompletableFuture.supplyAsync(() -> "Hello")
   ```
   所以如果想要chain多个`CompletableFuture`,使用这个方法
 ## Running Multiple Futures in Parallel
+当我们想并行执行多个`Future`时，通常我们想等待他们全部执行完，然后处理他们的所有结果。`CompletableFuture.allOf `静态方法解决这个
+```java
+CompletableFuture<String> future1  
+  = CompletableFuture.supplyAsync(() -> "Hello");
+CompletableFuture<String> future2  
+  = CompletableFuture.supplyAsync(() -> "Beautiful");
+CompletableFuture<String> future3  
+  = CompletableFuture.supplyAsync(() -> "World");
+
+CompletableFuture<Void> combinedFuture 
+  = CompletableFuture.allOf(future1, future2, future3);
+
+// ...
+
+combinedFuture.get();
+
+assertTrue(future1.isDone());
+assertTrue(future2.isDone());
+assertTrue(future3.isDone());
+```
+`CompletableFuture.allOf()`的返回类型是一个`CompletableFuture<Void>`，这个方法的限制是不能返回所有`Future`的结果，我们必须人工去获取结果，幸运的是，`CompletableFuture.join()`与`Stream`API结合可以获取结果
+```java
+String combined = Stream.of(future1, future2, future3)
+  .map(CompletableFuture::join)
+  .collect(Collectors.joining(" "));
+
+assertEquals("Hello Beautiful World", combined);
+```
+`CompletableFuture.join()`方法类似`get()`方法，但是它抛出未检查异常。
+## hanlding Errors
+对于异步计算步骤链中的错误处理，我们必须以类似的方式调整`throw/catch`习惯用法。`CompletableFuture`类允许我们在特殊的句柄方法中处理异常，而不是在语法块中捕获异常。此方法接收两个参数：计算结果(如果成功完成)和抛出的异常(如果某些计算步骤未正常完成)。在下面的示例中，当问候语的异步计算因未提供名称而出错时，我们使用handle方法提供默认值：
+```java
+String name = null;
+CompletableFuture<String> completableFuture  
+  =  CompletableFuture.supplyAsync(() -> {
+      if (name == null) {
+          throw new RuntimeException("Computation error!");
+      }
+      return "Hello, " + name;
+  }).handle((s, t) -> s != null ? s : "Hello, Stranger!");
+
+assertEquals("Hello, Stranger!", completableFuture.get());
+```
+作为替代方案，假设我们想要手动完成`Future`的值(如第一个示例中所示)，但也能够通过异常来完成它。`completeExceptionally()`方法就是为此目的而设计的。以下示例中的`completableFuture.get()`方法抛出`ExecutionExceptio`，其原因是`RuntimeException`:
+```java
+CompletableFuture<String> completableFuture = new CompletableFuture<>();
+completableFuture.completeExceptionally(
+  new RuntimeException("Calculation failed!"));
+completableFuture.get(); // ExecutionException
+```
+在上面的例子中，我们可以使用`handle`方法异步处理异常，但是使用get方法，我们可以使用更典型的同步异常处理方法.
+## Async Methods
+`CompletableFuture`类中的Fluent API的大多数方法都有两个带有`Async`后缀的附加变体。这些方法通常用于在另一个线程中运行相应的执行步骤。没有Async后缀的方法使用调用线程运行下一个执行阶段。相比之下，不带`Executor`参数的Async方法使用Executor的通用fork/join pool实现运行一个步骤，只要并行度 > 1，即可通过`ForkJoinPool.commonPool()`访问该步骤。最后，带有`Executor`参数的Async方法 使用传递的执行器运行一个步骤。这是一个修改后的示例，它使用`Function`实例处理计算结果。唯一可见的区别是`thenApplyAsync`方法，但在底层，函数的应用程序被包装到`ForkJoinTask`实例中(有关fork/join框架的更多信息，请参阅文章“Java 中的 Fork/Join 框架指南”)。这使我们能够更多地并行计算并更有效地使用系统资源:
+```java
+CompletableFuture<String> completableFuture  
+  = CompletableFuture.supplyAsync(() -> "Hello");
+
+CompletableFuture<String> future = completableFuture
+  .thenApplyAsync(s -> s + " World");
+
+assertEquals("Hello World", future.get());
+```
