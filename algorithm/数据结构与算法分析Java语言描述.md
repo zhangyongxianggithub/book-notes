@@ -380,6 +380,193 @@ public class MyArrayList<AnyType> implements List<AnyType> {
     }
 }
 ```
+## LinkedList类的实现
+`LinkedList`作为双链表来实现。
+```java
+public class MyLinkedList<AnyType> implements List<AnyType> {
+    private static class Node<AnyType> {
+        
+        public AnyType data;
+        public Node<AnyType> prev;
+        public Node<AnyType> next;
+        
+        public Node(final AnyType data, final Node<AnyType> prev,
+                final Node<AnyType> next) {
+            this.data = data;
+            this.prev = prev;
+            this.next = next;
+        }
+    }
+    
+    private int theSize;
+    private int modCount;
+    private Node<AnyType> beginMarker;
+    private Node<AnyType> endMarker;
+    
+    @Override
+    public int size() {
+        return theSize;
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return size() == 0;
+    }
+    
+    @Override
+    public boolean contains(final Object o) {
+        return false;
+    }
+    
+    @Override
+    public Iterator<AnyType> iterator() {
+        return null;
+    }
+    
+    @Override
+    public Object[] toArray() {
+        return new Object[0];
+    }
+    
+    @Override
+    public <T> T[] toArray(final T[] a) {
+        return null;
+    }
+    
+    @Override
+    public boolean add(final AnyType anyType) {
+        add(size(), anyType);
+        return true;
+    }
+    
+    @Override
+    public boolean remove(final Object o) {
+        return false;
+    }
+    
+    @Override
+    public boolean containsAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean addAll(final Collection<? extends AnyType> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean addAll(final int index,
+            final Collection<? extends AnyType> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean removeAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public boolean retainAll(final Collection<?> c) {
+        return false;
+    }
+    
+    @Override
+    public void clear() {
+        doClear();
+    }
+    
+    @Override
+    public AnyType get(final int index) {
+        return getNode(index).data;
+    }
+    
+    @Override
+    public AnyType set(final int index, final AnyType element) {
+        final Node<AnyType> node = getNode(index, 0, size());
+        final AnyType oldValue = node.data;
+        node.data = element;
+        return oldValue;
+    }
+    
+    @Override
+    public void add(final int index, final AnyType element) {
+        addBefore(getNode(index, 0, size()), element);
+    }
+    
+    @Override
+    public AnyType remove(final int index) {
+        return remove(getNode(index));
+    }
+    
+    @Override
+    public int indexOf(final Object o) {
+        return 0;
+    }
+    
+    @Override
+    public int lastIndexOf(final Object o) {
+        return 0;
+    }
+    
+    @Override
+    public ListIterator<AnyType> listIterator() {
+        return null;
+    }
+    
+    @Override
+    public ListIterator<AnyType> listIterator(final int index) {
+        return null;
+    }
+    
+    @Override
+    public List<AnyType> subList(final int fromIndex, final int toIndex) {
+        return null;
+    }
+    
+    private void doClear() {
+        beginMarker = new Node<>(null, null, null);
+        endMarker = new Node<>(null, beginMarker, null);
+        beginMarker.next = endMarker;
+        theSize = 0;
+        modCount++;
+    }
+    
+    private void addBefore(final Node<AnyType> p, final AnyType x) {
+        final Node<AnyType> newNode = new Node<>(x, p.prev, p);
+        newNode.prev.next = newNode;
+        p.prev = newNode;
+        theSize++;
+        modCount++;
+    }
+    
+    private Node<AnyType> getNode(final int idx) {
+        return getNode(idx, 0, size() - 1);
+    }
+    
+    private Node<AnyType> getNode(final int idx, final int lower,
+            final int upper) {
+        Node<AnyType> p;
+        if (idx < size() / 2) {
+            p = beginMarker;
+            for (int i = 0; i <= idx; i++) {
+                p = p.next;
+            }
+        } else {
+            p = endMarker;
+            for (int i = size(); i > idx; i--) {
+                p = p.prev;
+            }
+        }
+        return p;
+    }
+    
+    private AnyType remove(final Node<AnyType> p) {
+        p.prev.next = p.next;
+        p.next.prev = p.prev;
+        return p.data;
+    }
+}
+```
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
