@@ -297,4 +297,281 @@ CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
 ## Transforming and acting on a CompletableFuture
 `CompletableFuture.get()`方法是阻塞的。它会等待`Future`完成并在完成后返回结果。但是，这不是我们想要的，对吗？为了构建异步系统，我们应该能够将回调附加到`CompletableFuture`，当`Future`完成时，它应该自动被调用。这样我们就不需要等待结果了，我们可以把`Future`完成后需要执行的逻辑写在我们的回调函数中。您可以使用`thenApply()`、`thenAccept()`和`thenRun()`方法将回调附加到`CompletableFuture`。
 ### `thenApply()`
+当`CompletableFuture`计算完成时，您可以使用`thenApply()`方法来处理和转换结果。它接受`Function<T,R>`作为参数。`Function<T,R>`是一个简单的函数接口，表示接受T类型的参数并生成R类型的结果的函数
+```java
+// Create a CompletableFuture
+CompletableFuture<String> whatsYourNameFuture = CompletableFuture.supplyAsync(() -> {
+   try {
+       TimeUnit.SECONDS.sleep(1);
+   } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+   }
+   return "Rajeev";
+});
+// Attach a callback to the Future using thenApply()
+CompletableFuture<String> greetingFuture = whatsYourNameFuture.thenApply(name -> {
+   return "Hello " + name;
+});
+// Block and get the result of the future.
+System.out.println(greetingFuture.get()); // Hello Rajeev
+```
+您还可以通过附加一系列`thenApply()`回调方法来在`CompletableFuture`上编写一系列转换。一个`thenApply()`方法的结果将传递给该系列中的下一个方法
+```java
+CompletableFuture<String> welcomeText = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return "Rajeev";
+}).thenApply(name -> {
+    return "Hello " + name;
+}).thenApply(greeting -> {
+    return greeting + ", Welcome to the CalliCoder Blog";
+});
 
+System.out.println(welcomeText.get());
+// Prints - Hello Rajeev, Welcome to the CalliCoder Blog
+```
+### `thenAccept()`与`thenRun()`
+如果您不想从回调函数中返回任何内容，而只想在`Future`完成后运行一些代码，那么您可以使用`thenAccept()`和`thenRun()`方法。这些方法是消费者，通常用作回调链中的最后一个回调。`CompletableFuture.thenAccept()`接受`Consumer<T>`并返回`CompletableFuture<Void>`。它可以访问它所附加的`CompletableFuture`的结果。
+```java
+// thenAccept() example
+CompletableFuture.supplyAsync(() -> {
+	return ProductService.getProductDetail(productId);
+}).thenAccept(product -> {
+	System.out.println("Got product detail from remote service " + product.getName())
+});
+```
+虽然`thenAccept()`可以访问它所附加的`CompletableFuture`的结果，但`thenRun()`甚至无法访问`Future`的结果。它需要一个`Runnable`并返回`CompletableFuture<Void>`。
+```java
+// thenRun() example
+CompletableFuture.supplyAsync(() -> {
+    // Run some computation  
+}).thenRun(() -> {
+    // Computation Finished.
+});
+```
+### 关于异步回调方法
+所有的回调方法都有2种异步变体
+```java
+// thenApply() variants
+<U> CompletableFuture<U> thenApply(Function<? super T,? extends U> fn)
+<U> CompletableFuture<U> thenApplyAsync(Function<? super T,? extends U> fn)
+<U> CompletableFuture<U> thenApplyAsync(Function<? super T,? extends U> fn, Executor executor)
+```
+这些异步回调变体帮助你并行执行计算
+```java
+CompletableFuture.supplyAsync(() -> {
+    try {
+       TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(e);
+    }
+    return "Some Result"
+}).thenApply(result -> {
+    /* 
+      Executed in the same thread where the supplyAsync() task is executed
+      or in the main thread If the supplyAsync() task completes immediately (Remove sleep() call to verify)
+    */
+    return "Processed Result"
+})
+```
+在上面这个例子中，`thenApply()`中的任务与`supplyAsync()`任务执行在同一个线程中或者在主线程中(`supplyAsync()`任务执行完的情况)。为了更好的控制执行回调任务的线程，使用异步回调回更好，异步回调在`ForkJoinPool.commonPool()`中的线程中执行或者自己定义的`Executor`
+```java
+CompletableFuture.supplyAsync(() -> {
+    return "Some Result"
+}).thenApplyAsync(result -> {
+    // Executed in a different thread from ForkJoinPool.commonPool()
+    return "Processed Result"
+})
+```
+## Combining two CompletableFutures together
+### Combine two dependent futures using thenCompose()
+假设您想要从远程API服务获取用户的详细信息，一旦用户的详细信息可用，您想要从另一个服务获取他的信用评级。考虑`getUserDetail()`和`getCreditRating()`方法的以下实现:
+```java
+CompletableFuture<User> getUsersDetail(String userId) {
+	return CompletableFuture.supplyAsync(() -> {
+		return UserService.getUserDetails(userId);
+	});	
+}
+
+CompletableFuture<Double> getCreditRating(User user) {
+	return CompletableFuture.supplyAsync(() -> {
+		return CreditRatingService.getCreditRating(user);
+	});
+}
+```
+如果使用`thenApply()`来实现想要的结果:
+```java
+CompletableFuture<CompletableFuture<Double>> result = getUserDetail(userId)
+.thenApply(user -> getCreditRating(user));
+```
+在早期的例子中，`Supplier`函数传给`thenApply`回调会返回一个简单的值，但是在这个例子中，返回了一个`CompletableFuture`，因此，最终的结果是一个嵌套的`CompletableFuture`。如果你想要最终的结果是一个`top-level`的Future，请使用`thenCompose()`方法。
+```java
+CompletableFuture<Double> result = getUserDetail(userId)
+.thenCompose(user -> getCreditRating(user));
+```
+所以，这里的经验法则是，如果你的回调函数返回一个`CompletableFuture`，你想要的是`CompletableFuture`链中的flattened结果。使用`thenCompose()`。
+### Combine two independent futures using thenCombine()
+`thenCompose()`用来combine2个相互依赖的`Future`。`thenCombine()`用来运行2个独立的`Future`s，并在他们都完成后运行一些逻辑。
+```java
+System.out.println("Retrieving weight.");
+CompletableFuture<Double> weightInKgFuture = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return 65.0;
+});
+
+System.out.println("Retrieving height.");
+CompletableFuture<Double> heightInCmFuture = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return 177.8;
+});
+
+System.out.println("Calculating BMI.");
+CompletableFuture<Double> combinedFuture = weightInKgFuture
+        .thenCombine(heightInCmFuture, (weightInKg, heightInCm) -> {
+    Double heightInMeter = heightInCm/100;
+    return weightInKg/(heightInMeter*heightInMeter);
+});
+
+System.out.println("Your BMI is - " + combinedFuture.get());
+```
+## Combining multiple CompletableFutures together
+我们已经使用`thenCompose()`和`thenCombine()`将两个`CompletableFuture`组合在一起。现在，如果您想组合任意数量的 `CompletableFutures`该怎么办？那么，您可以使用以下方法来组合任意数量的`CompletableFutures`:
+### CompletableFuture.allOf()
+`CompletableFuture.allOf`用于以下场景: 您有一些独立的`Future`，您希望并行运行这些`Future`，并在所有`Future`完成后执行某些操作。假设您要下载某个网站100个不同网页的内容。您可以按顺序执行此操作，但这会花费很多时间。因此，您编写了一个函数，它接受网页链接并返回 `CompletableFuture`，即它异步下载网页内容
+```java
+CompletableFuture<String> downloadWebPage(String pageLink) {
+	return CompletableFuture.supplyAsync(() -> {
+		// Code to download and return the web page's content
+	});
+} 
+```
+现在所有的web页面都下载下来了，你想要计算页面中含有关键词`CompletableFuture`的数量，可以使用`CompletableFuture.allOf()`来实现。
+```java
+List<String> webPageLinks = Arrays.asList(...)	// A list of 100 web page links
+
+// Download contents of all the web pages asynchronously
+List<CompletableFuture<String>> pageContentFutures = webPageLinks.stream()
+        .map(webPageLink -> downloadWebPage(webPageLink))
+        .collect(Collectors.toList());
+
+
+// Create a combined Future using allOf()
+CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+        pageContentFutures.toArray(new CompletableFuture[pageContentFutures.size()])
+);
+```
+`CompletableFuture.allOf()`的问题是它返回`CompletableFuture<Void>`，我们可以用别的方式获取所有的`Future`的结果
+```java
+// When all the Futures are completed, call `future.join()` to get their results and collect the results in a list -
+CompletableFuture<List<String>> allPageContentsFuture = allFutures.thenApply(v -> {
+   return pageContentFutures.stream()
+           .map(pageContentFuture -> pageContentFuture.join())
+           .collect(Collectors.toList());
+});
+```
+花点时间来理解上面的代码片段，当所有的`Future`都执行完成了，我们才调用`future.join`，我们不是阻塞的，`join()`方法类似`get()`.
+### CompletableFuture.anyOf()
+`CompletableFuture.anyOf()`顾名思义，返回一个新的`CompletableFuture`，当任何给定的`CompletableFuture`完成时，它就会完成，并具有相同的结果。考虑以下示例:
+```java
+CompletableFuture<String> future1 = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(2);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return "Result of Future 1";
+});
+
+CompletableFuture<String> future2 = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return "Result of Future 2";
+});
+
+CompletableFuture<String> future3 = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(3);
+    } catch (InterruptedException e) {
+       throw new IllegalStateException(e);
+    }
+    return "Result of Future 3";
+});
+
+CompletableFuture<Object> anyOfFuture = CompletableFuture.anyOf(future1, future2, future3);
+
+System.out.println(anyOfFuture.get()); // Result of Future 2
+```
+在上面的示例中，当三个`CompletableFuture`中的任何一个完成时`anyOfFuture`也完成。由于`future2`的睡眠时间最少，因此它将首先完成，最终结果将是`Future 2`的结果。`CompletableFuture.anyOf()`接受`Future`的可变参数并返回`CompletableFuture<Object>`。 `CompletableFuture.anyOf()`的问题是，如果您有返回不同类型结果的`CompletableFuture`，那么您将不知道最终`CompletableFuture`的类型。
+## CompletableFuture Exception Handling
+我们探索了如何创建`CompletableFuture`、转换它们以及组合多个`CompletableFuture`。现在让我们了解出现问题时该怎么办。让我们首先了解错误是如何在回调链中传播的。考虑以下`CompletableFuture`回调链:
+```java
+CompletableFuture.supplyAsync(() -> {
+	// Code which might throw an exception
+	return "Some result";
+}).thenApply(result -> {
+	return "processed result";
+}).thenApply(result -> {
+	return "result after further processing";
+}).thenAccept(result -> {
+	// do something with the final result
+});
+```
+如果原始`SupplyAsync()`任务中发生错误，则不会调用任何`thenApply()`回调，并且`future`将解决发生的异常。如果第一个`thenApply()`回调中发生错误，则不会调用第二个和第三个回调，并且`future`将通过发生异常来解决，依此类推。
+### Handle exceptions using exceptionally() callback
+`exceptedly()`回调让您有机会从原始`Future`生成的错误中恢复。您可以在此处记录异常并返回默认值。
+```java
+Integer age = -1;
+
+CompletableFuture<String> maturityFuture = CompletableFuture.supplyAsync(() -> {
+    if(age < 0) {
+        throw new IllegalArgumentException("Age can not be negative");
+    }
+    if(age > 18) {
+        return "Adult";
+    } else {
+        return "Child";
+    }
+}).exceptionally(ex -> {
+    System.out.println("Oops! We have an exception - " + ex.getMessage());
+    return "Unknown!";
+});
+
+System.out.println("Maturity : " + maturityFuture.get()); 
+```
+请注意，如果处理一次，错误将不会在回调链中进一步传播。
+### Handle exceptions using the generic handle() method
+该API还提供了一个更通用的方法`handle()`来从异常中恢复。无论是否发生异常都会被调用。
+```java
+Integer age = -1;
+CompletableFuture<String> maturityFuture = CompletableFuture.supplyAsync(() -> {
+    if(age < 0) {
+        throw new IllegalArgumentException("Age can not be negative");
+    }
+    if(age > 18) {
+        return "Adult";
+    } else {
+        return "Child";
+    }
+}).handle((res, ex) -> {
+    if(ex != null) {
+        System.out.println("Oops! We have an exception - " + ex.getMessage());
+        return "Unknown!";
+    }
+    return res;
+});
+System.out.println("Maturity : " + maturityFuture.get());
+```
