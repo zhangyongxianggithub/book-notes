@@ -210,3 +210,91 @@ Java8引入了很多的新特性与提升，比如lambda表达式、Streams、`C
 - 您不能将多个`Future`组合在一起: 假设您有10个不同的`Future`，您想要并行运行，然后在所有这些`Future`完成后运行某个函数。你不能用 `Future`来做到这一点
 - 没有异常处理: 没有任何异常处理构造
 
+有如此多的限制，这就是为什么开发了`CompletableFuture`，它能实现上面的所有限制。`CompletableFuture`接口继承`Future`与`CompletionStage`接口，提供了大量方便的方法来创建、chaining、combining多个`Future`，也支持异常处理。
+## Creating a CompletableFuture
+使用无参的构造函数来创建一个`CompletableFuture`，`CompletableFuture<String> completableFuture = new CompletableFuture<String>();`。这是您可以拥有的最简单的 `CompletableFuture`。所有想要获取此`CompletableFuture`结果的客户端都可以调用 `CompletableFuture.get()`方法`String result = completableFuture.get()`。`get()`方法会阻塞直到`Future`计算完成。使用`CompletableFuture.complete()`方法人工设置Future的完成值`completableFuture.complete("Future's Result")`。如果你想异步运行一些后台任务并且不想从任务中返回任何内容，那么你可以使用`CompletableFuture.runAsync()`方法。它接受一个`Runnable`对象并返回`CompletableFuture<Void>`。
+```java
+// Run a task specified by a Runnable Object asynchronously.
+CompletableFuture<Void> future = CompletableFuture.runAsync(new Runnable() {
+    @Override
+    public void run() {
+        // Simulate a long-running Job
+        try {
+            TimeUnit.SECONDS.sleep(1);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        }
+        System.out.println("I'll run in a separate thread than the main thread.");
+    }
+});
+
+// Block and wait for the future to complete
+future.get()
+```
+`Runnable`对象可以使用lambda表达式。
+```java
+// Using Lambda Expression
+CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+    // Simulate a long-running Job   
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+        throw new IllegalStateException(e);
+    }
+    System.out.println("I'll run in a separate thread than the main thread.");
+});
+```
+`CompletableFuture.runAsync()`对于不返回任何内容的任务很有用。但是如果您想从后台任务返回一些结果怎么办？好吧，`CompletableFuture.supplyAsync()`是你的伴侣。它接受一个`Supplier<T>`并返回`CompletableFuture<T>`，其中T是通过调用给定`Supplier`获得的值的类型。
+```java
+// Run a task specified by a Supplier object asynchronously
+CompletableFuture<String> future = CompletableFuture.supplyAsync(new Supplier<String>() {
+    @Override
+    public String get() {
+        try {
+            TimeUnit.SECONDS.sleep(1);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(e);
+        }
+        return "Result of the asynchronous computation";
+    }
+});
+
+// Block and get the result of the Future
+String result = future.get();
+System.out.println(result);
+```
+`Supply<T>`是一个简单的函数接口，代表结果的提供者。它有一个`get()`方法，您可以在其中编写后台任务并返回结果。再次，你可以使用Java 8的lambda表达式让上面的代码更加简洁
+```java
+// Using Lambda Expression
+CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+        throw new IllegalStateException(e);
+    }
+    return "Result of the asynchronous computation";
+});
+```
+### 关于Executor与Thread Pool
+您可能想知道 - 嗯，我知道`runAsync()`和`SupplyAsync()`方法在单独的线程中执行其任务。 但是，我们从来没有创建过线程，对吗？
+`CompletableFuture`使用来自于`ForkJoinPool.commonPool()`中的线程来执行任务。但是你可以创建一个Thread Pool，并作为参数传到`runAsync()`或者`supplyAsync()`方法，让它们使用来自你创建的线程池中的线程来执行任务。`CompletableFuture`API的所有方法都有2个变体，一个有`Executor`一个没有。
+```java
+// Variations of runAsync() and supplyAsync() methods
+static CompletableFuture<Void>	runAsync(Runnable runnable)
+static CompletableFuture<Void>	runAsync(Runnable runnable, Executor executor)
+static <U> CompletableFuture<U>	supplyAsync(Supplier<U> supplier)
+static <U> CompletableFuture<U>	supplyAsync(Supplier<U> supplier, Executor executor)
+Executor executor = Executors.newFixedThreadPool(10);
+CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+    try {
+        TimeUnit.SECONDS.sleep(1);
+    } catch (InterruptedException e) {
+        throw new IllegalStateException(e);
+    }
+    return "Result of the asynchronous computation";
+}, executor);
+```
+## Transforming and acting on a CompletableFuture
+`CompletableFuture.get()`方法是阻塞的。它会等待`Future`完成并在完成后返回结果。但是，这不是我们想要的，对吗？为了构建异步系统，我们应该能够将回调附加到`CompletableFuture`，当`Future`完成时，它应该自动被调用。这样我们就不需要等待结果了，我们可以把`Future`完成后需要执行的逻辑写在我们的回调函数中。您可以使用`thenApply()`、`thenAccept()`和`thenRun()`方法将回调附加到`CompletableFuture`。
+### `thenApply()`
+
