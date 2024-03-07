@@ -169,3 +169,44 @@ CompletableFuture<String> future = completableFuture
 
 assertEquals("Hello World", future.get());
 ```
+## JDK 9 CompletableFuture API
+Java9在以下几个方面提升了`CompletableFuture`API:
+- 添加了新的工厂方法
+- 支持延迟与超时
+- 改进了对子类化的支持
+
+新增了一些实例API:
+- `Executor defaultExecutor()`
+- `CompletableFuture<U> newIncompleteFuture()`
+- `CompletableFuture<T> copy()`
+- `CompletionStage<T> minimalCompletionStage()`
+- `CompletableFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor)`
+- `CompletableFuture<T> completeAsync(Supplier<? extends T> supplier)`
+- `CompletableFuture<T> orTimeout(long timeout, TimeUnit unit)`
+- `CompletableFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit)`
+
+一些静态工具方法
+- `Executor delayedExecutor(long delay, TimeUnit unit, Executor executor)`
+- `Executor delayedExecutor(long delay, TimeUnit unit)`
+- `<U> CompletionStage<U> completedStage(U value)`
+- `<U> CompletionStage<U> failedStage(Throwable ex)`
+- `<U> CompletableFuture<U> failedFuture(Throwable ex)`
+
+最终，为了解决超时的问题，Java 9引入了2个新的函数:
+- `orTimeout()`
+- `completeOnTimeout()`
+
+具体的提升参考文档[Java 9 CompletableFuture API Improvements.](https://www.baeldung.com/java-9-completablefuture)
+## Conclusion
+# Java CompletableFuture Tutorial with Examples
+Java8引入了很多的新特性与提升，比如lambda表达式、Streams、`CompletableFuture`等。下面简单讲述下`CompletableFuture`的详细解释。
+## What's CompletableFuture
+`CompletableFuture`用来做异步编程，异步编程就是在主应用线程另外一个线程中运行一个任务，这个任务是非阻塞的代码编写的，任务通知主线程它的进度、完成或者失败等事件。这样，主线程不需要阻塞等待任务的完成，它可以并行执行其他的任务。这种并行模式极大的提升了程序的性能。详细参考[Java Concurrency and Multithreading Basics](https://www.callicoder.com/java-concurrency-multithreading-basics/)
+## Future vs CompletableFuture
+`CompletableFuture`是Java的`Future`API的扩展，一个`Future`用来表示异步计算结果的引用。它提供了一个`isDone()`方法来检查计算是否完成，一个`get()`方法来检索计算的结果。[Callable and Future Tutorial](https://www.callicoder.com/java-callable-and-future-tutorial/)里面有更多的`Future`的介绍。`Future`API是向Java异步编程迈出的良好一步，但它缺乏一些重要且有用的功能
+- 它不能手动结束: 假设您编写了一个函数来从远程API获取电子商务产品的最新价格。由于此API调用非常耗时，因此您在单独的线程中运行它并从函数返回`Future`现在，假设如果远程API服务已关闭，那么您希望通过产品的最后缓存价格手动完成`Future`,你能用`Future`做到这一点吗？不！
+- 在不阻塞的情况下，您无法对`Future`的结果执行进一步的操作: `Future`不会通知您其完成。它提供了一个`get()`方法，该方法会阻塞直到结果可用。您无法将回调函数附加到`Future`并在`Future`的结果可用时自动调用它。
+- 多个`Future`不能链接在一起: 有时您需要执行长时间运行的计算，并且当计算完成后，您需要将其结果发送到另一个长时间运行的计算，依此类推。您无法使用`Future`创建此类异步工作流程。
+- 您不能将多个`Future`组合在一起: 假设您有10个不同的`Future`，您想要并行运行，然后在所有这些`Future`完成后运行某个函数。你不能用 `Future`来做到这一点
+- 没有异常处理: 没有任何异常处理构造
+
