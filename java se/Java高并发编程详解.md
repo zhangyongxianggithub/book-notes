@@ -83,7 +83,9 @@ public class ArrayListVSLinkedListWithJMH {
 - warmup以及measurement，都是分批次执行基准测试方法的机制。warmup用于预热，就是使基准测试方法经过类优化JVM编译优化JIT优化之后处于最终运行的状态，从而获得真实性能数据。measurement是真正的度量操作，纳入统计。可以通过全局`Options`与全局注解设置批次，也可以在基准测试方法上添加注解设置批次。输出的信息参考文档
 - 4大BenchmarkMode
 
-
+# ExecutorService
+## CompletableFuture
+异步编程: 程序运算与应用程序的主线程在不同的线程上完成，程序运算的线程能够向主线程通知其进度/成功/失败的非阻塞编码方式。
 
 
 
