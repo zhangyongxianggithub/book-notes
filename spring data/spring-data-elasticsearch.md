@@ -1339,21 +1339,24 @@ public class PersonService {
                         .where("gender").is(gender)
                         .and("age").lessThanEqual(maxAge))
                 .withRuntimeFields(List.of(runtimeField))//当使用Query时，添加运行时字段
-                .withFields("age")// 
-                .withSourceFilter(FetchSourceFilter.of(b -> b.withIncludes("*")))
+                .withFields("age")// 当添加一个脚本字段到Query时，额外的字段参数拥有计算的返回值
+                .withSourceFilter(FetchSourceFilter.of(b -> b.withIncludes("*")))//当添加一个脚本字段到Query，需要一个额外的source filter来检索doc source中的field
                 .build();
 
-        var result1 = operations.search(query, Person.class);
+        var result1 = operations.search(query, Person.class);// 得到过滤后的字段
 
-        // variant 2: use the repository
+        // variant 2: use the repository，当使用Repository时，唯一需要做的就是添加运行时field到方法参数上
         var result2 = repository.findByGenderAndAgeLessThanEqual(gender, maxAge, runtimeField);
 
         return result1;
     }
 }
 ```
+除了在query中定义运行时fields，也可以在索引上定义，需要设置`@Mapping`注解上的`runtimeFieldsPath`属性指定一个JSON文件的地址，json文件中包含运行时字段的定义信息。
 # Elasticsearch Repositories
-本章包含了ES Repository实现的细节。
+本章包含了ES Repository实现的细节。` Repository`抽象的目标时减少实现各种底层存储的数据访问层的模板代码。
+## Core concepts
+
 ```java
 @Document(indexName="books")
 class Book {
