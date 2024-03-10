@@ -71,9 +71,9 @@ Call<List<User>> groupList(@Path("id") int groupId, @QueryMap Map<String, String
 @POST("users/new")
 Call<User> createUser(@Body User user);
 ```
-对象将会通过Retrofit对象设置的转换器来完成与请求体的转换。如果咩有指定转换器，使用`RequestBody`
+对象将会通过Retrofit对象设置的转换器来完成与请求体的转换。如果没有指定转换器，使用`RequestBody`
 ### FORM ENCODED AND MULTIPART
-支持提交form-encoded and multipart请求。当方法上存在`@FormUrlEncoded`时，将发送表单编码数据。每个键值对都用包含名称和提供值的对象的`@Field`进行注释。
+支持提交form-encoded与multipart请求。当方法上存在`@FormUrlEncoded`时，将发送表单编码数据。每个键值对都用包含名称和提供值的对象的`@Field`进行注释。
 ```java
 @FormUrlEncoded
 @POST("user/edit")
@@ -95,7 +95,7 @@ multipart使用Retrofit的转换器之一，或者它们可以实现`RequestBody
 @GET("users/{username}")
 Call<User> getUser(@Path("username") String username);
 ```
-请注意，header不会相互覆盖。所有具有相同名称的header都将包含在请求中。可以使用`@Header`注释动态更新请求header。必须向`@Header`提供相应的参数。如果值为null，则将省略header。否则，将对该值调用`toString`并使用结果。
+请注意，header不会相互覆盖。所有具有相同名称的header都将包含在请求中。可以使用`@Header`注解动态更新请求header。必须向`@Header`提供相应的参数。如果值为null，则将省略header。否则，将对该值调用`toString`并使用结果。
 ```java
 @GET("user")
 Call<User> getUser(@Header("Authorization") String authorization)
@@ -130,7 +130,7 @@ Retrofit retrofit = new Retrofit.Builder()
 GitHubService service = retrofit.create(GitHubService.class);
 ```
 ### CUSTOM CONVERTERS
-如果您需要与使用Retrofit不支持开箱即用的内容格式（例如 YAML、txt、自定义格式）的API进行通信，或者您希望使用不同的库来实现现有格式，您可以轻松创建您自己的转换器。创建一个扩展`Converter.Factory`类的类，并在构建适配器时传入一个实例。
+如果您需要与使用Retrofit默认不支持的内容格式(例如YAML、txt、自定义格式)的API进行通信，或者您希望使用不同的库来实现现有格式，您可以轻松创建您自己的转换器。创建一个扩展`Converter.Factory`类的类，并在构建适配器时传入一个实例。
 # Feign
 Feign是一个HTTP客户端库，参考了Retrofit、JAXRS-2.0、WebSocket等内容，Feign的首要目标是降低HTTP开发的复杂性。
 ## Why Feign and not X?
