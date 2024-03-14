@@ -1356,25 +1356,52 @@ public class PersonService {
 # Elasticsearch Repositories
 本章包含了ES Repository实现的细节。` Repository`抽象的目标时减少实现各种底层存储的数据访问层的模板代码。
 ## Core concepts
-
+Spring Data仓库抽象的核心接口是`Repository`，它的泛型参数是领域类与领域类的主键。这个接口主要是一个标记接口，用户获取领域类类型与帮助发现子接口。`CrudRepository`与`ListCrudRepository`接口提供了更好的CRUD功能
 ```java
-@Document(indexName="books")
-class Book {
-    @Id
-    private String id;
+public interface CrudRepository<T, ID> extends Repository<T, ID> {
 
-    @Field(type = FieldType.text)
-    private String name;
+  <S extends T> S save(S entity);// 保存给定的实体
 
-    @Field(type = FieldType.text)
-    private String summary;
+  Optional<T> findById(ID primaryKey); //根据ID查询实体
 
-    @Field(type = FieldType.Integer)
-    private Integer price;
+  Iterable<T> findAll(); //返回所有的实体
 
-	// getter/setter ...
+  long count();// 返回实体的数量
+
+  void delete(T entity);//删除实体
+
+  boolean existsById(ID primaryKey);// 表示一个给定ID的实体是否存在
 }
 ```
+我们也提供了特定持久化技术相关的抽象，比如`JpaRepository`或者`MongoRepository`，这些接口扩展自`CrudRepository`并且暴露了底层吹久化技术的特定能力。除了`CrudRepository`，还有`PagingAndSortingRepository`与`ListPagingAndSortingRepository`提供了分页的方法。
+```java
+public interface PagingAndSortingRepository<T, ID>  {
+  Iterable<T> findAll(Sort sort);
+  Page<T> findAll(Pageable pageable);
+}
+```
+扩展接口只存在具体的存储模块中，为了访问`User`的第二页，你需要做的如下:
+```java
+PagingAndSortingRepository<User, Long> repository = // … get access to a bean
+Page<User> users = repository.findAll(PageRequest.of(1, 20));
+```
+`ListPagingAndSortingRepository`提供了等价的方法，但是返回`List`而`PagingAndSortingRepository`返回`Iterable`。除了查询方法，count/delete的派生也是支持的。下面是一个派生的count/delete查询的例子:
+```java
+interface UserRepository extends CrudRepository<User, Long> {
+  long countByLastname(String lastname);
+}
+interface UserRepository extends CrudRepository<User, Long> {
+  long deleteByLastname(String lastname);
+  List<User> removeByLastname(String lastname);
+}
+```
+### 实体状态检测策略
+检测一个entity是否是新的
+- 检测`@Id`属性，这个是默认的策略，缺省情况下，Spring Data检测实体的ID属性，如果ID属性是null或者0(原子类型)，实体就被认为是新的，否则认为是旧的
+- `@Version`属性检测，如果存在这样的属性，并且为null或者0(原子类型)，实体就是新的，如果是其他值，实体是旧的，如果没有这种属性，Spring Data降级到ID属性的检测策略
+- 实现`Persistable`接口，如果实体实现了`Persistable`接口，判断实体是否是新的通过接口的`isNew()`方法
+- 提供自定义的`EntityInformation`实现，你可以自定义`EntityInformation`抽象，创建一个模块特定仓库工厂的子类并覆写`getEntityInformation(…)`方法中，这样仓库的实现就会使用到自定义的`EntityInformation`，必须注册模块特定仓库工厂的子类的自定义实现为bean，这个很少需要用到。
+## Defining Repository Interface
 ## 索引/mapping的自动创建
 `@Document`注解由一个createIndex的参数。如果参数设置为true，SDE将会在启动Repository支持的阶段检查索引是否存在。如果不存在，将会创建索引与mapping，索引的细节可以通过`@Setting`注解设置，参考[Index settings](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获取更多的信息。
 ## Query methods
