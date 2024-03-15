@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>&#x7406;&#x89e3;&#x81ea;&#x52a8;&#x914d;&#x7f6e;Bean</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <p>如果你正在开发共享库、开源或者商业库，而不是业务代码，你可能想要开发自己的自动配置功能，自动配置的相关的类可以放在外部的jar包中，这是可以被Spring Boot处理到的；自动配置的代码以及其中使用的依赖包通常是在一个名字类似xxx-starter的库中，我们将讲述创建自己的自动配置需要知道的内容以及如何按照标准方式创建自己的starter。</p>
+<h1 id="理解自动配置bean">理解自动配置Bean</h1>
+<p>实际上，实现自动配置的类必须带有<code>@AutoConfiguration</code>注解，这个注解被元注解<code>@Configuration</code>标注，这样自动配置类也是标准的	<code>@Configuration</code>注解类，额外的<code>@Conditional</code>注解可以用来限制自动配置的应用场景，通常，自动配置类都会使用更好用的<code>@ConditionalOnClass</code>与@<code>ConditionalOnMissingBean</code>注解，这会确保，自动配置涉及的相关类存在并且你没有声明你自己的<code>@Configuration</code>类的情况下才会生效，你可以浏览<code>spring-boot-autoconfigure</code>的源代码来查看Spring提供的<code>@AutoConfiguration</code>类或者查看<code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>文件的内容。</p>
+<h1 id="定位自动配置的候选者">定位自动配置的候选者</h1>
+<p>Spring Boot会检查你发布的jar包中是否有<code>META-INF/spring.factories（META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>这个文件，这个文件列出所有的自动配置类，一个class一行，如下所示：</p>
+<blockquote>
+<p>com.mycorp.libx.autoconfigure.LibXAutoConfiguration
+com.mycorp.libx.autoconfigure.LibXWebAutoConfiguration
+你可以使用#向文件添加注释。
+自动配置类只能通过这样的方式加载，也就是必须当在导入文件中。你需要确保它们定义在一个不能被组件扫描扫描到的特定包空间下，此外，自动配置类不应该开启组件扫描来加载额外的组件应该使用<code>@Import</code>的方式来加载其他Bean；如果需要特定的自动配置应用的顺序，可以使用<code>@AutoConfiguration</code>注解的<code>before</code>、<code>beforeName</code>、<code>after</code>、<code>afterName</code>属性或者是专门的<code>@AutoConfigureAfter</code>与<code>@AutoConfigureBefore</code>注解，比如，你想应用一些与Web有关的自动配置，你的自动配置类可能想在<code>WebMvcAutoConfiguration</code>类之后加载。如果你就想安排一些可能没啥关联的自动配置组件的顺序，你可以使用<code>@AutoConfigureOrder</code>注解，这个注解提供了<code>@Order</code>注解类似的功能；与标准的<code>@Configurtion</code>类一样，自动配置类应用的顺序只会影响它自己的BeanDefinition的顺序，bean的实际创建顺序是不受影响的，只会由Bean的依赖关系与<code>@DependsOn</code>关系决定。</p>
+</blockquote>
+<h1 id="条件注解">条件注解</h1>
+<p>大多数场景下，你都可能需要在自动配置类上使用<code>@Conditional</code>注解，<code>@ConditionalOnMissingBean</code>注解是更加常用的条件注解，可以让开发者覆盖不满足要求的默认定义；Spring提供了大量的<code>@Conditional</code>注解，你可以用来条件化<code>@Configuration</code>类与<code>@Bean</code>方法，这些注解包括4类。</p>
+<h2 id="类条件">类条件</h2>
+<p><code>@ConditionalOnClass</code>与<code>@ConditionalOnMissingClass</code>注解让自动配置类在特定类存在或者不存在的情况下加载，由于注解元数据是由ASM处理的，你可以使用value指定实际类，即使运行时的应用classpath下不存在这个类，也可以使用name指定class的名字，当在@Bean的场景下且返回类型就是<code>Condition</code>定义的类型下，这个机制不会生效，因为，在方法上的条件执行前，JVM已经加载了目标类型的类来处理方法符号引用等，如果类不存在启动时就会失败；这种情况下，可以把Bean隔离成一个单独的@Configuration注解类，如下:</p>
+<pre><code class="language-java"><span class="hljs-meta">@AutoConfiguration</span>
+<span class="hljs-comment">// Some conditions ...</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyAutoConfiguration</span> {
+    <span class="hljs-comment">// Auto-configured beans ...</span>
+    <span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span>
+    <span class="hljs-meta">@ConditionalOnClass(SomeService.class)</span>
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">SomeServiceConfiguration</span> {
+        <span class="hljs-meta">@Bean</span>
+        <span class="hljs-meta">@ConditionalOnMissingBean</span>
+        <span class="hljs-keyword">public</span> SomeService <span class="hljs-title function_">someService</span><span class="hljs-params">()</span> {
+            <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">SomeService</span>();
+        }
+    }
+}
+</code></pre>
+<p>如果你使用<code>@ConditionalOnClass</code>与<code>@ConditionalOnMissingClass</code>注解作为元注解来组成你自己的组合注解，必须使用name来指定类，</p>
+<h2 id="bean条件">Bean条件</h2>
+<p><code>@ConditionalOnbean</code>注解与<code>@ConditionalOnMissingBean</code>注解可以在特定的bean出现或者没有出现的情况下决定是否加载，使用value指定bean的类型，使用name指定bean的name，search限定搜索bean的<code>ApplicationContext</code>；当应用在<code>@Bean</code>方法上时，目标的bean的类型就是方法返回的类型，如下:</p>
+<pre><code class="language-java"><span class="hljs-meta">@AutoConfiguration</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">MyAutoConfiguration</span> {
+    <span class="hljs-meta">@Bean</span>
+    <span class="hljs-meta">@ConditionalOnMissingBean</span>
+    <span class="hljs-keyword">public</span> SomeService <span class="hljs-title function_">someService</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">SomeService</span>();
+    }
+}
+</code></pre>
+<p>在上面的例子中，<code>SomeService</code>将会在<code>ApplicationContext</code>中不存在<code>SomeServicebean</code>的情况下创建。你必须要注意<code>bean definition</code>加载的顺序，因为条件计算时只会依据当前已经加载的上下文环境计算，所以，我们建议你只在自动配置类上使用<code>@ConditionalOnBean</code>或者<code>@ConditionalOnMissingBean</code>注解，这是因为自动配置类一定是在用户自定义的bean定义加载后才会加载；<code>@ConditionalOnBean</code>或者<code>@ConditionalOnMissingBean</code>注解不会阻止<code>@Configuration</code>类的创建，放在类上的情况除外，条件放在@bean方法上无论如何都会创建<code>@Configuration</code>类的bean，当使用<code>@Bean</code>的方式声明一个bean时，方法的返回类型尽可能是比较具体的类型，比如是具体类而不是接口，因为这对对于bean条件的计算是特别有帮助的。</p>
+<h2 id="属性条件">属性条件</h2>
+<p><code>@ConditionalOnProperty</code>注解是根据Spring环境中的属性来判断是否加载，使用prefix与name属性指定要检查的属性，缺省情况下，属性存在且不等于false，条件都是真，你可以通过havingValue与matchIfMissing属性来创建更高级的检查.</p>
+<h2 id="资源条件">资源条件</h2>
+<p><code>@ConditionalOnResource</code>注解是判断是否存在指定的资源，资源使用常规的Spring描述方式，比如</p>
+<blockquote>
+<p>file:/home/user/test.dat</p>
+</blockquote>
+<h2 id="web应用条件">Web应用条件</h2>
+<p><code>@ConditionalOnWebApplication</code>与<code>@ConditionalOnNotWebApplication</code>注解依据是否是一个Web应用决定是否加载配置，<code>@ConditionalOnWarDeployment</code>注解依据应用是否是一个传统的WAR应用来决定是否加载配置，但是运行embedded server应用不匹配这个条件。</p>
+<h2 id="spel表达式条件">SpEL表达式条件</h2>
+<p><code>@ConditionalOnExpression</code>注解可以让配置依据SpEL表达式的条件计算结果确定是否加载。在表达式中应用一个bean会造成bean被很早的初始化，因此，bean可能不会被post-processing处理（比如configuration properties绑定），因此他的状态可能不是完整的。</p>
+<h1 id="测试你的自动配置">测试你的自动配置</h1>
+<p>自动配置受到很多方面的影响，用户配置（用户定义的@bean或者环境配置）、条件计算逻辑或者其他，具体的，每个测试都需要创建一个ApplicationContext，ApplicationContextRunner可以帮忙创建，ApplicationContextRunner通常定义成测试类的一个成员，收集一些共同的基础的配置，如下:</p>
+<pre><code class="language-java"><span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ApplicationContextRunner</span> <span class="hljs-variable">contextRunner</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ApplicationContextRunner</span>()
+        .withConfiguration(AutoConfigurations.of(MyServiceAutoConfiguration.class));
+</code></pre>
+<p>每个测试都可以使用这个runner来执行一个测试用例，比如下面的例子使用一个用户配置，检测是否应用了自动配置的降级处理:</p>
+<pre><code class="language-java"><span class="hljs-meta">@Test</span>
+<span class="hljs-keyword">void</span> <span class="hljs-title function_">defaultServiceBacksOff</span><span class="hljs-params">()</span> {
+    <span class="hljs-built_in">this</span>.contextRunner.withUserConfiguration(UserConfiguration.class).run((context) -&gt; {
+        assertThat(context).hasSingleBean(MyService.class);
+        assertThat(context).getBean(<span class="hljs-string">&quot;myCustomService&quot;</span>).isSameAs(context.getBean(MyService.class));
+    });
+}
+
+<span class="hljs-meta">@Configuration(proxyBeanMethods = false)</span>
+<span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">UserConfiguration</span> {
+
+    <span class="hljs-meta">@Bean</span>
+    MyService <span class="hljs-title function_">myCustomService</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">MyService</span>(<span class="hljs-string">&quot;mine&quot;</span>);
+    }
+}
+</code></pre>
+<p>也可以非常容易的定制Enviroment，如下:</p>
+<pre><code class="language-java"><span class="hljs-meta">@Test</span>
+<span class="hljs-keyword">void</span> <span class="hljs-title function_">serviceNameCanBeConfigured</span><span class="hljs-params">()</span> {
+    <span class="hljs-built_in">this</span>.contextRunner.withPropertyValues(<span class="hljs-string">&quot;user.name=test123&quot;</span>).run((context) -&gt; {
+        assertThat(context).hasSingleBean(MyService.class);
+        assertThat(context.getBean(MyService.class).getName()).isEqualTo(<span class="hljs-string">&quot;test123&quot;</span>);
+    });
+}
+</code></pre>
+<p>Runner也可以用来展示条件的计算结果<code>ConditionEvaluationReport</code>，这个计算结果，可以通过日志的方式打印，如下:</p>
+<pre><code class="language-java"><span class="hljs-keyword">import</span> org.junit.jupiter.api.Test;
+
+<span class="hljs-keyword">import</span> org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener;
+<span class="hljs-keyword">import</span> org.springframework.boot.logging.LogLevel;
+<span class="hljs-keyword">import</span> org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">MyConditionEvaluationReportingTests</span> {
+
+    <span class="hljs-meta">@Test</span>
+    <span class="hljs-keyword">void</span> <span class="hljs-title function_">autoConfigTest</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">new</span> <span class="hljs-title class_">ApplicationContextRunner</span>()
+            .withInitializer(<span class="hljs-keyword">new</span> <span class="hljs-title class_">ConditionEvaluationReportLoggingListener</span>(LogLevel.INFO))
+            .run((context) -&gt; {
+                    <span class="hljs-comment">// Test something...</span>
+            });
+    }
+
+}
+</code></pre>
+<h2 id="仿真一个web环境">仿真一个Web环境</h2>
+<p>如果你想要测试基于Servlet的Web环境的自动配置，可以使用<code>WebApplicationContextRunner</code>.</p>
+<h2 id="覆盖classpath">覆盖classpath</h2>
+<p>也可以测试当一个类或者一个包在运行时不存在会发生什么，runner可以使用<code>FilteredClassLoader</code>来模拟类不存在情况，如下:</p>
+<pre><code class="language-java"><span class="hljs-meta">@Test</span>
+<span class="hljs-keyword">void</span> <span class="hljs-title function_">serviceIsIgnoredIfLibraryIsNotPresent</span><span class="hljs-params">()</span> {
+    <span class="hljs-built_in">this</span>.contextRunner.withClassLoader(<span class="hljs-keyword">new</span> <span class="hljs-title class_">FilteredClassLoader</span>(MyService.class))
+            .run((context) -&gt; assertThat(context).doesNotHaveBean(<span class="hljs-string">&quot;myService&quot;</span>));
+}
+</code></pre>
+<h1 id="创建你自己的starter">创建你自己的Starter</h1>
+<p>一个传统的Spring Boot starter会包含自动配置的代码与定制基础设施技术实现2个功能（也叫做ACME），为了让自动配置更容易扩展，Spring Boot把大量特定空间下的自动配置key开放出来，最终，一个用于简化Spring开发的starter依赖就有了。
+具体来说，一个自定义的starter可以包含如下的部分：</p>
+<ul>
+<li>包含自动配置代码的自动配置模块<code>autoconfigure</code>；</li>
+<li>starter模块，提供对自动配置的依赖也就是<code>autoconfigure</code>模块，与其他的一些额外有用的依赖，概括的说，添加starter就是添加了一切。
+分为2个模块是完全没有必要的，但是如果自动配置（ACME）有几种不同的形式或者选项或者可选的特性等，那么最好是分为2个模块，因为这样，你可以容易的表示出哪些特性是可选的，其他人也可以基于你的autoconfigure模块构造它们自己的starter；如果你的自动配置是简单并明了的，没有一些可选的特性，那么只需要提供一个starter模块就可以了。</li>
+</ul>
+<h2 id="命名">命名</h2>
+<p>你必须给你的starter设置一个适当的名字空间，不要让你的模块名叫spring-boot；作为一个经验法则，你需要给starter的各个模块命名，例如：假设你要创建一个一个acme的starter，你的自动配置模块可能叫acme-spring-boot， starter模块叫做acme-spring-boot-starter，如果你只有一个starter，那么叫做acme-spring-boot-starter就可以了。</p>
+<h2 id="配置keys">配置keys</h2>
+<p>如果你的starter提供了配置keys，最好放到一个独一无二的名字空间下面，最好不要定义在Spring Boot的标准名字空间（比如server、management，spring等）下，因为标准名字空间未来可能会发生变更，经验使然，名嘴空间是你持有的并且唯一的会更好一些。确保每个配置key都通过javadoc的方式做了文档化注释，如下:</p>
+<pre><code class="language-java"><span class="hljs-meta">@ConfigurationProperties(&quot;acme&quot;)</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">AcmeProperties</span> {
+
+    <span class="hljs-comment">/**
+     * Whether to check the location of acme resources.
+     */</span>
+    <span class="hljs-keyword">private</span> <span class="hljs-type">boolean</span> <span class="hljs-variable">checkLocation</span> <span class="hljs-operator">=</span> <span class="hljs-literal">true</span>;
+
+    <span class="hljs-comment">/**
+     * Timeout for establishing a connection to the acme server.
+     */</span>
+    <span class="hljs-keyword">private</span> <span class="hljs-type">Duration</span> <span class="hljs-variable">loginTimeout</span> <span class="hljs-operator">=</span> Duration.ofSeconds(<span class="hljs-number">3</span>);
+
+    <span class="hljs-comment">// getters/setters ...</span>
+
+}
+</code></pre>
+<p>下面是一些配置key注释文档的编写规则：</p>
+<ul>
+<li>不要用the或者A开头；</li>
+<li>对于boolean类型，使用Whether或者Enable开头；</li>
+<li>对于集合类型，使用逗号分隔列表；</li>
+<li>使用Duration类型不要使用long类型表示时间,如果时间单位不是毫秒要指出时间单位</li>
+<li>不要在注释中写默认值，除非默认值只有在运行时决定的情况除外；
+确保trigger meta-data generation，这样IDE辅助工具可以提供配置keys的提示功能，你可能想要查看生成的metadata（META-INF/spring-configuration-metadata.json）来确保你的配置keys被正确的文档化了。</li>
+</ul>
+<h2 id="autoconfigure模块">autoconfigure模块</h2>
+<p>autoconfigure模块包括启动应用时，库做的所有的启动工作，也包括配置keys定义，还有一些回调接口用来进一步定制化组件的初始化；你应该将库设置为optional的，这样你可以更容易的将自动配置模块包含到你的项目中去，这样，默认情况下可以使用Spring Boot提供的lib，Spring Boot使用注解处理器收集元数据文件中自动配置条件，如果存在这个文件，它将用于及时的过滤不匹配的自动配置，这将缩短启动时间，建议在包含自动配置的模块中添加以下依赖项:</p>
+<pre><code class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.springframework.boot<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>spring-boot-autoconfigure-processor<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">optional</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">optional</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span>
+</code></pre>
+<p>如果你在应用中直接定义了自动配置，一定要配置<code>spring-boot-maven-plugin</code>以便不让repackge goal添加依赖:</p>
+<pre><code class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">project</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">build</span>&gt;</span>
+        <span class="hljs-tag">&lt;<span class="hljs-name">plugins</span>&gt;</span>
+            <span class="hljs-tag">&lt;<span class="hljs-name">plugin</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.springframework.boot<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>spring-boot-maven-plugin<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">configuration</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">excludes</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">exclude</span>&gt;</span>
+                            <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>org.springframework.boot<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span>
+                            <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>spring-boot-autoconfigure-processor<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span>
+                        <span class="hljs-tag">&lt;/<span class="hljs-name">exclude</span>&gt;</span>
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">excludes</span>&gt;</span>
+                <span class="hljs-tag">&lt;/<span class="hljs-name">configuration</span>&gt;</span>
+            <span class="hljs-tag">&lt;/<span class="hljs-name">plugin</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">plugins</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">build</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">project</span>&gt;</span>
+</code></pre>
+<h2 id="starter-module">Starter Module</h2>
+<p>starter实际上是一个空jar，它的唯一目的是提供必要的依赖项以使用该库，您可以将其视为使用库的标准做法。不要对添加starter的项目做出假设。如果自动配置的库需要其他启动器，请同时提及它们。如果可选依赖项的数量很多，则提供一组适当的默认依赖项可能会很困难，因为您应该避免包含对于库的典型使用而言不必要的依赖项。换句话说，您不应该包含可选依赖项。</p>
+
+            
+            
+        </body>
+        </html>
