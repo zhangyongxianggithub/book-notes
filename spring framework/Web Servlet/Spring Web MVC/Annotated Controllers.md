@@ -127,7 +127,7 @@ public class SimpleController {
     }
 }
 ```
-异常可以匹配抛出的异常栈内的所有异常，也就是能匹配上直接异常与内嵌的cause异常。比如IOException异常被包含在IllegalStateException异常内。从5.3版本之后才具有这个特性，之前的版本只会匹配直接异常。为了匹配异常，最好将目标异常类型声明为一个方法参数。如上面的例子所示，当匹配多个异常处理方法时，直接异常匹配比内嵌异常匹配具有更高的优先级。更具体的说，`ExceptionDepthComparator`就是用来对异常排序，这是基于抛出的异常栈来排序。或者，注解可以声明匹配多个异常类型，如下面的例子所示:
+异常可以匹配抛出的异常栈内的所有异常，也就是能匹配上直接异常与内嵌的cause异常。比如IOException异常被包含在IllegalStateException异常内。从5.3版本之后才具有这个特性，之前的版本只会匹配直接异常或者其直接的cause异常。为了匹配异常，最好将目标异常类型声明为一个方法参数。如上面的例子所示，当匹配多个异常处理方法时，直接异常匹配比内嵌异常匹配具有更高的优先级。更具体的说，`ExceptionDepthComparator`就是用来对异常排序，这是基于抛出的异常栈来排序。或者，注解可以声明匹配多个异常类型，如下面的例子所示:
 ```java
 @ExceptionHandler({FileSystemException.class, RemoteException.class})
 public ResponseEntity<String> handle(IOException ex) {
@@ -203,8 +203,41 @@ public ResponseEntity<String> handle(Exception ex) {
 }
 ```
 root与cause异常匹配是不同的
-在前面展示的`IOException`变体中，方法实际调用时，异常参数可能是`FileSystemException`或者`RemoteException`的实例对象，因为他们都扩展自`IOException`，然而，如果异常在传播中被包裹到一个`IOException`实例中，方法传递的异常实例对象是`IOException`本身。这种行为类似`handle(Exception)`变体，在wrapping的场景总是使用最外面的异常实例完成方法调用，通过`ex.getCause()`完成异常匹配。
+在前面展示的`IOException`变体中，方法实际调用时，异常参数可能是`FileSystemException`或者`RemoteException`的实例对象，因为他们都扩展自`IOException`，然而，如果异常在传播中被包裹到一个`IOException`实例中，方法传递的异常实例对象是`IOException`本身。这种行为类似`handle(Exception)`变体，在wrapping的场景总是使用最外面的异常实例完成方法调用，通过`ex.getCause()`完成异常匹配。我们通常建议你在方法签名中使用更具体的异常类型。减少因为cause而误匹配的情况。考虑将能够执行多种匹配的拆分为单个匹配的异常处理方法，每一个方法只处理其签名声明的特定异常。在多`@ControllerAdvice`的处理中，我们建议在`@ControllerAdvice`上声明你的primary root exception映射并按照顺序设定优先级。虽然root异常匹配优先于cause异常匹配，但是这只能在同一个类中的异常处流方法间生效。也就是说一个高优先级的`@ControllerAdvice`中的cause匹配要优先于一个低优先级的`@ControllerAdvice`的root异常匹配。还有一个重要的点是，`@ExceptionHandler`可以重新抛出异常。这在有些场景下很有用，比如，你只对root匹配感兴趣或者在一个特定的上下文环境中的匹配感兴趣。一个重新抛出的异常会在剩余的解析链中传播，就好像好没处理过一样。Spring MVC对`@ExceptionHanlder`方法的支持是内置基于`DispatcherServlet`的`HandlerExceptionResolver`机制。
 
+## Method Arguments
+`@ExceptionHandler`方法支持下面的参数
+|方法参数|描述|
+|:---|:---|
+|Exception type|抛出的异常|
+|`HandlerMethod`|抛出异常的controller method|
+|`WebRequest`、`NativeWebRequest`|request\session\等|
+|`jakarta.servlet.ServletRequest`,`jakarta.servlet.ServletResponse`|request或者response，比如`ServletRequest`、`HttpServletRequest`、`MultipartRequest`、`MultipartHttpServletRequest`|
+|`jakarta.servlet.http.HttpSession`|强制session必须出现，因此，这个参数永不为null，session反问不是线程安全的，考虑设置`RequestMappingHandlerAdapter`实例的`synchronizeOnSession=true`|
+|`java.security.Principal`|登陆用户|
+|`HttpMethod`|HTTP method|
+|`java.util.Locale`|当前请求的locale，由`LocaleResolver`决定|
+|`java.util.TimeZone`, `java.time.ZoneId`|时区|
+|`java.io.OutputStream`, `java.io.Writer`|raw response body|
+|`java.util.Map`, `org.springframework.ui.Model`, `org.springframework.ui.ModelMap`|model，始终是空的|
+|`RedirectAttributes`|指定在重定向时使用的属性 — （即附加到查询字符串）以及要临时存储的闪存属性，直到重定向后的请求为止。 请参阅重定向属性和Flash属性。|
+|`@SessionAttribute`|用于访问任何会话属性，与作为类级`@SessionAttributes`声明的结果存储在会话中的模型属性相反。有关更多详细信息，请参阅`@SessionAttribute`|
+|`@RequestAttribute`|用于访问请求属性。有关更多详细信息，请参阅`@RequestAttribute`|
+## Return Values
+支持的返回类型如下:
+|返回值||描述|
+|:---|:---|
+|`@ResponseBody`|返回值使用`HttpMessageConverter`转换后写入到响应中|
+|`HttpEntity<B>`, `ResponseEntity<B>`|返回值描述了HTTP响应的全部内容，将会通过`HttpMessageConverter`转换然后写入到响应中，参考[ResponseEntity](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/responseentity.html)|
+|`ErrorResponse`|使用body中的内容渲染一个RFC 7807错误响应，参考[Error Responses](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html)|
+|`ProblemDetail`|同`ErrorResponse`|
+|`String`|将使用`ViewResolver`实现解析并与隐式模型一起使用的视图名称 - 通过命令对象和`@ModelAttribute`方法确定。处理程序方法还可以通过声明模型参数（前面已描述）以编程方式丰富模型。|
+|`View`||
+|`java.util.Map`与`org.springframework.ui.Model`|要添加到隐式模型的属性，视图名称通过`RequestToViewNameTranslator`隐式确定|
+|`@ModelAttribute`|添加到model中的属性|
+|`ModelAndView`|view与model|
+|`void`|void返回类型或者null返回值，在存在`ServletResponse`、`OutputStream`或者`@ResponseStatus`的情况下被认为已经完全处理完了响应，如果controller已经有了一个正的Etag或者`lastModified`时间戳的情况下也是这么处理，如果上述情况都不存在，void在RestController中被认为是没有响应体，在HTMLController中被认为是使用默认的视图名|
+|其他任意类型|如果一个返回值不是上面的所有类型，也不是一个基本类型(`BeanUtils#isSimpleProperty`决定)，缺省情况下，它会被当作一个model属性添加到`Model`对象中，如果是基本类型，保留未解析的状态|
 # Controller Advice
 `@ExceptionHandler`,`@InitBinder`,`@ModelAttribute`只能定义并应用在`@Controller`类中，或者继承了`@Controller`注解的类。还有一种方案，它们可以定义在一个`@ControllerAdvice`与`@RestControllerAdvice`修饰类中，然后它们可以全局应用到任意的控制器。更多的，从5.3版本开始，`@ControllerAdvice`中`@ExceptionHandler`可以处理任意`@Controller`类抛出的异常。`@ControllerAdvice`是一个带有`@Component`注解的元注解，因此可以注册为一个Spring Bean，`@RestControllerAdvice`是一个带有`@ControllerAdvice`与`@ResponseBody`的元注解。这意味着，`@ExceptionHandler`方法的返回值将会通过response body message转换转化到响应中而不是返回HTML视图。在启动阶段，`RequestMappingHandlerMapping`和`ExceptionHandlerExceptionResolver`会检测controller advice类型的bean并在运行时应用处理器逻辑。来自于`@ControllerAdvice`类的全局`@ExceptionHandler`方法在controller本地定义的异常处理器之后执行，相反的是，全局的`@ModelAttribute`与`@InitBinder`方法在本地定义的组件之前执行。`@ControllerAdvice`注解有很多属性可以设置，可以限定controller的范围，比如:
 ```java
