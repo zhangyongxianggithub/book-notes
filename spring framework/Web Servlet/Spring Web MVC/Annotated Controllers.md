@@ -177,6 +177,34 @@ public ResponseEntity<String> handle(Exception ex) {
 |void|如果具有`void`返回类型（或 null 返回值）的方法还具有`ServletResponse``OutputStream`参数或`@ResponseStatus`注释，则该方法被认为已完全处理响应。如果控制器进行了肯定的`ETag`或`lastModified`时间戳检查，情况也是如此（有关详细信息，请参阅控制器）。如果以上都不是true，void 返回类型也可以指示 REST 控制器的“无响应主体”或 HTML 控制器的默认视图名称选择。|
 |Any other return value|如果返回值与上述任何一个都不匹配并且不是简单类型（由 BeanUtils#isSimpleProperty 确定），默认情况下，它将被视为要添加到模型中的模型属性。 如果是简单类型，则仍未解决|
 
+# Exceptions
+`@Controller`与`@ControllerAdvice`注解类内都可以写`@ExceptionHandler`方法来处理controller方法抛出的异常，如下面的例子所示
+```java
+@Controller
+public class SimpleController {
+	@ExceptionHandler
+	public ResponseEntity<String> handle(IOException ex) {
+		// ...
+	}
+}
+```
+异常能匹配异常stack中的所有异常，这是从5.3版本开始的，之前的版本只能匹配最外面的异常与它的直接cause。最好声明方法中的异常为目标类型，当有很多异常处理方法都匹配时，需要一个root异常处理来处理根异常。更特殊的，可以用`ExceptionDepthComparator`来对异常stack排序，基于他们的depth。注解声明可以限定匹配的异常，如下面的例子所示:
+```java
+@ExceptionHandler({FileSystemException.class, RemoteException.class})
+public ResponseEntity<String> handle(IOException ex) {
+	// ...
+}
+```
+通过注解限定，你可以在方法签名上声明更通用的异常类型参数，如下面的例子所示:
+```java
+@ExceptionHandler({FileSystemException.class, RemoteException.class})
+public ResponseEntity<String> handle(Exception ex) {
+	// ...
+}
+```
+root与cause异常匹配是不同的
+在前面展示的`IOException`变体中，方法实际调用时，异常参数可能是`FileSystemException`或者`RemoteException`的实例对象，因为他们都扩展自`IOException`，然而，如果异常在传播中被包裹到一个`IOException`实例中，方法传递的异常实例对象是`IOException`本身。这种行为类似`handle(Exception)`变体，在wrapping的场景总是使用最外面的异常实例完成方法调用，通过`ex.getCause()`完成异常匹配。
+
 # Controller Advice
 `@ExceptionHandler`,`@InitBinder`,`@ModelAttribute`只能定义并应用在`@Controller`类中，或者继承了`@Controller`注解的类。还有一种方案，它们可以定义在一个`@ControllerAdvice`与`@RestControllerAdvice`修饰类中，然后它们可以全局应用到任意的控制器。更多的，从5.3版本开始，`@ControllerAdvice`中`@ExceptionHandler`可以处理任意`@Controller`类抛出的异常。`@ControllerAdvice`是一个带有`@Component`注解的元注解，因此可以注册为一个Spring Bean，`@RestControllerAdvice`是一个带有`@ControllerAdvice`与`@ResponseBody`的元注解。这意味着，`@ExceptionHandler`方法的返回值将会通过response body message转换转化到响应中而不是返回HTML视图。在启动阶段，`RequestMappingHandlerMapping`和`ExceptionHandlerExceptionResolver`会检测controller advice类型的bean并在运行时应用处理器逻辑。来自于`@ControllerAdvice`类的全局`@ExceptionHandler`方法在controller本地定义的异常处理器之后执行，相反的是，全局的`@ModelAttribute`与`@InitBinder`方法在本地定义的组件之前执行。`@ControllerAdvice`注解有很多属性可以设置，可以限定controller的范围，比如:
 ```java
