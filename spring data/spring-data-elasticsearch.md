@@ -1402,6 +1402,71 @@ interface UserRepository extends CrudRepository<User, Long> {
 - 实现`Persistable`接口，如果实体实现了`Persistable`接口，判断实体是否是新的通过接口的`isNew()`方法
 - 提供自定义的`EntityInformation`实现，你可以自定义`EntityInformation`抽象，创建一个模块特定仓库工厂的子类并覆写`getEntityInformation(…)`方法中，这样仓库的实现就会使用到自定义的`EntityInformation`，必须注册模块特定仓库工厂的子类的自定义实现为bean，这个很少需要用到。
 ## Defining Repository Interface
+为了定义一个repository接口，你首先需要定义一个与领域类相关的`Repository`接口，接口必须扩展自`Repository`且类型参数是领域类与其ID的类型，如果你想要暴露CRUD方法，你需要继承`CrudRepository`或者它的子接口。
+### Fine-tuning Repository Definition
+有几种方式来定义你的`Repository`接口。典型的方式是扩展`CrudRepository`接口。可以让你的接口具有CRUD的能力。从3.0版本开始，`ListCrudRepository`支持多条数据返回`List`而不是`Iterable`。如果你的存储是响应式的，你可以使用`ReactiveCrudRepository`或者`RxJava3CrudRepository`这依赖于你正在使用的响应式框架。如果你正在使用Kotlin，你可以使用`CoroutineCrudRepository`利用了Kotlin的协程。持此以外，你还可以扩展`PagingAndSortingRepository`, `ReactiveSortingRepository`, `RxJava3SortingRepository`, `CoroutineSortingRepository`支持通过`Sort`或者`Pageable`来指定排序或者分页。注意，在3.0版本后，不同的排序`Repository`不在互相继承，所以如果你需要2个排序方法，就需要指定多个`Repository`。如果你不想要扩展`Spring Data`接口，你可以使用`@RepositoryDefinition`标注你的`Repository`接口，扩展CRUD `Repository`接口会暴露一组完整的操作实体对象的方法。 如果您希望选择一些方法来暴露，将要暴露的方法从CRUD仓库复制到你的域仓库中。这样做时，您可以更改方法的返回类型。如果可能的话，Spring Data将遵循返回类型。例如，对于返回多个实体的方法，您可以选择`Iterable<T>`、`List<T>`、`Collection<T>`或`VAVR`列表。如果你的应用中多个`Repository`具有一些相同的方法集合，你可以将这些相同的方法抽取到一个父接口中，这个接口必须被`@NoRepositoryBean`标注，因为这个接口是泛型的，没有具体的领域类，这个注解可以告诉Spring Data不要实例化这个仓库。下面的例子展示了选择性的暴露一些CRUD方法
+```java
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends Repository<T, ID> {
+
+  Optional<T> findById(ID id);
+
+  <S extends T> S save(S entity);
+}
+
+interface UserRepository extends MyBaseRepository<User, Long> {
+  User findByEmailAddress(EmailAddress emailAddress);
+}
+```
+在前面的例子中，我们定义了一个通用的base接口，暴露了`findById(...)`与`save(...)`接口，这些方法会被路由到Spring Data提供的对应你选择的store的基本仓库实现中。比如，如果你使用JPA，那么实现就是`SimpleJpaRepository`，因为他们与`CrudRepository`中的方法签名相同。因此，`UserRepository`现在可以保存用户、通过ID查找单个用户，并触发查询以通过电子邮件地址查找用户。中间的仓库接口要使用`@NoRepositoryBean`标注。
+### Using Repositories with Multiple Spring Data Modules
+在应用中只使用一个Spring Data模块是非常简单的。因为所有的仓库接口都是该模块的。有时候，应用需要使用多个Spring Data模块，在这样的场景中，仓库定义必须根据其对应的持久化技术做区分。当应用在classpath中检测到多个仓库工厂时，Spring Data会进入严格的仓库配置模式，严格配置模式会使用仓库接口与领域类的细节信息来决定绑定哪个Spring Data模块。
+- 如果仓库定义扩展自模块相关的接口，它会绑定到这个模块
+- 如果领域类使用了模块内的注解，也是绑定到这个模块，Spring Data也接受第三方的注解，比如JPA的`@Entity`或者模块自己的注解比如Spring Data MongoDb与Spring Data Elasticsearch的`@Document`
+
+下面的例子展示了一个使用了模块相关接口的仓库
+```java
+interface MyRepository extends JpaRepository<User, Long> { }
+
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends JpaRepository<T, ID> { … }
+
+interface UserRepository extends MyBaseRepository<User, Long> { … }
+```
+下面的例子展示了一个使用通用接口的仓库
+```java
+interface AmbiguousRepository extends Repository<User, Long> { … }
+
+@NoRepositoryBean
+interface MyBaseRepository<T, ID> extends CrudRepository<T, ID> { … }
+
+interface AmbiguousUserRepository extends MyBaseRepository<User, Long> { … }
+```
+下面的例子是领域类的例子
+```java
+interface PersonRepository extends Repository<Person, Long> { … }
+@Entity
+class Person { … }
+interface UserRepository extends Repository<User, Long> { … }
+@Document
+class User { … }
+```
+下面是一个错误示例
+```java
+interface JpaPersonRepository extends Repository<Person, Long> { … }
+interface MongoDBPersonRepository extends Repository<Person, Long> { … }
+@Entity
+@Document
+class Person { … }
+```
+[Repository type details](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/definition.html#repositories.multiple-modules.types)与[领域类注解](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/definition.html#repositories.multiple-modules.annotations)是用来在严格模式下判断属于哪个Spring Data模块，在同一域类型上使用多个特定持久性技术的注解是可能的，并且可以跨多种持久性技术重用域类型。但是，Spring Data将无法再确定用于绑定存储库的唯一模块。最后一个判断的方法是限定扫描仓库的范围，默认情况下，注解驱动的配置使用Configuration类所在的package作为base package，基于XML的配置需要强制配置这个属性。下面是一个注解驱动的配置base packages的例子:
+```java
+@EnableJpaRepositories(basePackages = "com.acme.repositories.jpa")
+@EnableMongoRepositories(basePackages = "com.acme.repositories.mongo")
+class Configuration { … }
+```
+## Elasticsearch Repositories
+
 ## 索引/mapping的自动创建
 `@Document`注解由一个createIndex的参数。如果参数设置为true，SDE将会在启动Repository支持的阶段检查索引是否存在。如果不存在，将会创建索引与mapping，索引的细节可以通过`@Setting`注解设置，参考[Index settings](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获取更多的信息。
 ## Query methods
