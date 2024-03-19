@@ -172,4 +172,27 @@ public class Config {
 - ProducerFactory, see [Sending Messages](https://docs.spring.io/spring-kafka/reference/kafka/sending-messages.html)
 - ConsumerFactory, see [Receiving Messages](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages.html)
 
-从2.5版本开始，他们都继承`KafkaResourceFactory`，这样可以在运行时动态更改bootstrap servers，只需要在他们的配置中添加一个`Supplier<String>`，比如`setBootstrapServersSupplier(() -> …​)`，每次建立新的连接时这个方法会被调用来获取服务器列表。 `Consumers`与`Producers`通常存活期是很长的，为了关闭`Producers`调用`DefaultKafkaProducerFactory`的`reset()`方法，关闭`Consumerss`调用`KafkaListenerEndpointRegistry`的`stop()`与`start()`方法，或者调用listener container bean的`stop()`与`start()`方法。为了方便，框架也提供了`ABSwitchCluster`支持2个服务器集合，其中之一在任何时刻都是active的，
+从2.5版本开始，他们都继承`KafkaResourceFactory`，这样可以在运行时动态更改bootstrap servers，只需要在他们的配置中添加一个`Supplier<String>`，比如`setBootstrapServersSupplier(() -> …​)`，每次建立新的连接时这个方法会被调用来获取服务器列表。 `Consumers`与`Producers`通常存活期是很长的，为了关闭`Producers`调用`DefaultKafkaProducerFactory`的`reset()`方法，关闭`Consumerss`调用`KafkaListenerEndpointRegistry`的`stop()`与`start()`方法，或者调用listener container bean的`stop()`与`start()`方法。为了方便，框架也提供了`ABSwitchCluster`支持2个服务器集合，其中之一在任何时刻都是active的，配置`ABSwitchCluster`通过调用`setBootstrapServersSupplier()`将其添加到producer、consumer工厂与KafkaAdmin内，当你想要切换时，调用producer工厂的`primary()`或者`second()`方法后调用`reset()`来建立新的连接。对于消费者，`stop()`/`start()`所有的listener容器，当使用`@KafkaListener`时，需要`stop()`/`start()``KafkaListenerEndpointRegistry`bean对象。
+#### Factory Listeners
+从2.5版本开始，`DefaultKafkaProducerFactory`与`DefaultKafkaConsumerFactory`可以配置一个`Listener`来接收producer或者consumer创建或者关闭的通知。
+```java
+interface Listener<K, V> {
+    default void producerAdded(String id, Producer<K, V> producer) {
+    }
+    default void producerRemoved(String id, Producer<K, V> producer) {
+    }
+}
+```
+```java
+interface Listener<K, V> {
+    default void consumerAdded(String id, Consumer<K, V> consumer) {
+    }
+    default void consumerRemoved(String id, Consumer<K, V> consumer) {
+    }
+}
+```
+id=工厂bean的名字+.+client-id属性值构成。这些listeners可以用来为新创建的客户端创建并绑定一个Micrometer `KafkaClientMetrics`实例，在客户端关闭时，也需要同时关闭`KafkaClientMetrics`。框架已经提供了这种实现的listener，具体参考[Micrometer Native Metrics](https://docs.spring.io/spring-kafka/reference/kafka/micrometer.html#micrometer-native)
+### Configuring Topics
+### Receiving Messages
+接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
+#### Message Listeners
