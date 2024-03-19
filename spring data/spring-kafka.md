@@ -172,4 +172,4 @@ public class Config {
 - ProducerFactory, see [Sending Messages](https://docs.spring.io/spring-kafka/reference/kafka/sending-messages.html)
 - ConsumerFactory, see [Receiving Messages](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages.html)
 
-从2.5版本开始，他们都继承`KafkaResourceFactory`，这样可以在运行时动态更改bootstrap servers，只需要在他们的配置中添加一个`Supplier<String>`。
+从2.5版本开始，他们都继承`KafkaResourceFactory`，这样可以在运行时动态更改bootstrap servers，只需要在他们的配置中添加一个`Supplier<String>`，比如`setBootstrapServersSupplier(() -> …​)`，每次建立新的连接时这个方法会被调用来获取服务器列表。 `Consumers`与`Producers`通常存活期是很长的，为了关闭`Producers`调用`DefaultKafkaProducerFactory`的`reset()`方法，关闭`Consumerss`调用`KafkaListenerEndpointRegistry`的`stop()`与`start()`方法，或者调用listener container bean的`stop()`与`start()`方法。为了方便，框架也提供了`ABSwitchCluster`支持2个服务器集合，其中之一在任何时刻都是active的，
