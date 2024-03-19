@@ -579,6 +579,45 @@ public class MyLinkedList<AnyType> implements List<AnyType> {
 - 方法调用，方法调用时，主调方法的寄存器与返回地址等上下文信息存在一个栈中，控制转移到被调方法。执行完从栈顶复原。所存储的信息叫做活动记录(activation record)或者叫做栈帧(stack frame)。通常，栈顶就是当前运行的方法。栈空间有大小限制。尾递归就是最后一行的递归调用。尾递归可以被转换为迭代。递归总是可以被去除，编译期也会这么优化。
 ## 队列ADT
 队列也是表，队列在一端插入在一端删除。队列的基本操作时入队与出队。队列是可以使用表实现的，链表或者数组实现都可以，都是$O(1)$的运行时间。数组的实现要使用循环数组。
+# 第四章 树
+二叉查找树(bianry search tree)，是`TreeSet`与`TreeMap`的实现基础。树在计算机科学中是非常有用的抽象概念。
+## 预备知识
+树的递归定义方式，一棵树是一些节点的集合，这个集合可以是空集，若不是空集，则树由称作根(root)的节点`r`以及0个或者多个非空的子树$T_{1},T_{2}, \dots ,T_{k}$组成，子树的的根都被来自$r$的有向边连结。树由$N$个节点与$N-1$条边构成。从节点$n_1$到$n_k$的路径定义为节点$n_1,n_2,\dots ,n_k$的一个序列，使得对于$1\le i\le k$，节点$n_i$是节点$n_{i+1}$的父亲，路径的长是路径的边数。一颗树丛根节点到每个节点恰好存在一条路径。$n_i$的深度为从根到$n_i$的路径的长，$n_i$的高度为$n_i$到一片树叶的最长路径的长。树的深度=树的高度。实现树的数据结构，通常是在节点内维持指向子节点的链，但是子节点数量是变化的，不好维护，解决的方法是将所有的兄弟节点放到一个链表中，父节点只需维护到第一个子节点的链就可以了，结构如下:
+```java
+public class TreeNode<T> {
+    private T element; 
+    private TreeNode<T> firstChild;
+    private TreeNode<T> nextSibling;
+    public TreeNode(final T element, final TreeNode<T> firstChild,
+            final TreeNode<T> nextSibling) {
+        this.element = element;
+        this.firstChild = firstChild;
+        this.nextSibling = nextSibling;
+    }
+    public void setElement(final T element) {
+        this.element = element;
+    }
+    public void setFirstChild(final TreeNode<T> firstChild) {
+        this.firstChild = firstChild;
+    }
+    public void setNextSibling(final TreeNode<T> nextSibling) {
+        this.nextSibling = nextSibling;
+    }
+    public T getElement() {
+        return element;
+    }
+    public TreeNode<T> getFirstChild() {
+        return firstChild;
+    }
+    public TreeNode<T> getNextSibling() {
+        return nextSibling;
+    }
+}
+```
+树的应用-文件系统的目录，树由前中后3种遍历方法
+- 前序preorder，对节点的处理工作在所有儿子节点处理之前完成，层次感比较好，节点的计算与子节点无关时用前序。
+- 中序，左子树处理完处理处理节点，然后右子树
+- 后序postorder，对节点的处理工作在所有儿子节点处理之后完成，需要所有子节点的数据的时候，用后序
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
