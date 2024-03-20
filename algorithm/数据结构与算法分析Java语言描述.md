@@ -618,6 +618,50 @@ public class TreeNode<T> {
 - 前序preorder，对节点的处理工作在所有儿子节点处理之前完成，层次感比较好，节点的计算与子节点无关时用前序。
 - 中序，左子树处理完处理处理节点，然后右子树
 - 后序postorder，对节点的处理工作在所有儿子节点处理之后完成，需要所有子节点的数据的时候，用后序
+## 二叉树
+二叉树是一棵树，每个节点不能多于2个儿子。二叉树的节点类实现
+```java
+public class BinaryNode<T> {
+    private T element;
+    
+    private BinaryNode<T> left;
+    
+    private BinaryNode<T> right;
+    
+    public BinaryNode(final T element, final BinaryNode<T> left,
+            final BinaryNode<T> right) {
+        this.element = element;
+        this.left = left;
+        this.right = right;
+    }
+    
+    public T getElement() {
+        return element;
+    }
+    
+    public void setElement(final T element) {
+        this.element = element;
+    }
+    
+    public BinaryNode<T> getLeft() {
+        return left;
+    }
+    
+    public void setLeft(final BinaryNode<T> left) {
+        this.left = left;
+    }
+    
+    public BinaryNode<T> getRight() {
+        return right;
+    }
+    
+    public void setRight(final BinaryNode<T> right) {
+        this.right = right;
+    }
+}
+```
+二叉树的主要用在编译器的设计领域。
+- 表达式树: 
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
