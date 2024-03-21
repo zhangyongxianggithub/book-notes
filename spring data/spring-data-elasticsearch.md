@@ -1466,9 +1466,115 @@ class Person { … }
 class Configuration { … }
 ```
 ## Elasticsearch Repositories
+这个小节包含了Elasticsearch仓库信息的细节。
+```java
+@Document(indexName="books")
+class Book {
+    @Id
+    private String id;
+    @Field(type = FieldType.text)
+    private String name;
+    @Field(type = FieldType.text)
+    private String summary;
+    @Field(type = FieldType.Integer)
+    private Integer price;
+	// getter/setter ...
+}
+```
+### 自动创建具有相应mapping的索引
+`@Document`注解由一个`createIndex`的参数。如果参数设置为true，Spring Data Elasticsearch将会在启动Repository支持的阶段检查`@Document`定义的索引是否存在。如果不存在，将会创建索引与从实体类注解衍生出来的mapping，索引的细节可以通过`@Setting`注解设置，参考[Index settings](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获取更多的信息。
+### Annotations for repository methods
+#### `@Highlight`
+仓库方法上的`@Highlight`注解定义了高亮部分应该包含返回实体的哪些字段，为了搜索书的名字或者summary并让搜到的数据高亮，可以使用下面的仓库方法:
+```java
+interface BookRepository extends Repository<Book, String> {
+    @Highlight(fields = {
+        @HighlightField(name = "name"),
+        @HighlightField(name = "summary")
+    })
+    SearchHits<Book> findByNameOrSummary(String text, String summary);
+}
+```
+如上面的例子，可以定义多个高亮的字段，`@Highlight`与`@HighlightField`注解可以使用`@HighlightParameters`定制化修改，参考可配置选项的javadocs。在搜索结果中，高亮数据可以通过`SearchHit`类检索到。
+#### `@SourceFilters`
+不想返回实体的所有属性只要一部分。ES提供了source过滤功能来减少药传输的数据量。当使用`ElasticsearchOperations`与`Query`接口使，只需要在`Query`实现上设置一个source filter就可以。当使用带有`@SourceFilters`注解的仓库方法时
+```java
+interface BookRepository extends Repository<Book, String> {
+    @SourceFilters(includes = "name")
+    SearchHits<Book> findByName(String text);
+}
+```
+在这个例子中，返回的`Book`对象的中除了name外的所有属性都是null。
+### Annotation based configuration
+SDE支持使用注解激活
+```java
+@Configuration
+@EnableElasticsearchRepositories(// EnableElasticsearchRepositories注解激活了仓库支持，如果没有配置base package，使用配置类所在的package
+  basePackages = "org.springframework.data.elasticsearch.repositories"
+  )
+static class Config {
 
-## 索引/mapping的自动创建
-`@Document`注解由一个createIndex的参数。如果参数设置为true，SDE将会在启动Repository支持的阶段检查索引是否存在。如果不存在，将会创建索引与mapping，索引的细节可以通过`@Setting`注解设置，参考[Index settings](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearc.misc.index.settings)获取更多的信息。
+  @Bean //提供一个名叫elasticsearchTemplate类型为elasticsearchTemplate的bean
+  public ElasticsearchOperations elasticsearchTemplate() {
+      // ...
+  }
+}
+
+class ProductService {
+
+  private ProductRepository repository;//注入
+
+  public ProductService(ProductRepository repository) {
+    this.repository = repository;
+  }
+
+  public Page<Product> findAvailableBookByName(String name, Pageable pageable) {
+    return repository.findByAvailableTrueAndNameStartingWith(name, pageable);
+  }
+}
+```
+### Spring Namespace
+SDE模块包含一个自定义命名空间与相关元素来完成仓库bean的定义与初始化一个`ElasticsearchServer`。使用`repositories`元素来寻找Spring Data的仓库
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:elasticsearch="http://www.springframework.org/schema/data/elasticsearch"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       https://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+       http://www.springframework.org/schema/data/elasticsearch
+       https://www.springframework.org/schema/data/elasticsearch/spring-elasticsearch-1.0.xsd">
+
+  <elasticsearch:repositories base-package="com.acme.repositories" />
+</beans>
+```
+使用`Transport Client`与`Rest Client`元素注册一个`ElasticsearchServer`的实例对象
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:elasticsearch="http://www.springframework.org/schema/data/elasticsearch"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       https://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+       http://www.springframework.org/schema/data/elasticsearch
+       https://www.springframework.org/schema/data/elasticsearch/spring-elasticsearch-1.0.xsd">
+  <elasticsearch:transport-client id="client" cluster-nodes="localhost:9300,someip:9300" />
+</beans>
+```
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:elasticsearch="http://www.springframework.org/schema/data/elasticsearch"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+       https://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+       http://www.springframework.org/schema/data/elasticsearch
+       https://www.springframework.org/schema/data/elasticsearch/spring-elasticsearch-1.0.xsd">
+
+  <elasticsearch:transport-client id="client" cluster-nodes="localhost:9300,someip:9300" />
+
+</beans>
+```
 ## Query methods
 ### Query lookup strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
