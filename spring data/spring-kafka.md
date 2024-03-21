@@ -196,3 +196,38 @@ id=工厂bean的名字+.+client-id属性值构成。这些listeners可以用来�
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners
+当你使用一个[message listener container](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/message-listener-container.html)时，你必须提供一个listener来接收数据，目前有8个接口用来做message listener，如下:
+```java
+public interface MessageListener<K, V> {// 使用这个接口来处理单个ConsumerRecord，ConsumerRecord是采用Kafka消费者的poll()操作接收到的，这个接口适用于使用auto-commit或者container-managed的commit methods的情况
+    void onMessage(ConsumerRecord<K, V> data);
+}
+public interface AcknowledgingMessageListener<K, V> {
+//使用manual commit methods时用来处理从Kafka消费者poll()操作接收的单个ConsumerRecord
+    void onMessage(ConsumerRecord<K, V> data, Acknowledgment acknowledgment);
+}
+public interface ConsumerAwareMessageListener<K, V> extends MessageListener<K, V> {
+//使用auto-commit或者container-managed commit methods其中之一时，用来处理从Kafka消费者poll()操作获取的单个ConsumerRecord，提供对Consumer对象的访问
+    void onMessage(ConsumerRecord<K, V> data, Consumer<?, ?> consumer);
+}
+public interface AcknowledgingConsumerAwareMessageListener<K, V> extends MessageListener<K, V> {
+//使用manual commit methods时用来处理从Kafka消费者poll()操作获取的单个ConsumerRecord，提供对Consumer对象的访问
+    void onMessage(ConsumerRecord<K, V> data, Acknowledgment acknowledgment, Consumer<?, ?> consumer);
+}
+public interface BatchMessageListener<K, V> {
+// 使用auto-commit或者container-managed commit methods其中之一时，用来处理从Kafka消费者的poll()操作接收的所有的ConsumerRecord实例，当使用这个接口时不支持AckMode.RECORD，因为listener获取的是完整的batch
+    void onMessage(List<ConsumerRecord<K, V>> data);
+}
+public interface BatchAcknowledgingMessageListener<K, V> {
+//使用manual commit methods时，用来处理从Kafka消费者的poll()操作接收的所有的ConsumerRecord实例
+    void onMessage(List<ConsumerRecord<K, V>> data, Acknowledgment acknowledgment);
+}
+public interface BatchConsumerAwareMessageListener<K, V> extends BatchMessageListener<K, V> {
+// 使用auto-commit或者container-managed commit methods其中之一时，用来处理从Kafka消费者的poll()操作接收的所有的ConsumerRecord实例，当使用这个接口时不支持AckMode.RECORD，因为listener获取的是完整的batch，提供对Consumer对象的访问
+    void onMessage(List<ConsumerRecord<K, V>> data, Consumer<?, ?> consumer);
+}
+public interface BatchAcknowledgingConsumerAwareMessageListener<K, V> extends BatchMessageListener<K, V> {
+// 使用manual commit methods时，用来处理从Kafka消费者的poll()操作接收的所有的ConsumerRecord实例，提供对Consumer对象的访问
+    void onMessage(List<ConsumerRecord<K, V>> data, Acknowledgment acknowledgment, Consumer<?, ?> consumer);
+}
+```
+`Consumer`对象不是线程安全的，必须在调用listener的线上上调用它的方法。你不应该执行任何可能影响到listener中消费者的positions或者committed offsets的`Consumer<?,?>`方法，container需要管理这些信息。
