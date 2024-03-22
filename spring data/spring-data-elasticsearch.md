@@ -1575,6 +1575,13 @@ SDE模块包含一个自定义命名空间与相关元素来完成仓库bean的�
 
 </beans>
 ```
+## Reactive Elasticsearch Repositories
+响应式Elasticsearch仓库支持基于前面的仓库支持，使用了[ Reactive Elasticsearch Operations](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/reactive-template.html)提供的操作，底层是由[Reactive REST Client](https://docs.spring.io/spring-data/elasticsearch/reference/elasticsearch/clients.html#elasticsearch.clients.reactiverestclient)执行的。SDE响应式仓库支持使用[Project Reactor]作为响应式库。主要使用3个接口
+- `ReactiveRepository`
+- `ReactiveCrudRepository`
+- `ReactiveSortingRepository`
+### Usage
+
 ## Query methods
 ### Query lookup strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
