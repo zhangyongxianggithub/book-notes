@@ -1,0 +1,1 @@
+连接器可以使用很多的transformation来配置，让每次的消息变更都轻量化。Debezium提供了几种SMT，你可以用来修改记录。DEbezium也支持SMT的使用。
