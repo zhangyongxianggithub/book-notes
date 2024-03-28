@@ -1581,7 +1581,68 @@ SDE模块包含一个自定义命名空间与相关元素来完成仓库bean的�
 - `ReactiveCrudRepository`
 - `ReactiveSortingRepository`
 ### Usage
+为了使用`Repository`访问存储在ES中的领域对象，只需要为它们创建接口，首先定义领域类
+```java
+public class Person {
 
+  @Id
+  private String id;//id属性必须是String的
+  private String firstname;
+  private String lastname;
+  private Address address;
+  // … getters and setters omitted
+}
+```
+```java
+interface ReactivePersonRepository extends ReactiveSortingRepository<Person, String> {
+// 方法查询给定lastname的所有人
+  Flux<Person> findByFirstname(String firstname);                                   
+// 方法等待Publisher的输入来绑定firstname参数值
+  Flux<Person> findByFirstname(Publisher<String> firstname);                        
+// 匹配firstname的所有人
+  Flux<Person> findByFirstnameOrderByLastname(String firstname);                    
+// 指定排序规则
+  Flux<Person> findByFirstname(String firstname, Sort sort);                        
+// 使用Pageable来分页
+  Flux<Person> findByFirstname(String firstname, Pageable page);                    
+// 使用And/Or关键词来创建criteria
+  Mono<Person> findByFirstnameAndLastname(String firstname, String lastname);       
+// 返回第一个匹配的人
+  Mono<Person> findFirstByLastname(String lastname);                                
+// 使用`@Query`注解执行查询
+  @Query("{ \"bool\" : { \"must\" : { \"term\" : { \"lastname\" : \"?0\" } } } }")
+  Flux<Person> findByLastname(String lastname);                                     
+// 匹配firstname的总数
+  Mono<Long> countByFirstname(String firstname)                                     
+// 判断firstname的人是否存在
+  Mono<Boolean> existsByFirstname(String firstname)                                 
+// 删除所有firstname的人
+  Mono<Long> deleteByFirstname(String firstname)                                    
+}
+```
+### Configuration
+对于Java配置来说，使用`@EnableReactiveElasticsearchRepositories`注解来启用相关的支持。如果没有配置base package。SDE扫描被注解的`@Confiuration`类所在的package。下面是一个例子:
+```java
+@Configuration
+@EnableReactiveElasticsearchRepositories
+public class Config extends AbstractReactiveElasticsearchConfiguration {
+  @Override
+  public ReactiveElasticsearchClient reactiveElasticsearchClient() {
+    return ReactiveRestClients.create(ClientConfiguration.localhost());
+  }
+}
+```
+因为前面的仓库继承了`ReactiveSortingRepository`，具有所有的CRUD操作与排序访问的支持。使用的例子如下:
+```java
+public class PersonRepositoryTests {
+  @Autowired ReactivePersonRepository repository;
+  @Test
+  public void sortsElementsCorrectly() {
+    Flux<Person> persons = repository.findAll(Sort.by(new Order(ASC, "lastname")));
+    // ...
+  }
+}
+```
 ## Query methods
 ### Query lookup strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
