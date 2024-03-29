@@ -1643,6 +1643,60 @@ public class PersonRepositoryTests {
   }
 }
 ```
+## Creating Repository Instances
+这一小节主要讲述如何为预定义的仓库接口创建实例与bean定义
+### Java Configuration
+使用`@EnableElasticsearchRepositories`注解来激活仓库支持。一个简单的例子如下:
+```java
+@Configuration
+@EnableJpaRepositories("com.acme.repositories")
+class ApplicationConfiguration {
+  @Bean
+  EntityManagerFactory entityManagerFactory() {
+    // …
+  }
+}
+```
+前面的例子使用JPA相关的注解，你可以根据你实际使用的底层存储调整。
+### XML Configuration
+每一个Spring Data模块都包括`repositories`元素，你可以定义一个base package，Spring会为你扫描，如下所示:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans:beans xmlns:beans="http://www.springframework.org/schema/beans"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns="http://www.springframework.org/schema/data/jpa"
+  xsi:schemaLocation="http://www.springframework.org/schema/beans
+    https://www.springframework.org/schema/beans/spring-beans.xsd
+    http://www.springframework.org/schema/data/jpa
+    https://www.springframework.org/schema/data/jpa/spring-jpa.xsd">
+
+  <jpa:repositories base-package="com.acme.repositories" />
+
+</beans:beans>
+```
+在前面的例子中，Spring被命令扫描`com.acme.repositories`与它的子包下的继承`Repository`的接口，对于发现的每个接口，SDE底层一个持久化的`FactoryBean`来创建合适的代理，代理管理查询方法的调用。bean的名字来自于接口名，所以`UserRepository`接口将会注册为`userRepository`，base package允许使用通配符，所以你可以定义package的模式。
+### Using Filters
+缺省情况下，底层基础设施会选择继承了`Repository`的子接口并为它们创建实例对象。然而，你可能想要细粒度的控制为哪些接口生成对象，为了做到这些，在仓库声明里面使用filter元素，语法完全等价于Spring components filters里面的元素，详情参考Spring官方文档。下面的是一个例子:
+```java
+@Configuration
+@EnableElasticsearchRepositories(basePackages = "com.acme.repositories",
+    includeFilters = { @Filter(type = FilterType.REGEX, pattern = ".*SomeRepository") },
+    excludeFilters = { @Filter(type = FilterType.REGEX, pattern = ".*SomeOtherRepository") })
+class ApplicationConfiguration {
+
+  @Bean
+  EntityManagerFactory entityManagerFactory() {
+    // …
+  }
+}
+```
+前面的例子包含所有以`SomeRepository`结尾的接口，排除所有以`SomeOtherRepository`结尾的接口。
+### Standalone Usage
+你可以在Spring IoC容器外使用仓库基础设置，比如，在CDI环境中，你仍然需要一些基础的Spring库，但是你可以自己编写代码来生成仓库实例对象，Spring Data模块提供了`RepositoryFactory`来支持生成仓库，如下所示:
+```java
+RepositoryFactorySupport factory = … // Instantiate factory here
+UserRepository repository = factory.getRepository(UserRepository.class);
+```
 ## Query methods
 ### Query lookup strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。

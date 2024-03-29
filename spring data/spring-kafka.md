@@ -193,6 +193,97 @@ interface Listener<K, V> {
 ```
 id=工厂bean的名字+.+client-id属性值构成。这些listeners可以用来为新创建的客户端创建并绑定一个Micrometer `KafkaClientMetrics`实例，在客户端关闭时，也需要同时关闭`KafkaClientMetrics`。框架已经提供了这种实现的listener，具体参考[Micrometer Native Metrics](https://docs.spring.io/spring-kafka/reference/kafka/micrometer.html#micrometer-native)
 ### Configuring Topics
+如果你定义了一个`KafkaAdmin`的bean，它可以自动添加topics到broker，为了做到这一点，你可以为每个topic添加一个`NewTopic`Bean到上下文中，2.3版本引入了一个新的类`TopicBuilder`来更方便的创建这些Bean，下面是一个例子:
+```java
+@Bean
+public KafkaAdmin admin() {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    return new KafkaAdmin(configs);
+}
+
+@Bean
+public NewTopic topic1() {
+    return TopicBuilder.name("thing1")
+            .partitions(10)
+            .replicas(3)
+            .compact()
+            .build();
+}
+
+@Bean
+public NewTopic topic2() {
+    return TopicBuilder.name("thing2")
+            .partitions(10)
+            .replicas(3)
+            .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "zstd")
+            .build();
+}
+
+@Bean
+public NewTopic topic3() {
+    return TopicBuilder.name("thing3")
+            .assignReplicas(0, List.of(0, 1))
+            .assignReplicas(1, List.of(1, 2))
+            .assignReplicas(2, List.of(2, 0))
+            .config(TopicConfig.COMPRESSION_TYPE_CONFIG, "zstd")
+            .build();
+}
+```
+从2.6版本开始，你可以忽略`partitions()`与`replicas()`，将会使用broker默认的配置。broker的版本至少是2.4.0来支持这一特性。
+```java
+@Bean
+public NewTopic topic4() {
+    return TopicBuilder.name("defaultBoth")
+            .build();
+}
+@Bean
+public NewTopic topic5() {
+    return TopicBuilder.name("defaultPart")
+            .replicas(1)
+            .build();
+}
+@Bean
+public NewTopic topic6() {
+    return TopicBuilder.name("defaultRepl")
+            .partitions(3)
+            .build();
+}
+```
+从2.7版本开始，你可以声明多个`NewTopic`
+```java
+@Bean
+public KafkaAdmin.NewTopics topics456() {
+    return new NewTopics(
+            TopicBuilder.name("defaultBoth")
+                .build(),
+            TopicBuilder.name("defaultPart")
+                .replicas(1)
+                .build(),
+            TopicBuilder.name("defaultRepl")
+                .partitions(3)
+                .build());
+}
+```
+当使用Spring Boot时，会自动注册一个`KafkaAdmin`Bean，你只需要定义`NewTopic`的Bean。缺省情况下，如果broker不可用，一个message会打印到日志，但是程序会继续运行。你可以手动调用admin的`initialize()`方法来稍后重试，如果你想要终止程序，将admin的`fatalIfBrokerNotAvailable`属性设置为true，程序将会失败退出。从2.7版本开始，`KafkaAdmin`提供了方法在运行时创建并检验topics。
+- `createOrModifyTopics`
+- `describeTopics`
+
+更多的高级特性，你可以直接使用`AdminClient`，下面是一个例子:
+```java
+@Autowired
+private KafkaAdmin admin;
+    AdminClient client = AdminClient.create(admin.getConfigurationProperties());
+    client.close();
+```
+从2.9.10，3.0.9版本开始，你可以提供一个`Predicate<NewTopic>`可以用来是否要创建一个`NewTopic`，当你有多个指向不同集群的`KafkaAdmin`对象的时候，你可能希望每个admin创建其自己的topics。
+```java
+admin.setCreateOrModifyTopic(nt -> !nt.name().equals("dontCreateThisOne"));
+```
+## Sending Messages
+如何发送消息
+### Using `KafkaTemplate`
+
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners
@@ -231,3 +322,9 @@ public interface BatchAcknowledgingConsumerAwareMessageListener<K, V> extends Ba
 }
 ```
 `Consumer`对象不是线程安全的，必须在调用listener的线上上调用它的方法。你不应该执行任何可能影响到listener中消费者的positions或者committed offsets的`Consumer<?,?>`方法，container需要管理这些信息。
+#### Message Listener Containers
+提供了2个`MessageListenerContainer`实现
+- `KafkaMessageListenerContainer`
+- `ConcurrentMessageListenerContainer`
+
+
