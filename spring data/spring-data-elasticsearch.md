@@ -1697,8 +1697,13 @@ class ApplicationConfiguration {
 RepositoryFactorySupport factory = … // Instantiate factory here
 UserRepository repository = factory.getRepository(UserRepository.class);
 ```
-## Query methods
-### Query lookup strategies
+## Defining Query Methods
+仓库代理有2种方法来从方法名衍生查询
+- 直接从方法名衍生查询
+- 使用自定义query
+
+SDE由策略决定如何生成实际的查询。
+### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
 通常来说，查询创建机制就是[QueryMethod](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#repositories.query-methods)里面所描述的，下面是一个例子，这个例子展示了ES查询方法是如何翻译为ES查询的:
