@@ -1706,7 +1706,10 @@ SDE由策略决定如何生成实际的查询。
 ### Query Lookup Strategies
 SDE使用下面的策略来解析查询。在XML配置下，你可以使用`query-lookup-strategy`来配置策略。对与Java配置，你可以使用`@EnableElasticsearchRepositories`注解的`queryLookupStrategy`属性来配置策略。
 - `CREATE`: 尝试从方法名构造一个查询，最通用的方式是从方法名移除一些常见的前缀并解析剩余的名字，你可以在[Query Creation](Query Creation)获得更多的信息
-- `USE_DECLARED_QUERY`: 
+- `USE_DECLARED_QUERY`: 尝试寻找一个声明式的查询，如果没有找到则抛出异常。查询可以是某处的注解来声明或者其他的方式
+- `CREATE_IF_NOT_FOUND`: 这是默认的策略，融合了前面2种策略，首先使用`USE_DECLARED_QUERY`策略，如果没有找到，使用`CREATE`策略。
+### Query Creation
+
 ### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
