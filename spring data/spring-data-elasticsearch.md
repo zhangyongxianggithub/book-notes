@@ -1709,7 +1709,27 @@ SDE使用下面的策略来解析查询。在XML配置下，你可以使用`quer
 - `USE_DECLARED_QUERY`: 尝试寻找一个声明式的查询，如果没有找到则抛出异常。查询可以是某处的注解来声明或者其他的方式
 - `CREATE_IF_NOT_FOUND`: 这是默认的策略，融合了前面2种策略，首先使用`USE_DECLARED_QUERY`策略，如果没有找到，使用`CREATE`策略。
 ### Query Creation
+SDE的查询构建机制对于构建领域类上的有限制的查询是非常有用的。下面是一些例子:
+```java
+interface PersonRepository extends Repository<Person, Long> {
 
+  List<Person> findByEmailAddressAndLastname(EmailAddress emailAddress, String lastname);
+
+  // Enables the distinct flag for the query
+  List<Person> findDistinctPeopleByLastnameOrFirstname(String lastname, String firstname);
+  List<Person> findPeopleDistinctByLastnameOrFirstname(String lastname, String firstname);
+
+  // Enabling ignoring case for an individual property
+  List<Person> findByLastnameIgnoreCase(String lastname);
+  // Enabling ignoring case for all suitable properties
+  List<Person> findByLastnameAndFirstnameAllIgnoreCase(String lastname, String firstname);
+
+  // Enabling static ORDER BY for a query
+  List<Person> findByLastnameOrderByFirstnameAsc(String lastname);
+  List<Person> findByLastnameOrderByFirstnameDesc(String lastname);
+}
+```
+解析查询方法名把分成subject/predicate2部分，第一部分(find...By,exists...By)定义了查询的主题，第二个部分形成了predicate，引入从句(主语)就可以包含更多的表达式，除非使用了限制结果的关键字之一(例如Distinct来设置查询中的唯一标志，或者Top/First来限制查询结果数)，否则在find(或其他引入关键字)和By之间的任何文本都被视为描述性的。附录部分包含了全部的查询方法subject关键词与查询方法predicate关键词。
 ### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
