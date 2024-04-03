@@ -1730,6 +1730,21 @@ interface PersonRepository extends Repository<Person, Long> {
 }
 ```
 解析查询方法名把分成subject/predicate2部分，第一部分(find...By,exists...By)定义了查询的主题，第二个部分形成了predicate，引入从句(主语)就可以包含更多的表达式，除非使用了限制结果的关键字之一(例如Distinct来设置查询中的唯一标志，或者Top/First来限制查询结果数)，否则在find(或其他引入关键字)和By之间的任何文本都被视为描述性的。附录部分包含了全部的查询方法subject关键词与查询方法predicate关键词。
+- 表达式通常是属性遍历与可连接的运算符相结合。可以使用`AND`和`OR`组合属性表达式。支持更多属性表达式的运算符(如Between、LessThan、GreaterThan和Like)等。支持的运算符可能因数据存储而异，因此请参阅参考文档的相应部分。
+- 方法解析器支持为单个属性(例如，findByLastnameIgnoreCase(…))或支持忽略大小写的类型的所有属性(通常是`String`对象，例如，findByLastnameAndFirstnameAllIgnoreCase(…))设置`IgnoreCase`标志。是否支持忽略大小写可能因底层存储而异，因此请参阅参考文档中的相关部分以了解特定存储的查询方法
+- 可以通过将`OrderBy`子句附加到引用属性的查询方法并提供排序方向(`Asc`或`Desc`)来应用静态排序。要创建支持动态排序的查询方法，请参阅[Paging, Iterating Large Results, Sorting & Limiting](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/query-methods-details.html#)
+### Property Expressions
+属性表达式只能引用管理实体的直接属性，在查询构建时，你要确保属性是管理的领域类的属性，然而，你也可以定义内嵌属性的查询，如下面的例子所示:
+```java
+List<Person> findByAddressZipCode(ZipCode zipCode);
+```
+假设一个人有一个`Address`对象，`Address`对象有`ZipCode`对象，在这种场景下，方法会遍历x.address.zipCode属性，解析算法首先将整个部分`AddressZipCode`解释为一个完整的属性，并在领域类中查找(首字母小写)，如果算法成功，就是用查找到的属性，如果没有，算法按照驼峰格式从右向左切分属性名，形成一个head与一个tail，并寻找相应的属性，上面的例子会切分成`AddressZip`与`Code`，如果算法找到head对应的属性，接下来寻找tail从head处递归解析，如果第一次切分没有匹配，算法向左转移切分点并继续解析。虽然这在大多数场景下都是OK的，算法仍有可能选错，假设`Person`类有一个`addressZip`属性，算法在第一次切分时就会选择到这个属性，然后因为没找到属性code而失败。为了解决这种混淆，你可以使用`_`分隔符，手动指定切分点，方法名如下所示
+```java
+List<Person> findByAddress_ZipCode(ZipCode zipCode);
+```
+因为我们将下划线认为是一个保留字符，所以我们强烈建议遵守Java的命名约定，也就是尽量不在属性名中使用下划线，而是使用驼峰命名方式。
+### Repository Methods Returning Collections or Iterables
+查询方法
 ### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
