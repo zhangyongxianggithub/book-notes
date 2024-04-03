@@ -1744,7 +1744,59 @@ List<Person> findByAddress_ZipCode(ZipCode zipCode);
 ```
 因为我们将下划线认为是一个保留字符，所以我们强烈建议遵守Java的命名约定，也就是尽量不在属性名中使用下划线，而是使用驼峰命名方式。
 ### Repository Methods Returning Collections or Iterables
-查询方法
+返回多个结果的查询方法可以使用标准Java的`Iterable`、`List`、`Set`等类型，除此以外，也支持返回Spring Data的`Streamable`以及Vavr库的集合类型。请参考附录，里面包含了所有可能的查询方法返回类型
+#### Using Streamable as Query Method Return Type
+使用`Streamable`作为`Iterable`或者其他集合类型的替代，它提供了方便的方法来访问一个`Stream`并可以直接使用`filter()`与`map()`等
+```java
+interface PersonRepository extends Repository<Person, Long> {
+  Streamable<Person> findByFirstnameContaining(String firstname);
+  Streamable<Person> findByLastnameContaining(String lastname);
+}
+
+Streamable<Person> result = repository.findByFirstnameContaining("av")
+  .and(repository.findByLastnameContaining("ea"));
+```
+#### Returning Custom Streamable Wrapper Types
+为集合类型提供了专门的包装类型，这是一种常用的模式，用于为返回多个元素的查询结果提供API。通常的方案是，调用返回类集合类型的仓库方法并手动创建包装器类型的实例来使用这些类型。可以避免这个额外的步骤，因为Spring Data允许您使用这些包装器类型直接作为查询方法返回类型，但是必须满足以下条件:
+- 类型必须实现`Streamable`
+- 类型要么公开构造器要么具有命名为`of(Streamable)`或者`valueOf(Streamable)`的静态工厂方法。下面是一个例子
+
+```java
+class Product {//一个Product的实体类
+  MonetaryAmount getPrice() { … }
+}
+
+@RequiredArgsConstructor(staticName = "of")
+class Products implements Streamable<Product> {//一个Streamable<Product>的包装器类型，可以使用`Products.of(...)`构造，使用Lombok注解常见的工厂方法，标准的构造函数也是Ok的
+
+  private final Streamable<Product> streamable;
+
+  public MonetaryAmount getTotal() {//包装器类型公开了额外的API，计算`Streamable<Product>`上新的值
+    return streamable.stream()
+      .map(Priced::getPrice)
+      .reduce(Money.of(0), MonetaryAmount::add);
+  }
+
+
+  @Override
+  public Iterator<Product> iterator() {//实现了`Streamable`接口，并委托到底层实际的实现
+    return streamable.iterator();
+  }
+}
+
+interface ProductRepository implements Repository<Product, Long> {
+  Products findAllByDescriptionContaining(String text);//查询方法返回类型可以直接使用包装器类型，你不需要返回`Streamable<Product>`
+}
+```
+#### Support for Vavr Collections
+Vavr是一个专门用于函数式编程的Java库，它里面包含了很多的自定义集合类型，你可以作为方法的返回类型，如下表所示
+|Vavr collection type|Used Vavr implementation type|Valid Java source types|
+|:---|:---|:---|
+|`io.vavr.collection.Seq`|`io.vavr.collection.Seq`|`java.util.Iterable`|
+|`io.vavr.collection.Set`|`io.vavr.collection.LinkedHashSet`|`java.util.Iterable`|
+|`io.vavr.collection.Map`|`io.vavr.collection.LinkedHashMap`|`java.util.Map`|
+
+
 ### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
