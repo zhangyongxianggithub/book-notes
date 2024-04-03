@@ -1796,11 +1796,101 @@ Vavr是一个专门用于函数式编程的Java库，它里面包含了很多的
 |`io.vavr.collection.Set`|`io.vavr.collection.LinkedHashSet`|`java.util.Iterable`|
 |`io.vavr.collection.Map`|`io.vavr.collection.LinkedHashMap`|`java.util.Map`|
 
+你可以使用上表中的第一列的类型或者子类型作为返回类型，第二列作为返回类型的实现类型，这是与java本身的集合类型相对应的。另外，你可以声明`Traversable`类型，等价于`Iterable`类型，我们会从实际的返回值推导出实现类，也就是实际返回值是`java.util.List`会被调整成Vavr的`List`或者`Seq`，`java.util.Set`会被调整成`LinkedHashSet`.
+### Streaming Query Results
+可以使用Java8的`Stream`作为返回类型，例子:
+```java
+@Query("select u from User u")
+Stream<User> findAllByCustomQueryAndStream();
+Stream<User> readAllByFirstnameNotNull();
+@Query("select u from User u")
+Stream<User> streamAllPaged(Pageable pageable);
+```
+`Stream`底层包含了一些底层存储的资源，因此使用完毕后一定要close，你可以使用`Stream`的`close()`来关闭或者使用try-with-resources的方式关闭，如下所示
+```java
+try (Stream<User> stream = repository.findAllByCustomQueryAndStream()) {
+  stream.forEach(…);
+}
+```
+### Asynchronous Query Results
+查询可以异步执行，这意味着，方法调用会立即返回，实际查询发生在Spring的`TaskExecutor`的线程中，异步查询不同于reactive查询，下面的例子是异步查询
+```java
+@Async/
+Future<User> findByFirstname(String firstname);
 
+@Async
+CompletableFuture<User> findOneByFirstname(String firstname);
+```
+### Paging, Iterating Large Results, Sorting & Limiting
+SDE会识别特定的方法参数类型，比如`Pageable`、`Sort`、`Limit`来动态的处理分页、排序、limit。下面的例子展示了这些特性
+```java
+Page<User> findByLastname(String lastname, Pageable pageable);
+
+Slice<User> findByLastname(String lastname, Pageable pageable);
+
+List<User> findByLastname(String lastname, Sort sort);
+
+List<User> findByLastname(String lastname, Sort sort, Limit limit);
+
+List<User> findByLastname(String lastname, Pageable pageable);
+```
+API认为这些特定参数都是非null的，不要传null，如果不想分页或者排序神马的，传`Sort.unsorted()`, `Pageable.unpaged()`,`Limit.unlimited()`。分页查询会返回`Page`接口的结果，里面有所有的元素数以及一共多少页，这是通过count查询实现的，因为这可能会比较耗时，你可以返回`Slice`,`Slice`含有是否有下一个`Slice`的信息，当遍历大的结果集的时候可能比较有用。`Pageable`也支持排序而`Sort`只支持排序，支持返回List，此时不需要构造Page，也不需要执行count查询来得到`Page`中的必要的信息。特定的参数在查询方法中最好只使用一次，一些参数直接可能是互斥的，比如下面的例子
+```java
+findBy…​(Pageable page, Sort sort) //Pageable already defines Sort
+findBy…​(Pageable page, Limit limit)// Pageable already defines a limit.
+```
+`Top`关键字用来限定返回的结果数，可以与`Pageable`一起使用，top定义结果的最大总数，而`Pageable`可能会减少此数量。
+#### Which Method is Appropriate?
+Spring Data抽象根据查询方法的返回类型提供的值的选择性列在下面的表格中。你可以根据此了解应该使用哪种返回类型
+|Method|Amount of Data Fetched|Query Structure|Constraints|
+|:---|:---|:---|:---|
+|`List<T>`|所有的结果|单一查询|查询结果可能耗尽内存，拉取所有结果是非常耗时的|
+|`Streamable<T>`|所有结果|单一查询|查询结果可能耗尽内存，拉取所有结果是非常耗时的|
+|`Stream<T>`|分块的，一条接一条|单一查询使用游标|使用完毕后必须关闭，避免资源泄漏|
+|`Flux<T>`|分块的，一条接一条|单一查询使用游标|必须支持响应式|
+|`Slice<T>`|Pageable.getPageSize() + 1 at Pageable.getOffset()|不知到在讲啥||
+|`Page<T>`|Pageable.getPageSize() at Pageable.getOffset()||需要执行count查询|
+#### Paging and Sorting
+你可以使用属性名来定义简单的排序表达式，可以把多个表达式拼接到一起
+```java
+Sort sort = Sort.by("firstname").ascending()
+  .and(Sort.by("lastname").descending());
+```
+类型安全的方式是使用属性的方法引用来定义排序表达式
+```java
+TypedSort<Person> person = Sort.sort(Person.class);
+
+Sort sort = person.by(Person::getFirstname).ascending()
+  .and(person.by(Person::getLastname).descending());
+```
+`TypedSort.by(…)`需要运行时代理使用`CGlib`，可能会到native image编译造成影响。如果你的底层存储支持`Querydsl`，你可以使用生成的metamodel类型类定义排序表达式:
+```java
+QSort sort = QSort.by(QPerson.firstname.asc())
+  .and(QSort.by(QPerson.lastname.desc()));
+```
+#### Limiting Query Results
+除了分页，可以使用专门的`Limit`参数来限定返回的结果数量。也可以使用`Top`或者`First`关键词，可以交换使用，但是不要与`Limit`参数混合使用，你可以在`Top`或者`First`后指定一个可选的数字值来指定要返回的最大数量，如果没有指定数量，默认返回1条，下面的例子展示了如何限定结果数量
+```java
+List<User> findByLastname(Limit limit);
+
+User findFirstByOrderByLastnameAsc();
+
+User findTopByOrderByAgeDesc();
+
+Page<User> queryFirst10ByLastname(String lastname, Pageable pageable);
+
+Slice<User> findTop3ByLastname(String lastname, Pageable pageable);
+
+List<User> findFirst10ByLastname(String lastname, Sort sort);
+
+List<User> findTop10ByLastname(String lastname, Pageable pageable);
+```
+支持`Distinct`，返回结果支持`Optional`
+## Query methods
 ### Query Lookup Strategies
 es模块支持构建所有基本的查询: string查询、native search查询、criteria查询或者方法名查询。从方法名派生查询有时实现不了或者方法名不可读。在这种情况下，你可以使用`@Query`注解查询，参考[Using @Query Annotation](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#elasticsearch.query-methods.at-query)。
 ### Query创建
-通常来说，查询创建机制就是[QueryMethod](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#repositories.query-methods)里面所描述的，下面是一个例子，这个例子展示了ES查询方法是如何翻译为ES查询的:
+通常来说，查询创建机制描述在[Defining Query Methods](https://docs.spring.io/spring-data/elasticsearch/docs/current/reference/html/#repositories.query-methods)里面所描述的，下面是一个例子，这个例子展示了ES查询方法是如何翻译为ES查询的:
 ```java
 interface BookRepository extends Repository<Book, String> {
   List<Book> findByNameAndPrice(String name, Integer price);
@@ -1819,15 +1909,33 @@ interface BookRepository extends Repository<Book, String> {
     }
 }
 ```
-支持的关键字列表如下,集体列表的内容参考官方文档吧.
+支持的关键字列表如下
+|keyword|Sample|Elasticsearch Query String|
+|:---|:---|:---|
+|And|findByNameAndPrice|`{\n  "query": {\n    "bool": {\n      "must": [\n        { "query_string": { "query": "?", "fields": ["name"] } },\n        { "query_string": { "query": "?", "fields": ["price"] } }\n      ]\n    }\n  }\n}\n`|
+|Or|findByNameOrPrice|`{\n  "query": {\n    "bool": {\n      "should": [\n        { "query_string": { "query": "?", "fields": ["name"] } },\n        { "query_string": { "query": "?", "fields": ["price"] } }\n      ]\n    }\n  }\n}\n`|
+|Is|findByName|`{\n  "query": {\n    "bool": {\n      "must": [{ "query_string": { "query": "?", "fields": ["name"] } }]\n    }\n  }\n}\n`|
+|Not|findByNameNot|`{\n  "query": {\n    "bool": {\n      "must_not": [{ "query_string": { "query": "?", "fields": ["name"] } }]\n    }\n  }\n}\n`|
+|Between|findByPriceBetween|`{\n  "query": {\n    "bool": {\n      "must": [\n        {\n          "range": {\n            "price": {\n              "from": ?,\n              "to": ?,\n              "include_lower": true,\n              "include_upper": true\n            }\n          }\n        }\n      ]\n    }\n  }\n}\n`|
+|LessThan|findByPriceLessThan|`{\n    "query": {\n        "bool": {\n            "must": [\n                {\n                    "range": {\n                        "price": {\n                            "from": null,\n                            "to": ?,\n                            "include_lower": true,\n                            "include_upper": false\n                        }\n                    }\n                }\n            ]\n        }\n    }\n}`|
+|LessThanEqual|findByPriceLessThanEqual|`{\n    "query": {\n        "bool": {\n            "must": [\n                {\n                    "range": {\n                        "price": {\n                            "from": null,\n                            "to": ?,\n                            "include_lower": true,\n                            "include_upper": true\n                        }\n                    }\n                }\n            ]\n        }\n    }\n}`|
+|GreaterThan|findByPriceGreaterThan|`{ "query" : {\n    "bool" : {\n    "must" : [\n    {"range" : {"price" : {"from" : ?, "to" : null, "include_lower" : false, "include_upper" : true } } }\n    ]\n    }\n    }}`|
+|GreaterThanEqual|findByPriceGreaterThanEqual|`{ "query" : {\n    "bool" : {\n    "must" : [\n    {"range" : {"price" : {"from" : ?, "to" : null, "include_lower" : true, "include_upper" : true } } }\n    ]\n    }\n    }}`|
+|In (when annotated as FieldType.Keyword)|findByNameIn(Collection<String>names)|`{ "query" : {\n    "bool" : {\n    "must" : [\n    {"bool" : {"must" : [\n    {"terms" : {"name" : ["?","?"]}}\n    ]\n    }\n    }\n    ]\n    }\n    }}`|
+|In|findByNameIn(Collection<String>names)|`{ "query": {"bool": {"must": [{"query_string":{"query": "\"?\" \"?\"", "fields": ["name"]}}]}}}`|
+|NotIn|findByNameNotIn(Collection<String>names)|`{\n  "query": {\n    "bool": {\n      "must": [\n        { "query_string": { "query": "NOT(\"?\" \"?\")", "fields": ["name"] } }\n      ]\n    }\n  }\n}\n`|
+|OrderBy|findByAvailableTrueOrderByNameDesc|`{\n  "query": {\n    "bool": {\n      "must": [{ "query_string": { "query": "true", "fields": ["available"] } }]\n    }\n  },\n  "sort": [{ "name": { "order": "desc" } }]\n}\n`|
+|Exists|findByNameExists|`{"query":{"bool":{"must":[{"exists":{"field":"name"}}]}}}`|
+
+方法名的方式不支持Geo-shape查询，请使用`ElasticsearchOperations`的`CriteriaQuery`。
 ### Method return types
 Repository方法可以返回下面的类型:
-- List<T>
-- Stream<T>
-- SearchHits<T>
-- List<SearchHit<T>>
-- Stream<SearchHit<T>>
-- SearchPage<T>
+- `List<T>`
+- `Stream<T>`
+- `SearchHits<T>`
+- `List<SearchHit<T>>`
+- `Stream<SearchHit<T>>`
+- `SearchPage<T>`
 
 ### Using @Query注解
 在方法上声明查询，参数可以通过查询字符串中的占位符定义。占位符类似?0,?1,?2这种:
@@ -1854,7 +1962,7 @@ interface BookRepository extends ElasticsearchRepository<Book, String> {
 @Query("{\"ids\": {\"values\": ?0 }}")
 List<SampleEntity> getByIds(Collection<String> ids);
 ```
-将会返回IDs规定的所有文档:
+将会执行一个[IDs query](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-ids-query.html)来返回IDs规定的所有文档:
 ```json
 {
   "query": {
@@ -1864,6 +1972,29 @@ List<SampleEntity> getByIds(Collection<String> ids);
   }
 }
 ```
+## Projections
+Spring Data查询方法通常会返回仓库管理的聚合根的一个或者多个实例对象。有时想要创建聚合根的几个属性的投影。Spring Data允许返回专门的投影类型。考虑如下的例子:
+```java
+class Person {
+
+  @Id UUID id;
+  String firstname, lastname;
+  Address address;
+
+  static class Address {
+    String zipCode, city, street;
+  }
+}
+
+interface PersonRepository extends Repository<Person, UUID> {
+
+  Collection<Person> findByLastname(String lastname);
+}
+```
+现在想象我们只想要检索人的名字，怎么做呢
+### Interface-based Projections
+
+# Old version
 ## Reactive Elasticsearch Repositories
 Reactive Elasticsearch Repositories通过Reactive Elasticsearch Operations实现。SDE Reactive repo使用Project Reactor作为底层库。有3个可用的接口：
 - ReactiveRepository
