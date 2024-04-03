@@ -1729,7 +1729,7 @@ interface PersonRepository extends Repository<Person, Long> {
   List<Person> findByLastnameOrderByFirstnameDesc(String lastname);
 }
 ```
-解析查询方法名把分成subject/predicate2部分，第一部分(find...By,exists...By)定义了查询的主题，第二个部分形成了predicate，引入从句(主语)就可以包含更多的表达式，除非使用了限制结果的关键字之一(例如Distinct来设置查询中的唯一标志，或者Top/First来限制查询结果数)，否则在find(或其他引入关键字)和By之间的任何文本都被视为描述性的。附录部分包含了全部的查询方法subject关键词与查询方法predicate关键词。
+解析查询方法名把分成subject/predicate2部分，第一部分(find...By,exists...By)定义了查询的主题，第二个部分形成了predicate，引入从句(主语)就可以包含更多的表达式，除非使用了限制结果的关键字之一(例如Distinct来设置查询中的唯一标志，或者Top/First来限制查询结果数)，否则在find(或其他引入关键字)和By之间的任何文本都被视为描述性的。附录部分包含了全部的查询方法subject关键词与查询方法predicate关键词。解析方法的实际的结果依赖底层的存储，有一些需要注意的是:
 - 表达式通常是属性遍历与可连接的运算符相结合。可以使用`AND`和`OR`组合属性表达式。支持更多属性表达式的运算符(如Between、LessThan、GreaterThan和Like)等。支持的运算符可能因数据存储而异，因此请参阅参考文档的相应部分。
 - 方法解析器支持为单个属性(例如，findByLastnameIgnoreCase(…))或支持忽略大小写的类型的所有属性(通常是`String`对象，例如，findByLastnameAndFirstnameAllIgnoreCase(…))设置`IgnoreCase`标志。是否支持忽略大小写可能因底层存储而异，因此请参阅参考文档中的相关部分以了解特定存储的查询方法
 - 可以通过将`OrderBy`子句附加到引用属性的查询方法并提供排序方向(`Asc`或`Desc`)来应用静态排序。要创建支持动态排序的查询方法，请参阅[Paging, Iterating Large Results, Sorting & Limiting](https://docs.spring.io/spring-data/elasticsearch/reference/repositories/query-methods-details.html#)
