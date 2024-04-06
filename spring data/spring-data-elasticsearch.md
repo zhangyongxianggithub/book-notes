@@ -1993,7 +1993,221 @@ interface PersonRepository extends Repository<Person, UUID> {
 ```
 现在想象我们只想要检索人的名字，怎么做呢
 ### Interface-based Projections
+最简单的方式是声明接口，接口只暴露要读区的属性的访问方法，如下例子所示:
+```java
+interface NamesOnly {
 
+  String getFirstname();
+  String getLastname();
+}
+```
+这里定义的属性要精确匹配聚合根中的属性，然后添加如下的查询方法：
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+  Collection<NamesOnly> findByLastname(String lastname);
+}
+```
+查询执行引擎会在运行时为每一个返回的元素创建一个接口的代理实例，将对访问方法的调用转发到底层实际的对象。在`Repository`接口中声明的方法如果覆盖了基本内置方法，将只会调用基本内置方法而不管返回类型，确保使用兼容的返回类型，因为基方法不能用于投影。一些存储模块支持`@Query`注解，将重写的基本方法转换为查询方法，然后可用于返回投影。投影可以递归的使用，如果你想要包含一些`Address`的信息，创建一个接口，并返回它，如下面的例子所示:
+```java
+interface PersonSummary {
+
+  String getFirstname();
+  String getLastname();
+  AddressSummary getAddress();
+
+  interface AddressSummary {
+    String getCity();
+  }
+}
+```
+在方法调用时，目标实例的`address`属性会被获取并被包含在一个投影代理中。
+#### Closed Projecttions(封闭式投影)
+一个投影接口，它的访问方法都匹配目标聚合根的属性，被认为是封闭式投影，下面的例子就是一个封闭式投影
+```java
+interface NamesOnly {
+
+  String getFirstname();
+  String getLastname();
+}
+```
+如果你使用封闭式投影，Spring Data可以优化执行查询，因为我们知道需要生成投影代理的所需要的所有的属性。
+#### Open Projections
+投影代理中的访问方法也能用来计算新的值，这是通过`@Value`注解实现的，如下面的例子所示:
+```java
+interface NamesOnly {
+
+  @Value("#{target.firstname + ' ' + target.lastname}")
+  String getFullName();
+  …
+}
+```
+聚合根就是里面的target变量，使用了`@Value`的投影接口是开放式投影，Spring Data不能对开放式投影应用查询优化，因为SpEL表达式可以使用聚合根的任意属性。在`@Value`注解中的表达式不要太复杂，你应该避免用字符串变量编程，对于简单的表达式，你可以使用Java8的默认方法，如下面的例子所示:
+```java
+interface NamesOnly {
+
+  String getFirstname();
+  String getLastname();
+
+  default String getFullName() {
+    return getFirstname().concat(" ").concat(getLastname());
+  }
+}
+```
+还有一种方法就是在一个Spring Bean中实现逻辑并通过SpEl表达式调用，如下面的例子所示:
+```java
+@Component
+class MyBean {
+
+  String getFullName(Person person) {
+    …
+  }
+}
+
+interface NamesOnly {
+
+  @Value("#{@myBean.getFullName(target)}")
+  String getFullName();
+  …
+}
+```
+我们注意到，SpEL表达式引用了`myBean`然后调用了`getFullName(...)`方法，使用了投影背后的聚合根作为方法的参数，SpEL表达式求值支持的方法也可以使用方法参数，然后可以从表达式中引用这些参数。方法参数可通过名为args的对象数组获得。以下示例显示如何从args数组获取方法参数：
+```java
+interface NamesOnly {
+
+  @Value("#{args[0] + ' ' + target.firstname + '!'}")
+  String getSalutation(String prefix);
+}
+```
+另外，对于复杂的表达式，你应该使用Spring Bean并让表达式调用方法。
+#### Nullable Wrappers
+投影接口中的Getters可以使用nullable wrappers来提升null-safety，目前支持的wrapper类型有:
+- `java.util.Optional`
+- `com.google.common.base.Optional`
+- `scala.Option`
+- `io.vavr.control.Option`
+
+```java
+interface NamesOnly {
+
+  Optional<String> getFirstname();
+}
+```
+### Class-based Projections (DTOs)
+另外一种定义投影的方式使用值类型DTOs(data transfer objects)，它们持有需要检索的属性，使用的方式与接口投影的方式类似，但是不会产生代理也不能使用嵌套投影。如果底层存储要通过限制读取的field来优化查询执行，这些field要通过构造函数的参数来决定。下面是一个例子:
+```java
+record NamesOnly(String firstname, String lastname) {
+}
+```
+Java Record适合用来定义DTO类型，因为它们遵守值类型语义。所有的fields都是`private final`的并且`equals(...)/hashCode(...)/toString()`方法都是自动创建的。另外·你可以使用任意类。
+### Dynamic Projections
+到此为止，我们已经使用投影类型作为返回类型或者集合的元素类型，然而，你可能想要早运行时要就是实际调用时决定使用哪种返回类型，为了应用动态投影，可以使用下面例子中的查询方法
+```java
+interface PersonRepository extends Repository<Person, UUID> {
+
+  <T> Collection<T> findByLastname(String lastname, Class<T> type);
+}
+```
+这样，方法可以返回聚合根或者投影类型
+```java
+void someMethod(PersonRepository people) {
+
+  Collection<Person> aggregates =
+    people.findByLastname("Matthews", Person.class);
+
+  Collection<NamesOnly> aggregates =
+    people.findByLastname("Matthews", NamesOnly.class);
+}
+```
+`Class`类型的查询参数会被检查是否是动态动态投影参数，如果查询的返回类型等于`Class`参数定义的泛型参数类型。
+## Custom Repository Implementations
+Spring Data提供了多种选项来使用最少的带来来创建查询方法。如果这些不满足你的需求，你也可以为这些仓库方法提供你自己的实现。
+### Customizing Individual Repositories
+为了让仓库支持自定义功能，首先需要定义一个接口然后使用自定义实现实现这个接口
+```java
+interface CustomizedUserRepository {
+  void someCustomMethod(User user);
+}
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+
+  public void someCustomMethod(User user) {
+    // Your custom implementation
+  }
+}
+```
+类名的最重要的部分时相比于接口，实现是接口名+Impl后缀。实现本身不依赖Spring Data，可以是普通的Spring Bean，因此，你可以使用标准的依赖注入行为。然后让你的仓库接口继承自定义接口，如下所示:
+```java
+interface UserRepository extends CrudRepository<User, Long>, CustomizedUserRepository {
+
+  // Declare query methods here
+}
+```
+扩展自定义接口的新接口组合了所有的操作，Spring Data仓库是通过使用多个原子仓库片段组合实现的。片段是base repository、functional aspects(例如QueryDsl)、自定义接口及其实现。每次将接口添加到仓库接口时，您都可以通过添加片段来增强组合。base respository和repository aspect实现由每个Spring Data模块提供。下面的例子展示了自定义接口与它们的实现
+```java
+interface HumanRepository {
+  void someHumanMethod(User user);
+}
+
+class HumanRepositoryImpl implements HumanRepository {
+
+  public void someHumanMethod(User user) {
+    // Your custom implementation
+  }
+}
+
+interface ContactRepository {
+
+  void someContactMethod(User user);
+
+  User anotherContactMethod(User user);
+}
+
+class ContactRepositoryImpl implements ContactRepository {
+
+  public void someContactMethod(User user) {
+    // Your custom implementation
+  }
+
+  public User anotherContactMethod(User user) {
+    // Your custom implementation
+  }
+}
+```
+下面的例子展示了接口组合
+```java
+interface UserRepository extends CrudRepository<User, Long>, HumanRepository, ContactRepository {
+
+  // Declare query methods here
+}
+```
+仓库可能由多个自定义实现构成，这些自定义实现按照声明的顺序导入。自定义实现比base repository/repository aspect有更高的优先级，这样可以覆盖base repository/repository aspect的方法。自定义实现可以用在多个repository中，可以复用下面是一个例子
+```java
+interface CustomizedSave<T> {
+  <S extends T> S save(S entity);
+}
+
+class CustomizedSaveImpl<T> implements CustomizedSave<T> {
+
+  public <S extends T> S save(S entity) {
+    // Your custom implementation
+  }
+}
+interface UserRepository extends CrudRepository<User, Long>, CustomizedSave<User> {
+}
+
+interface PersonRepository extends CrudRepository<Person, Long>, CustomizedSave<Person> {
+}
+```
+#### Configuration
+仓库基础设施会尝试自动检测自定义实现，方法是在发现repository所在的package下面扫描类，自定义实现需要遵循命名约定，也就是后面有Impl后缀。
+```java
+@EnableElasticsearchRepositories(repositoryImplementationPostfix = "MyPostfix")
+class Configuration { … }
+```
+## Publishing Events from Aggregate Roots
+## Null Handling of Repository Methods
+## CDI Integration
+## Repository query keywords
+## Repository query return types
 # Old version
 ## Reactive Elasticsearch Repositories
 Reactive Elasticsearch Repositories通过Reactive Elasticsearch Operations实现。SDE Reactive repo使用Project Reactor作为底层库。有3个可用的接口：
