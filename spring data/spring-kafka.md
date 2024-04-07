@@ -1,3 +1,4 @@
+[TOC]
 # overview
 Spring for Apache Kafka项目将Spring概念应用到基于Kafka的消息解决方案的开发中。我们提供一个一个`template`作为发送消息的高级抽象组件，我们也支持消息驱动的·POJOs。
 # Introduction
@@ -283,7 +284,111 @@ admin.setCreateOrModifyTopic(nt -> !nt.name().equals("dontCreateThisOne"));
 ## Sending Messages
 如何发送消息
 ### Using `KafkaTemplate`
+`KafkaTemplate`包含了一个生产者，提供了方便的方法发送数据到Kafka的topis，下面是相关的方法
+```java
+CompletableFuture<SendResult<K, V>> sendDefault(V data);
 
+CompletableFuture<SendResult<K, V>> sendDefault(K key, V data);
+
+CompletableFuture<SendResult<K, V>> sendDefault(Integer partition, K key, V data);
+
+CompletableFuture<SendResult<K, V>> sendDefault(Integer partition, Long timestamp, K key, V data);
+
+CompletableFuture<SendResult<K, V>> send(String topic, V data);
+
+CompletableFuture<SendResult<K, V>> send(String topic, K key, V data);
+
+CompletableFuture<SendResult<K, V>> send(String topic, Integer partition, K key, V data);
+
+CompletableFuture<SendResult<K, V>> send(String topic, Integer partition, Long timestamp, K key, V data);
+
+CompletableFuture<SendResult<K, V>> send(ProducerRecord<K, V> record);
+
+CompletableFuture<SendResult<K, V>> send(Message<?> message);
+
+Map<MetricName, ? extends Metric> metrics();
+
+List<PartitionInfo> partitionsFor(String topic);
+
+<T> T execute(ProducerCallback<K, V, T> callback);
+
+<T> T executeInTransaction(OperationsCallback<K, V, T> callback);
+
+// Flush the producer.
+void flush();
+
+interface ProducerCallback<K, V, T> {
+
+    T doInKafka(Producer<K, V> producer);
+
+}
+
+interface OperationsCallback<K, V, T> {
+
+    T doInOperations(KafkaOperations<K, V> operations);
+
+}
+```
+在3.0版本，前面提到的返回`ListenableFuture`的方法已经改为返回`CompletableFuture`，2.9版本添加了一个方法`usingCompletableFuture()`这个会提供返回`CompletableFuture`的发送方法。`sendDefault`API需要提供一个缺省的topic。API支持一个叫做`timestamp`的参数并存储到record中，这个时间戳如何存储依赖topic配置中时间戳类型配置。如果topic配置使用`CREATE_TIME`,record携带用户提供的事件戳(不存在则自动生成)，如果topic配置使用`LOG_APPEND_TIME`，用户提供的时间戳会被忽略，broker添加本地的broker时间作为record的时间戳。`metrics`与`partitionsFor`方法实际就是底层库的Producer上的同样的方法，`executr`提供了对底层使用的Producer的访问接口。为了使用template，你可以配置一个producer factory，并在template的构造函数提供它，如下所示:
+```java
+@Bean
+public ProducerFactory<Integer, String> producerFactory() {
+    return new DefaultKafkaProducerFactory<>(producerConfigs());
+}
+
+@Bean
+public Map<String, Object> producerConfigs() {
+    Map<String, Object> props = new HashMap<>();
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+    props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+    props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    // See https://kafka.apache.org/documentation/#producerconfigs for more properties
+    return props;
+}
+
+@Bean
+public KafkaTemplate<Integer, String> kafkaTemplate() {
+    return new KafkaTemplate<Integer, String>(producerFactory());
+}
+```
+从2.5版本开始，你可以覆盖factory中的`ProducerConfig`属性，在创建template时使用不同的生产者属性
+```java
+@Bean
+public KafkaTemplate<String, String> stringTemplate(ProducerFactory<String, String> pf) {
+    return new KafkaTemplate<>(pf);
+}
+
+@Bean
+public KafkaTemplate<String, byte[]> bytesTemplate(ProducerFactory<String, byte[]> pf) {
+    return new KafkaTemplate<>(pf,
+            Collections.singletonMap(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class));
+}
+```
+记住，`ProducerFactory<?, ?>`类型的bean(比如Spring Boot自动创建的)，可以通过不同的泛型类型参数引用，你也可以使用标准的`<bean/>`定义配置template，当你使用带有`Message<?>`参数的方法时，需要在消息头提供topic、partition、key与时间戳信息。具体就是
+- `KafkaHeaders.TOPIC`
+- `KafkaHeaders.PARTITION`
+- `KafkaHeaders.KEY`
+- `KafkaHeaders.TIMESTAMP`
+
+message的payload就是数据。可选的，你可以为`KafkaTemplate`配置一个`ProducerListener`来执行异步回调，不需要等待`Future`执行完，下面的列表是`ProducerListener`接口的定义:
+```java
+public interface ProducerListener<K, V> {
+
+    void onSuccess(ProducerRecord<K, V> producerRecord, RecordMetadata recordMetadata);
+
+    void onError(ProducerRecord<K, V> producerRecord, RecordMetadata recordMetadata,
+            Exception exception);
+
+}
+```
+缺省情况下，template已经配置了一个`LoggingProducerListener`，主要的作用就是发生错误时打印错误，成功时什么都不做。为了方便，接口都提供了默认实现，你可以只实现需要的方法逻辑。发送的方法都返回`CompletableFuture<SendResult>`你可以注册回调监听器来异步的接收发送的结果。下面是一个例子:
+```java
+CompletableFuture<SendResult<Integer, String>> future = template.send("myTopic", "something");
+future.whenComplete((result, ex) -> {
+    ...
+});
+```
+`SendResult`有2个属性，一个`ProducerRecord`一个`RecordMetadata`，
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners
