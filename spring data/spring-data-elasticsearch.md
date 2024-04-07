@@ -2203,9 +2203,153 @@ interface PersonRepository extends CrudRepository<Person, Long>, CustomizedSave<
 @EnableElasticsearchRepositories(repositoryImplementationPostfix = "MyPostfix")
 class Configuration { … }
 ```
+#### Resolution of Ambiguity
+如果在不同的package内发现了多个匹配类名的实现，Spring Data使用bean的名字来识别使用哪一个。假如存在下面2个`CustomizedUserRepository`实现，那么第一个会被选择使用，它的bean名字是`customizedUserRepositoryImpl`，匹配接口名+Impl后缀。
+```java
+package com.acme.impl.one;
+
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+
+  // Your custom implementation
+}
+package com.acme.impl.two;
+
+@Component("specialCustomImpl")
+class CustomizedUserRepositoryImpl implements CustomizedUserRepository {
+
+  // Your custom implementation
+}
+```
+如果在`UserRepository`接口中使用注解`@Component("specialCustom")`，那么bean名字+Impl会匹配第二个实现，会使用第二个实现。
+#### Manual Wiring
+如果您的自定义实现仅使用基于注解的配置和自动装配，则前面显示的方法效果很好，因为它被视为任何Spring bean。如果您的实现bean需要特殊wiring，您可以声明该bean并根据上一节中描述的约定对其进行命名。然后，基础设施通过名称引用手动定义的bean定义，而不是自行创建bean定义。以下示例展示了如何手动连接自定义实现:
+```java
+class MyClass {
+  MyClass(@Qualifier("userRepositoryImpl") UserRepository userRepository) {
+    …
+  }
+}
+```
+### Customize the Base Repository
+前面章节中描述的方式需要自定义仓库片段接口与实现。特别是你想要改变base repository的行为时，要定义很多的接口。为了方便的改变base repository的行为，你可以创建一个继承底层仓库实现类的实现。这个类会作为仓库代理的底层实现基类，如下所示:
+```java
+class MyRepositoryImpl<T, ID>
+  extends SimpleJpaRepository<T, ID> {
+
+  private final EntityManager entityManager;
+
+  MyRepositoryImpl(JpaEntityInformation entityInformation,
+                          EntityManager entityManager) {
+    super(entityInformation, entityManager);
+
+    // Keep the EntityManager around to used from the newly introduced methods.
+    this.entityManager = entityManager;
+  }
+
+  @Transactional
+  public <S extends T> S save(S entity) {
+    // implementation goes here
+  }
+}
+```
+该类需要具有跟超类一样的构造函数签名，构造函数通常会使用存储的仓库工厂类作为参数来生成仓库实例。如果自定义基类具有多个构造函数，请重写使用`EntityInformation`与特定存储基础设施对象(例如`EntityManager`或模板类)作为参数的构造函数。最后是让Spring Data知晓自定义实现基类，在配置上，你可以使用`repositoryBaseClass`，如下所示:
+```java
+@Configuration
+@EnableElasticsearchRepositories(repositoryBaseClass = MyRepositoryImpl.class)
+class ApplicationConfiguration { … }
+```
 ## Publishing Events from Aggregate Roots
+由仓库管理的实体就是聚合根。在领域驱动设计的应用中，这些聚合根通常会发布领域事件。Spring Data提供了一个叫做`@DomainEvents`的注解，你可以使用在聚合根的方法上，事件的发布非常方便，如下所示：
+```java
+class AnAggregateRoot {
+
+    @DomainEvents//方法可以返回单一事件或者多个事件，必须是无参函数
+    Collection<Object> domainEvents() {
+        // … return events you want to get published here
+    }
+
+    @AfterDomainEventPublication//在所有事件发布后调用，你可以用它来做一些收尾工作
+    void callbackMethod() {
+       // … potentially clean up domain events list
+    }
+}
+```
+每次下面的Spring Data仓库方法被调用时，事件方法就会被调用:
+- `save(…)`
+- `saveAll(…)`
+- `delete(…)`
+- `deleteAll(…)`
+- `deleteAllInBatch(…)`
+- `deleteInBatch(…)`
+
+请注意，这些方法使用聚合根实例作为参数，这就是为什么`deleteById(…)`明显不存在的原因，因为实现可能会选择发出删除实例的查询，因此我们一开始就永远无法访问聚合实例。
 ## Null Handling of Repository Methods
+从Spring Data2.0版本开始，仓库的CRUP方法支持使用Java8的`Optional`，Spring Data还支持下面的包装类型:
+- `com.google.common.base.Optional`
+- `scala.Option`
+- `io.vavr.control.Option`
+
+### Nullability Annotations
+你可以使用[Spring Framework’s nullability annotations](https://docs.spring.io/spring-framework/reference/6.1/core/null-safety.html)来表示仓库方法的可以为空的限制。它们提供了一种工具友好的方法，并在运行时选择加入空检查:
+- `@NonNullApi`: 在package级别使用，表示包的所有方法的参数与返回值都不接受null值
+- `@NonNull`: 在参数与返回值上使用，表示不能为null
+- `@Nullable`: 用在参数与返回值上表示可以为null
+
+Spring注解是使用JSR205注解后的注解，JSR305元注解为工具厂商(比如IDEA、Eclipse或者Kotlin)提供了null-safety检查支持，无需为Spring注解硬编码。为了启用查询方法的为空性限制的检查，你需要通过在`package-info.java`文件中使用`@NonNullApi`来激活package级别的不能为空限制。如下面的例子所示:
+```java
+@org.springframework.lang.NonNullApi
+package com.acme;
+```
+一旦非null默认设置存在，存储查询方法调用就会在运行时验证可空性约束。如果查询结果违反了定义的约束，则会抛出异常。当该方法返回null但被声明为不可为null(默认情况下在存储所在的包上定义的注解)时，就会发生这种情况。如果您想再次选择可空结果，请有选择地在各个方法上使用 @Nullable。使用本节开头提到的结果包装器类型继续按预期工作：空结果被转换为表示缺席的值。
+```java
+package com.acme; //仓库位于我们定义为non-null的包或者子包下
+
+import org.springframework.lang.Nullable;
+
+interface UserRepository extends Repository<User, Long> {
+
+  User getByEmailAddress(EmailAddress emailAddress);// 当查询是null的时候，抛出EmptyResultDataAccessException异常，当参数为null时抛出IllegalArgumentException异常
+
+  @Nullable
+  User findByEmailAddress(@Nullable EmailAddress emailAdress);// 当没有查询结果时返回null，参数也可以为null
+
+  Optional<User> findOptionalByEmailAddress(EmailAddress emailAddress);// 当没有查询结果的时候，返回Optional.empty()，参数为null抛出IllegalArgumentException异常
+}
+```
+### Nullability in Kotlin-based Repositories
+Kotlin将可空性约束的定义融入到语言中。Kotlin代码编译为字节码，字节码不通过方法签名表达可空性约束，而是通过编译的元数据表达。确保在您的项目中包含kotlin-reflect JAR，以便能够自省Kotlin的可为空性约束。Spring Data仓库使用语言机制来定义这些约束以应用相同的运行时检查，如下所示：
+```kotlin
+interface UserRepository : Repository<User, String> {
+
+  fun findByUsername(username: String): User
+
+  fun findByFirstname(firstname: String?): User?
+}
+```
 ## CDI Integration
+SDE可以配置使用CDI功能。
+```java
+class ElasticsearchTemplateProducer {
+
+  @Produces
+  @ApplicationScoped
+  public ElasticsearchOperations createElasticsearchTemplate() {
+    // ...                               (1)
+  }
+}
+
+class ProductService {
+
+  private ProductRepository repository;  (2)
+  public Page<Product> findAvailableBookByName(String name, Pageable pageable) {
+    return repository.findByAvailableTrueAndNameStartingWith(name, pageable);
+  }
+  @Inject
+  public void setRepository(ProductRepository repository) {
+    this.repository = repository;
+  }
+}
+```
 ## Repository query keywords
 ## Repository query return types
 # Old version
@@ -2317,30 +2461,6 @@ class ProductService {
 
   public Page<Product> findAvailableBookByName(String name, Pageable pageable) {
     return repository.findByAvailableTrueAndNameStartingWith(name, pageable);
-  }
-}
-```
-## Elasticsearch Repositories using CDI
-SDE可以配置使用CDI功能。
-```java
-class ElasticsearchTemplateProducer {
-
-  @Produces
-  @ApplicationScoped
-  public ElasticsearchOperations createElasticsearchTemplate() {
-    // ...                               (1)
-  }
-}
-
-class ProductService {
-
-  private ProductRepository repository;  (2)
-  public Page<Product> findAvailableBookByName(String name, Pageable pageable) {
-    return repository.findByAvailableTrueAndNameStartingWith(name, pageable);
-  }
-  @Inject
-  public void setRepository(ProductRepository repository) {
-    this.repository = repository;
   }
 }
 ```
