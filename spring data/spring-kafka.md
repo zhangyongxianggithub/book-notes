@@ -388,7 +388,76 @@ future.whenComplete((result, ex) -> {
     ...
 });
 ```
-`SendResult`有2个属性，一个`ProducerRecord`一个`RecordMetadata`，
+`SendResult`有2个属性，一个`ProducerRecord`一个`RecordMetadata`。Throwable可以被转型成一个`KafkaProducerException`异常，它的`failedProducerRecord`属性包含了失败的record。如果你想要阻塞发送线程来等待结果，可以直接`get()`，如果你设置了`linger.ms`，在等待前需要调用`flush()`，或者template的构造函数支持一个`autoFlush`参数，可以设置为true，在每次send前template都会调用`flush()`，只有在设置`linger.ms`的情况下需要立即发送一个partial batch时才需要flush。下面是一个发送的例子:
+```java
+public void sendToKafka(final MyOutputData data) {
+    final ProducerRecord<String, String> record = createRecord(data);
+
+    CompletableFuture<SendResult<Integer, String>> future = template.send(record);
+    future.whenComplete((result, ex) -> {
+        if (ex == null) {
+            handleSuccess(data);
+        }
+        else {
+            handleFailure(data, record, ex);
+        }
+    });
+}
+public void sendToKafka(final MyOutputData data) {
+    final ProducerRecord<String, String> record = createRecord(data);
+
+    try {
+        template.send(record).get(10, TimeUnit.SECONDS);
+        handleSuccess(data);
+    }
+    catch (ExecutionException e) {
+        handleFailure(data, record, e.getCause());
+    }
+    catch (TimeoutException | InterruptedException e) {
+        handleFailure(data, record, e);
+    }
+}
+```
+注意，`ExecutionException`的cause是`KafkaProducerException`
+### Using `RoutingKafkaTemplate`
+从2.5版本开始，你可以使用`RoutingKafkaTemplate`在运行时基于destination topic 名字选择要使用的生产者。 routing template不支持事务、`execute`、`flush`、`metrics`操作，因为你topic是未知的，而这些操作需要topic。template需要一个`java.util.regex.Pattern`到`ProducerFactory<Object, Object>`的map对象，map应该是有序的，因为是按序遍历。下面是一个使用一个template发送不同的topic的例子，每个topic使用不同的value serializer。
+```java
+@SpringBootApplication
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+
+    @Bean
+    public RoutingKafkaTemplate routingTemplate(GenericApplicationContext context,
+            ProducerFactory<Object, Object> pf) {
+
+        // Clone the PF with a different Serializer, register with Spring for shutdown
+        Map<String, Object> configs = new HashMap<>(pf.getConfigurationProperties());
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        DefaultKafkaProducerFactory<Object, Object> bytesPF = new DefaultKafkaProducerFactory<>(configs);
+        context.registerBean("bytesPF", DefaultKafkaProducerFactory.class, () -> bytesPF);
+
+        Map<Pattern, ProducerFactory<Object, Object>> map = new LinkedHashMap<>();
+        map.put(Pattern.compile("two"), bytesPF);
+        map.put(Pattern.compile(".+"), pf); // Default PF with StringSerializer
+        return new RoutingKafkaTemplate(map);
+    }
+
+    @Bean
+    public ApplicationRunner runner(RoutingKafkaTemplate routingTemplate) {
+        return args -> {
+            routingTemplate.send("one", "thing1");
+            routingTemplate.send("two", "thing2".getBytes());
+        };
+    }
+
+}
+```
+另一种技术可以实现类似的结果，还具有将不同类型发送到同一主题的额外能力。具体参考[Delegating Serializer and Deserializer](https://docs.spring.io/spring-kafka/reference/kafka/serdes.html#delegating-serialization)
+### Using `DefaultKafkaProducerFactory`
+
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners
@@ -432,4 +501,50 @@ public interface BatchAcknowledgingConsumerAwareMessageListener<K, V> extends Ba
 - `KafkaMessageListenerContainer`
 - `ConcurrentMessageListenerContainer`
 
+## Serialization, Deserialization, Message Conversion
+### Delegating Serializer and Deserializer
+#### Using Headers
+2.3版本引入了`DelegatingSerializer`与`DelegatingDeserializer`，允许生产与消费不同类型的key/value的records。生产者必须设置一个Header`DelegatingSerializer.VALUE_SERIALIZATION_SELECTOR`为一个selector value，用来选择使用哪一个serializer来序列化value，`DelegatingSerializer.KEY_SERIALIZATION_SELECTOR`用来选择key的序列化器。如果没有找到，则抛出`IllegalStateException`异常。消费records时，使用同样的头来选择反序列化器，如果没有找到或者没有相关的头，则返回`byte[]`。你可以配置一个selector到`Serializer/Deserializer`的映射，或者你可以通过Kafka的生产者与消费者属性`DelegatingSerializer.VALUE_SERIALIZATION_SELECTOR_CONFIG`或者`DelegatingSerializer.KEY_SERIALIZATION_SELECTOR_CONFIG`来配置，对于序列化器来说，生产者属性可以是一个`Map<String, Object>`，key是selector，value是`Serializer`实例对象、Serializer的Class或者就是Class的名字。属性可以是逗号分隔的map对。反序列化器与上面的配置方式类似。
+```java
+producerProps.put(DelegatingSerializer.VALUE_SERIALIZATION_SELECTOR_CONFIG,
+    "thing1:com.example.MyThing1Serializer, thing2:com.example.MyThing2Serializer")
+
+consumerProps.put(DelegatingDeserializer.VALUE_SERIALIZATION_SELECTOR_CONFIG,
+    "thing1:com.example.MyThing1Deserializer, thing2:com.example.MyThing2Deserializer")
+```
+生产者将会设置`DelegatingSerializer.VALUE_SERIALIZATION_SELECTOR`为`thing1`或者`thing2`，这种技术支持将不同的类型的数据发送到同一个topic或者不同的topic。从2.5.1版本开始，如果类型(key/value)是受`Serdes`支持的标准类型就不需要设置selector header了，序列化器会设置header为类型的class名字，不需要为这些类型配置序列化器或者反序列化器，它们会被自动创建(只创建一次)。
+#### By Type
+从2.8版本开始引入了`DelegatingByTypeSerializer`
+```java
+@Bean
+public ProducerFactory<Integer, Object> producerFactory(Map<String, Object> config) {
+    return new DefaultKafkaProducerFactory<>(config,
+            null, new DelegatingByTypeSerializer(Map.of(
+                    byte[].class, new ByteArraySerializer(),
+                    Bytes.class, new BytesSerializer(),
+                    String.class, new StringSerializer())));
+}
+```
+从2.8.3版本开始，你可以配置序列化器检测是否Map的key可赋值为目标对象，代理序列化器可以序列化化子类时很有用，如果存在key的匹配混乱，最好使用一个有序的Map。
+#### By Topic
+从2.8版本开始，`DelegatingByTopicSerializer`与`DelegatingByTopicDeserializer`允许基于topic名字选择一个`serializer/deserializer`，正则表达式Pattern用来寻找要使用的实例，map可以通过构造函数配置或者通过属性(`pattern:serializer`的逗号分隔列表)
+```java
+producerConfigs.put(DelegatingByTopicSerializer.VALUE_SERIALIZATION_TOPIC_CONFIG,
+            "topic[0-4]:" + ByteArraySerializer.class.getName()
+        + ", topic[5-9]:" + StringSerializer.class.getName());
+...
+ConsumerConfigs.put(DelegatingByTopicDeserializer.VALUE_SERIALIZATION_TOPIC_CONFIG,
+            "topic[0-4]:" + ByteArrayDeserializer.class.getName()
+        + ", topic[5-9]:" + StringDeserializer.class.getName());
+        @Bean
+public ProducerFactory<Integer, Object> producerFactory(Map<String, Object> config) {
+    return new DefaultKafkaProducerFactory<>(config,
+            new IntegerSerializer(),
+            new DelegatingByTopicSerializer(Map.of(
+                    Pattern.compile("topic[0-4]"), new ByteArraySerializer(),
+                    Pattern.compile("topic[5-9]"), new StringSerializer())),
+                    new JsonSerializer<Object>());  // default
+}
+```
+你可以指定当没有模式匹配到时使用的默认的`serializer/deserializer`，通过`DelegatingByTopicSerialization.KEY_SERIALIZATION_TOPIC_DEFAULT`与`DelegatingByTopicSerialization.VALUE_SERIALIZATION_TOPIC_DEFAULT`指定。一个额外的属性`DelegatingByTopicSerialization.CASE_SENSITIVE`决定做topic匹配时是否需略大小写。
 
