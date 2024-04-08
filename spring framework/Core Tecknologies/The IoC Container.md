@@ -103,19 +103,10 @@ jdbc.password=root
 dataSource.driverClassName=com.mysql.jdbc.Driver
 dataSource.url=jdbc:mysql:mydb
 ```
-比如为名叫dataSource的bean定义属性
-
-还支持复合属性名称，只要路径的每个组件（除了要覆盖的最终属性）都已经非空（可能由构造函数初始化）。 在以下示例中，tom bean 的 fred 属性的 bob 属性的 sammy 属性设置为标量值 123：
-bean里面的引用的属性值外部化，就是可以将属性值放到其他任何的文件中，通过这个类加载到容器中来，这个功能可以让开发者自定义每个环境的属性，比如数据库信息的URL或者密码等，不用修改容器的主XML配置文件。
-
-通过配置指定外部属性文件的位置，Spring会通过占位符的形式替换Bean定义的value值，占位符的属性名遵循的格式是Ant、log4j或者JSP EL形式的。
-Spring 2.5版本后引入了命名空间的概念，可以通过一个特殊的配置外部化属性，比如：
-
-PropertySourcesPlaceholderConfigurer不仅会寻找配置的外部文件的属性，缺省情况下，也会寻找Spring的Enviroment的属性与JVM的系统属性。同时，也可以用其来替换类名，用来在特定的环境下实例化不同的类，比如：
-
-例子2：PropertyOverrideConfigurer
-PropertyOverrideConfigurer与上一个不同的是，bean定义按照标准配置，使用这个处理器可以替换Bean里面的属属性，外部文件中属性的定义方式：beanName.property=value。在Spring2.5版本中的简要的配置方式：
-
+这个例子文件可以被一个容器定义，容器定义定义了一个叫做`dataSource`的bean，有`driver`与`url`2个属性，也支持级联属性名，只要路径中的每一个部件都不是null，一个例子`tom.fred.bob.sammy=123`，指定的覆盖的值都是字面量，而不是对bean的引用。
+```xml
+<context:property-override location="classpath:override.properties"/>
+```
 ## 使用FactoryBean自定义初始化逻辑
 你可以使用`FactoryBean`接口创建工厂Bean对象，`FactoryBean`接口是Spring IoC容器实例化逻辑的可插入点。 如果您有复杂的初始化代码，用Java代码更好地表达而不是(可能)冗长的XML，您可以创建自己的`FactoryBean`，在该类中编写复杂的初始化逻辑，然后将您的自定义`FactoryBean`插入容器。`FactoryBean<T>`接口提供了3个方法:
 - `T getObject()`: 返回这个工厂创建的对象的实例，返回的实例可以是shared，这依赖于返回的是singleton还是prototypes
