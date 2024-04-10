@@ -15,11 +15,11 @@ JsonPath始终表示一个JSON文档中的结构，工作方式类似XPath与XML
 |@|谓词filter正在处理的当前节点|
 |*|通配符，匹配任意的名字或者数组|
 |..|深度扫描，表示任意名字|
-|.<name>|点号标记的子节点|
-|['<name>' (, '<name>')]|括号标记的子节点|
-|[<number> (, <number>)]|数组下标|
-|[start:end]|数组切片|
-|[?(<expression>)]|filter表达式，表达式的值必须是一个boolean值|
+|`.<name>`|点号标记的子节点|
+|`['<name>' (, '<name>')]`|括号标记的子节点|
+|`[<number> (, <number>)]`|数组下标|
+|`[start:end]`|数组切片|
+|`[?(<expression>)]`|filter表达式，表达式的值必须是一个boolean值|
 # Functions
 函数可以在path的最后调用，函数的输入是path表达式的输出，函数输出是函数本身定义的。
 |Function|Description|Output type|

@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Getting Started</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+<link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="getting-started">Getting Started</h1>
+<p>JsonPath库在Maven中央仓库中，需要提前添加:</p>
+<pre><code class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">dependency</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">groupId</span>&gt;</span>com.jayway.jsonpath<span class="hljs-tag">&lt;/<span class="hljs-name">groupId</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">artifactId</span>&gt;</span>json-path<span class="hljs-tag">&lt;/<span class="hljs-name">artifactId</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">version</span>&gt;</span>2.8.0<span class="hljs-tag">&lt;/<span class="hljs-name">version</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">dependency</span>&gt;</span>
+</code></pre>
+<p>JsonPath始终表示一个JSON文档中的结构，工作方式类似XPath与XML。JsonPath中的根对象始终用<code>$</code>表示，不论对象是对象还是数组。JsonPath表达式使用点号标记<code>$.store.book[0].title</code>或者括号标记<code>$['store']['book'][0]['title']</code></p>
+<h1 id="operators">Operators</h1>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Operator</th>
+<th style="text-align:left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">$</td>
+<td style="text-align:left">根对象，是所有路径表达式的开始标记</td>
+</tr>
+<tr>
+<td style="text-align:left">@</td>
+<td style="text-align:left">谓词filter正在处理的当前节点</td>
+</tr>
+<tr>
+<td style="text-align:left">*</td>
+<td style="text-align:left">通配符，匹配任意的名字或者数组</td>
+</tr>
+<tr>
+<td style="text-align:left">..</td>
+<td style="text-align:left">深度扫描，表示任意名字</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>.&lt;name&gt;</code></td>
+<td style="text-align:left">点号标记的子节点</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>['&lt;name&gt;' (, '&lt;name&gt;')]</code></td>
+<td style="text-align:left">括号标记的子节点</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>[&lt;number&gt; (, &lt;number&gt;)]</code></td>
+<td style="text-align:left">数组下标</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>[start:end]</code></td>
+<td style="text-align:left">数组切片</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>[?(&lt;expression&gt;)]</code></td>
+<td style="text-align:left">filter表达式，表达式的值必须是一个boolean值</td>
+</tr>
+</tbody>
+</table>
+<h1 id="functions">Functions</h1>
+<p>函数可以在path的最后调用，函数的输入是path表达式的输出，函数输出是函数本身定义的。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Function</th>
+<th style="text-align:left">Description</th>
+<th style="text-align:left">Output type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">min()</td>
+<td style="text-align:left">数字数组的最小值</td>
+<td style="text-align:left">Double</td>
+</tr>
+<tr>
+<td style="text-align:left">max()</td>
+<td style="text-align:left">数字数组的最大值</td>
+<td style="text-align:left">Double</td>
+</tr>
+<tr>
+<td style="text-align:left">avg()</td>
+<td style="text-align:left">数字数组的平均值</td>
+<td style="text-align:left">Double</td>
+</tr>
+<tr>
+<td style="text-align:left">stddev()</td>
+<td style="text-align:left">数字数组的标准差</td>
+<td style="text-align:left">Double</td>
+</tr>
+<tr>
+<td style="text-align:left">length()</td>
+<td style="text-align:left">数组的长度</td>
+<td style="text-align:left">Integer</td>
+</tr>
+<tr>
+<td style="text-align:left">sum()</td>
+<td style="text-align:left">数字数组的总和</td>
+<td style="text-align:left">Double</td>
+</tr>
+<tr>
+<td style="text-align:left">keys()</td>
+<td style="text-align:left">属性的key</td>
+<td style="text-align:left">Set</td>
+</tr>
+<tr>
+<td style="text-align:left">concat(X)</td>
+<td style="text-align:left">使用X连接输出</td>
+<td style="text-align:left">类似输入</td>
+</tr>
+<tr>
+<td style="text-align:left">append(X)</td>
+<td style="text-align:left">添加一个新的元素到输出的数组</td>
+<td style="text-align:left">input</td>
+</tr>
+<tr>
+<td style="text-align:left">first()</td>
+<td style="text-align:left">数组的第一个元素</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">last()</td>
+<td style="text-align:left">数组的最后一个元素</td>
+<td style="text-align:left"></td>
+</tr>
+<tr>
+<td style="text-align:left">index(X)</td>
+<td style="text-align:left">数组下标X处的元素</td>
+<td style="text-align:left"></td>
+</tr>
+</tbody>
+</table>
+<p>过滤器是逻辑表达式，用来过滤数组元素。典型的过滤器类似<code>[?(@.age &gt; 18)]</code>，在这个表达式里面，<code>@</code>符号表示当前正被处理的元素，更复杂的过滤器可以通过逻辑运算符<code>&amp;&amp;</code>与<code>||</code>来组合。纯文本要用单引号或者双引号包起来<code>[?(@.color == 'blue')]</code>或者<code>[?(@.color == &quot;blue&quot;)]</code>。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Operator</th>
+<th style="text-align:left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">==</td>
+<td style="text-align:left">等于</td>
+</tr>
+<tr>
+<td style="text-align:left">!=</td>
+<td style="text-align:left">不等于</td>
+</tr>
+<tr>
+<td style="text-align:left">&lt;</td>
+<td style="text-align:left">小于</td>
+</tr>
+<tr>
+<td style="text-align:left">&lt;=</td>
+<td style="text-align:left">小于等于</td>
+</tr>
+<tr>
+<td style="text-align:left">&gt;</td>
+<td style="text-align:left">大于</td>
+</tr>
+<tr>
+<td style="text-align:left">&gt;=</td>
+<td style="text-align:left">大于等于</td>
+</tr>
+<tr>
+<td style="text-align:left">=~</td>
+<td style="text-align:left">匹配正则表达式</td>
+</tr>
+<tr>
+<td style="text-align:left">in</td>
+<td style="text-align:left">存在<code>[?(@.size in ['S', 'M'])]</code></td>
+</tr>
+<tr>
+<td style="text-align:left">nin</td>
+<td style="text-align:left">不存在</td>
+</tr>
+<tr>
+<td style="text-align:left">subsetof</td>
+<td style="text-align:left">是子集<code>[?(@.sizes subsetof ['S', 'M', 'L'])]</code></td>
+</tr>
+<tr>
+<td style="text-align:left">anyof</td>
+<td style="text-align:left">交集不为空<code>[?(@.sizes anyof ['M', 'L'])]</code></td>
+</tr>
+<tr>
+<td style="text-align:left">noneof</td>
+<td style="text-align:left">交集为空<code> [?(@.sizes noneof ['M', 'L'])]</code></td>
+</tr>
+<tr>
+<td style="text-align:left">size</td>
+<td style="text-align:left">数组或者字符串的长度要匹配</td>
+</tr>
+<tr>
+<td style="text-align:left">empty</td>
+<td style="text-align:left">数组或者字符串为空</td>
+</tr>
+</tbody>
+</table>
+<h1 id="path-examples">Path Examples</h1>
+<pre><code class="language-json"><span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;store&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+        <span class="hljs-attr">&quot;book&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+            <span class="hljs-punctuation">{</span>
+                <span class="hljs-attr">&quot;category&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;reference&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;author&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Nigel Rees&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Sayings of the Century&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;price&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">8.95</span>
+            <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-punctuation">{</span>
+                <span class="hljs-attr">&quot;category&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;fiction&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;author&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Evelyn Waugh&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Sword of Honour&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;price&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">12.99</span>
+            <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-punctuation">{</span>
+                <span class="hljs-attr">&quot;category&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;fiction&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;author&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Herman Melville&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Moby Dick&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;isbn&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0-553-21311-3&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;price&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">8.99</span>
+            <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-punctuation">{</span>
+                <span class="hljs-attr">&quot;category&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;fiction&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;author&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;J. R. R. Tolkien&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;The Lord of the Rings&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;isbn&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;0-395-19395-8&quot;</span><span class="hljs-punctuation">,</span>
+                <span class="hljs-attr">&quot;price&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">22.99</span>
+            <span class="hljs-punctuation">}</span>
+        <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+        <span class="hljs-attr">&quot;bicycle&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;color&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;red&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;price&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">19.95</span>
+        <span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;expensive&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">10</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">JsonPath</th>
+<th style="text-align:left">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">$.store.book[*].author</td>
+<td style="text-align:left">所有书的作者</td>
+</tr>
+<tr>
+<td style="text-align:left">$..author</td>
+<td style="text-align:left">所有的作者</td>
+</tr>
+<tr>
+<td style="text-align:left">$.store.*</td>
+<td style="text-align:left">All things, both books and bicycles</td>
+</tr>
+<tr>
+<td style="text-align:left">$.store..price</td>
+<td style="text-align:left">The price of everything</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[2]</td>
+<td style="text-align:left">The third book</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[-2]</td>
+<td style="text-align:left">The second to last book</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[0,1]</td>
+<td style="text-align:left">The first two books</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[:2]</td>
+<td style="text-align:left">All books from index 0 (inclusive) until index 2 (exclusive)</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[1:2]</td>
+<td style="text-align:left">All books from index 1 (inclusive) until index 2 (exclusive)</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[-2:]</td>
+<td style="text-align:left">Last two books</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[2:]</td>
+<td style="text-align:left">All books from index 2 (inclusive) to last</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[?(@.isbn)]</td>
+<td style="text-align:left">All books with an ISBN number</td>
+</tr>
+<tr>
+<td style="text-align:left">$.store.book[?(@.price &lt; 10)]</td>
+<td style="text-align:left">All books in store cheaper than 10</td>
+</tr>
+<tr>
+<td style="text-align:left"><span class="katex-error" title="..book[?(@.price &amp;lt;= ">ParseError: KaTeX parse error: Expected &#039;EOF&#039;, got &#039;&amp;&#039; at position 18: …book[?(@.price &amp;̲lt;= </span>['expensive'])]</td>
+<td style="text-align:left">ll books in store that are not &quot;expensive&quot;</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book[?(@.author =~ /.*REES/i)]</td>
+<td style="text-align:left">All books matching regex (ignore case)</td>
+</tr>
+<tr>
+<td style="text-align:left">$..*</td>
+<td style="text-align:left">Give me every thing</td>
+</tr>
+<tr>
+<td style="text-align:left">$..book.length()</td>
+<td style="text-align:left">The number of books</td>
+</tr>
+</tbody>
+</table>
+<h1 id="reading-a-document">Reading a Document</h1>
+<p>最简单的方式是使用静态read API</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">json</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;...&quot;</span>;
+List&lt;String&gt; authors = JsonPath.read(json, <span class="hljs-string">&quot;$.store.book[*].author&quot;</span>);
+</code></pre>
+<p>如果你只需要读一次，那么这种方式是OK的，如果要处理多次，那么每次read都要解析json文档，你可以只解析一次</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">json</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;...&quot;</span>;
+<span class="hljs-type">Object</span> <span class="hljs-variable">document</span> <span class="hljs-operator">=</span> Configuration.defaultConfiguration().jsonProvider().parse(json);
+<span class="hljs-type">String</span> <span class="hljs-variable">author0</span> <span class="hljs-operator">=</span> JsonPath.read(document, <span class="hljs-string">&quot;$.store.book[0].author&quot;</span>);
+<span class="hljs-type">String</span> <span class="hljs-variable">author1</span> <span class="hljs-operator">=</span> JsonPath.read(document, <span class="hljs-string">&quot;$.store.book[1].author&quot;</span>);
+</code></pre>
+<p>JsonPath也提供了流式API</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">json</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;...&quot;</span>;
+<span class="hljs-type">ReadContext</span> <span class="hljs-variable">ctx</span> <span class="hljs-operator">=</span> JsonPath.parse(json);
+List&lt;String&gt; authorsOfBooksWithISBN = ctx.read(<span class="hljs-string">&quot;$.store.book[?(@.isbn)].author&quot;</span>);
+List&lt;Map&lt;String, Object&gt;&gt; expensiveBooks = JsonPath
+                            .using(configuration)
+                            .parse(json)
+                            .read(<span class="hljs-string">&quot;$.store.book[?(@.price &gt; 10)]&quot;</span>, List.class);
+</code></pre>
+<h1 id="what-is-returned-when">What is Returned When</h1>
+<p>使用Java时，你想获得预期的数据类型的结果，JsonPath将会自动将结果转型为你预期的类型</p>
+<pre><code class="language-java"><span class="hljs-comment">//Will throw an java.lang.ClassCastException    </span>
+List&lt;String&gt; list = JsonPath.parse(json).read(<span class="hljs-string">&quot;$.store.book[0].author&quot;</span>)
+
+<span class="hljs-comment">//Works fine</span>
+<span class="hljs-type">String</span> <span class="hljs-variable">author</span> <span class="hljs-operator">=</span> JsonPath.parse(json).read(<span class="hljs-string">&quot;$.store.book[0].author&quot;</span>)
+</code></pre>
+<p>当计算路径时，有2个概念要清楚</p>
+<ul>
+<li>明确的路径</li>
+<li>不明确的路径
+<ul>
+<li>.. 深度扫描</li>
+<li>?(expression)逻辑表达式</li>
+<li>[number,number,number]多个数组索引</li>
+</ul>
+</li>
+</ul>
+<p>不明确的路径始终返回list。这是由当前的JsonProvider提供的。默认的情况下，MappingProvider SPI提供了一个简单的对象mapper。你可以指定你想要的返回类型，MappingProvider江湖i执行这个映射，下面的例子展示了如何再Long与Date类型之间做映射</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">json</span> <span class="hljs-operator">=</span> <span class="hljs-string">&quot;{\&quot;date_as_long\&quot; : 1411455611975}&quot;</span>;
+
+<span class="hljs-type">Date</span> <span class="hljs-variable">date</span> <span class="hljs-operator">=</span> JsonPath.parse(json).read(<span class="hljs-string">&quot;$[&#x27;date_as_long&#x27;]&quot;</span>, Date.class);
+</code></pre>
+<p>如果你配置JsonPath使用<code>JacksonMappingProvider</code>，<code>GsonMappingProvider</code>，<code>JakartaJsonProvider</code>，你可以在json结果与普通的POJO之间做映射，如下:</p>
+<pre><code class="language-java"><span class="hljs-type">Book</span> <span class="hljs-variable">book</span> <span class="hljs-operator">=</span> JsonPath.parse(json).read(<span class="hljs-string">&quot;$.store.book[0]&quot;</span>, Book.class);
+</code></pre>
+<p>为了得到全部的泛型信息:</p>
+<pre><code class="language-java">TypeRef&lt;List&lt;String&gt;&gt; typeRef = <span class="hljs-keyword">new</span> <span class="hljs-title class_">TypeRef</span>&lt;List&lt;String&gt;&gt;() {};
+
+List&lt;String&gt; titles = JsonPath.parse(JSON_DOCUMENT).read(<span class="hljs-string">&quot;$.store.book[*].title&quot;</span>, typeRef);
+</code></pre>
+<h1 id="predicates">Predicates</h1>
+<p>有3种创建filter谓词的方式</p>
+<ul>
+<li>Inline Predicates，在path中定义的<pre><code class="language-java">List&lt;Map&lt;String, Object&gt;&gt; books =  JsonPath.parse(json)
+                                   .read(<span class="hljs-string">&quot;$.store.book[?(@.price &lt; 10)]&quot;</span>);
+</code></pre>
+你可以使用<code>&amp;&amp;</code>与<code>||</code>来组合多个谓词，<code>[?(@.price &lt; 10 &amp;&amp; @.category == 'fiction')] , [?(@.category == 'reference' || @.price &gt; 10)]</code>，你可以使用<code>!</code>来否定谓词<code>[?(!(@.price &lt; 10 &amp;&amp; @.category == 'fiction'))]</code></li>
+<li>Filter predicates，使用Filter API来构建<pre><code class="language-java"><span class="hljs-keyword">import</span> <span class="hljs-keyword">static</span> com.jayway.jsonpath.JsonPath.parse;
+  <span class="hljs-keyword">import</span> <span class="hljs-keyword">static</span> com.jayway.jsonpath.Criteria.where;
+  <span class="hljs-keyword">import</span> <span class="hljs-keyword">static</span> com.jayway.jsonpath.Filter.filter;
+  ...
+  ...
+  <span class="hljs-type">Filter</span> <span class="hljs-variable">cheapFictionFilter</span> <span class="hljs-operator">=</span> filter(
+ where(<span class="hljs-string">&quot;category&quot;</span>).is(<span class="hljs-string">&quot;fiction&quot;</span>).and(<span class="hljs-string">&quot;price&quot;</span>).lte(<span class="hljs-number">10D</span>)
+  );
+  List&lt;Map&lt;String, Object&gt;&gt; books =  
+ parse(json).read(<span class="hljs-string">&quot;$.store.book[?]&quot;</span>, cheapFictionFilter);
+</code></pre>
+注意占位符<code>?</code>表示filter应该在的位置，当存在多个filter谓词时，他们按照占位符出现的顺序填充。占位符与filter谓词的数量要匹配。也可也在一个filter操作中指定多个谓词，他们是AND的关系<code>[?,?]</code><pre><code class="language-java"><span class="hljs-type">Filter</span> <span class="hljs-variable">fooOrBar</span> <span class="hljs-operator">=</span> filter(
+ where(<span class="hljs-string">&quot;foo&quot;</span>).exists(<span class="hljs-literal">true</span>)).or(where(<span class="hljs-string">&quot;bar&quot;</span>).exists(<span class="hljs-literal">true</span>)
+  );
+ 
+  <span class="hljs-type">Filter</span> <span class="hljs-variable">fooAndBar</span> <span class="hljs-operator">=</span> filter(
+  where(<span class="hljs-string">&quot;foo&quot;</span>).exists(<span class="hljs-literal">true</span>)).and(where(<span class="hljs-string">&quot;bar&quot;</span>).exists(<span class="hljs-literal">true</span>)
+  );
+</code></pre>
+</li>
+<li>Roll Your Own，第三个方式是自定义谓词<pre><code class="language-java"><span class="hljs-type">Predicate</span> <span class="hljs-variable">booksWithISBN</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Predicate</span>() {
+  <span class="hljs-meta">@Override</span>
+  <span class="hljs-keyword">public</span> <span class="hljs-type">boolean</span> <span class="hljs-title function_">apply</span><span class="hljs-params">(PredicateContext ctx)</span> {
+      <span class="hljs-keyword">return</span> ctx.item(Map.class).containsKey(<span class="hljs-string">&quot;isbn&quot;</span>);
+  }
+  };
+
+  List&lt;Map&lt;String, Object&gt;&gt; books = 
+ reader.read(<span class="hljs-string">&quot;$.store.book[?].isbn&quot;</span>, List.class, booksWithISBN);
+</code></pre>
+</li>
+</ul>
+<h1 id="path-vs-value">Path vs Value</h1>
+<p>在Goessner的实现中，JsonPath也可以返回Path或者Value，默认返回Value，上面所有的例子都是返回Value，如果要返回path可以这么做:</p>
+<pre><code class="language-java"><span class="hljs-type">Configuration</span> <span class="hljs-variable">conf</span> <span class="hljs-operator">=</span> Configuration.builder()
+   .options(Option.AS_PATH_LIST).build();
+
+List&lt;String&gt; pathList = using(conf).parse(json).read(<span class="hljs-string">&quot;$..author&quot;</span>);
+
+assertThat(pathList).containsExactly(
+    <span class="hljs-string">&quot;$[&#x27;store&#x27;][&#x27;book&#x27;][0][&#x27;author&#x27;]&quot;</span>,
+    <span class="hljs-string">&quot;$[&#x27;store&#x27;][&#x27;book&#x27;][1][&#x27;author&#x27;]&quot;</span>,
+    <span class="hljs-string">&quot;$[&#x27;store&#x27;][&#x27;book&#x27;][2][&#x27;author&#x27;]&quot;</span>,
+    <span class="hljs-string">&quot;$[&#x27;store&#x27;][&#x27;book&#x27;][3][&#x27;author&#x27;]&quot;</span>);
+</code></pre>
+<h1 id="set-a-value">Set a Value</h1>
+<p>也可以设置json元素的值</p>
+<pre><code class="language-java"><span class="hljs-type">String</span> <span class="hljs-variable">newJson</span> <span class="hljs-operator">=</span> JsonPath.parse(json).set(<span class="hljs-string">&quot;$[&#x27;store&#x27;][&#x27;book&#x27;][0][&#x27;author&#x27;]&quot;</span>, <span class="hljs-string">&quot;Paul&quot;</span>).jsonString();
+</code></pre>
+<h1 id="tweaking-configuration">Tweaking Configuration</h1>
+<h2 id="options">Options</h2>
+<p>有一个配置选项可以改变默认的行为</p>
+<ul>
+<li>DEFAULT_PATH_LEAF_TO_NULL，JsonPath对不存在的path返回null,考虑下面的json<pre><code class="language-json"><span class="hljs-punctuation">[</span>
+ <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;name&quot;</span> <span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;john&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;gender&quot;</span> <span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;male&quot;</span>
+ <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;name&quot;</span> <span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;ben&quot;</span>
+ <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">]</span>
+</code></pre>
+<pre><code class="language-java"><span class="hljs-type">Configuration</span> <span class="hljs-variable">conf</span> <span class="hljs-operator">=</span> Configuration.defaultConfiguration();
+
+<span class="hljs-comment">//Works fine</span>
+<span class="hljs-type">String</span> <span class="hljs-variable">gender0</span> <span class="hljs-operator">=</span> JsonPath.using(conf).parse(json).read(<span class="hljs-string">&quot;$[0][&#x27;gender&#x27;]&quot;</span>);
+<span class="hljs-comment">//PathNotFoundException thrown</span>
+<span class="hljs-type">String</span> <span class="hljs-variable">gender1</span> <span class="hljs-operator">=</span> JsonPath.using(conf).parse(json).read(<span class="hljs-string">&quot;$[1][&#x27;gender&#x27;]&quot;</span>);
+
+<span class="hljs-type">Configuration</span> <span class="hljs-variable">conf2</span> <span class="hljs-operator">=</span> conf.addOptions(Option.DEFAULT_PATH_LEAF_TO_NULL);
+
+<span class="hljs-comment">//Works fine</span>
+<span class="hljs-type">String</span> <span class="hljs-variable">gender0</span> <span class="hljs-operator">=</span> JsonPath.using(conf2).parse(json).read(<span class="hljs-string">&quot;$[0][&#x27;gender&#x27;]&quot;</span>);
+<span class="hljs-comment">//Works fine (null is returned)</span>
+<span class="hljs-type">String</span> <span class="hljs-variable">gender1</span> <span class="hljs-operator">=</span> JsonPath.using(conf2).parse(json).read(<span class="hljs-string">&quot;$[1][&#x27;gender&#x27;]&quot;</span>);
+</code></pre>
+</li>
+<li>ALWAYS_RETURN_LIST，始终返回list<pre><code class="language-java"><span class="hljs-type">Configuration</span> <span class="hljs-variable">conf</span> <span class="hljs-operator">=</span> Configuration.defaultConfiguration();
+
+<span class="hljs-comment">//ClassCastException thrown</span>
+List&lt;String&gt; genders0 = JsonPath.using(conf).parse(json).read(<span class="hljs-string">&quot;$[0][&#x27;gender&#x27;]&quot;</span>);
+<span class="hljs-type">Configuration</span> <span class="hljs-variable">conf2</span> <span class="hljs-operator">=</span> conf.addOptions(Option.ALWAYS_RETURN_LIST);
+<span class="hljs-comment">//Works fine</span>
+List&lt;String&gt; genders0 = JsonPath.using(conf2).parse(json).read(<span class="hljs-string">&quot;$[0][&#x27;gender&#x27;]&quot;</span>);
+</code></pre>
+</li>
+<li>SUPPRESS_EXCEPTIONS，异常会被被传递，如果设置了ALWAYS_RETURN_LIST，返回空list，如果没有返回null</li>
+<li>REQUIRE_PROPERTIES，当计算indefinite路径时，路径上需要属性名<pre><code class="language-java"><span class="hljs-type">Configuration</span> <span class="hljs-variable">conf</span> <span class="hljs-operator">=</span> Configuration.defaultConfiguration();
+<span class="hljs-comment">//Works fine</span>
+List&lt;String&gt; genders = JsonPath.using(conf).parse(json).read(<span class="hljs-string">&quot;$[*][&#x27;gender&#x27;]&quot;</span>);
+<span class="hljs-type">Configuration</span> <span class="hljs-variable">conf2</span> <span class="hljs-operator">=</span> conf.addOptions(Option.REQUIRE_PROPERTIES);
+<span class="hljs-comment">//PathNotFoundException thrown</span>
+List&lt;String&gt; genders = JsonPath.using(conf2).parse(json).read(<span class="hljs-string">&quot;$[*][&#x27;gender&#x27;]&quot;</span>);
+</code></pre>
+</li>
+</ul>
+<h1 id="jsonprovider-spi">JsonProvider SPI</h1>
+<p>JsonPath打包了5个不同的JsonProviders:</p>
+<ul>
+<li><a href="https://github.com/netplex/json-smart-v2">JsonSmartJsonProvider</a>(default)</li>
+<li><a href="https://github.com/FasterXML/jackson">JacksonJsonProvider</a></li>
+<li><a href="https://github.com/FasterXML/jackson">JacksonJsonNodeJsonProvider</a></li>
+<li><a href="https://code.google.com/p/google-gson/">GsonJsonProvider</a></li>
+<li><a href="https://github.com/stleary/JSON-java">JsonOrgjsonProvider</a></li>
+<li><a href="https://javaee.github.io/jsonp/">JakataJsonProvider</a></li>
+</ul>
+<p>改变默认的配置应该在应用程序初始化时完成，不建议在运行时修改。</p>
+<pre><code class="language-java">Configuration.setDefaults(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Configuration</span>.Defaults() {
+
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">JsonProvider</span> <span class="hljs-variable">jsonProvider</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">JacksonJsonProvider</span>();
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">final</span> <span class="hljs-type">MappingProvider</span> <span class="hljs-variable">mappingProvider</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">JacksonMappingProvider</span>();
+      
+    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> JsonProvider <span class="hljs-title function_">jsonProvider</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">return</span> jsonProvider;
+    }
+
+    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> MappingProvider <span class="hljs-title function_">mappingProvider</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">return</span> mappingProvider;
+    }
+    
+    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> Set&lt;Option&gt; <span class="hljs-title function_">options</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">return</span> EnumSet.noneOf(Option.class);
+    }
+});
+</code></pre>
+<h1 id="cache-spi">Cache SPI</h1>
+<p>JsonPath 2.1.0引入了一个新的Cache SPI机制。这允许使用者自定义配置路径缓存。Cache必须在JsonPath第一次访问前配置，JsonPath打包了2个Cache实现</p>
+<ul>
+<li>com.jayway.jsonpath.spi.cache.LRUCache，默认的，线程安全的</li>
+<li>com.jayway.jsonpath.spi.cache.NOOPCache，mo cache
+自己实现</li>
+</ul>
+<pre><code class="language-java">CacheProvider.setCache(<span class="hljs-keyword">new</span> <span class="hljs-title class_">Cache</span>() {
+    <span class="hljs-comment">//Not thread safe simple cache</span>
+    <span class="hljs-keyword">private</span> Map&lt;String, JsonPath&gt; map = <span class="hljs-keyword">new</span> <span class="hljs-title class_">HashMap</span>&lt;String, JsonPath&gt;();
+
+    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> JsonPath <span class="hljs-title function_">get</span><span class="hljs-params">(String key)</span> {
+        <span class="hljs-keyword">return</span> map.get(key);
+    }
+
+    <span class="hljs-meta">@Override</span>
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">put</span><span class="hljs-params">(String key, JsonPath jsonPath)</span> {
+        map.put(key, jsonPath);
+    }
+});
+</code></pre>
+
+            <script async src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+            
+        </body>
+        </html>
