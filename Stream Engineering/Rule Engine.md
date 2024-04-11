@@ -50,7 +50,133 @@ RuleBook是线程安全的。但是`FactMaps`与其他的`NameValueReferableMap`
 ## RuleBook DSL详细说明
 RuleBook的Java DSL使用了` Given-When-Then`的格式，由BDD与相关的测试框架推广开来。很多概念都来自借鉴自BDD，应该使用句子来描述规则，并且应该使用翻译成代码库的通用语言来定义规则。
 ### Given-When-Then: RuleBook语言的根本
+与BDD推广的Given-When-Then语言结构类似，RuleBook使用这个结构来定义规则。Given-When-Then有如下含义:
+- **Given** some Fast(s)
+- **When** a condition evaluates to true
+- **Then** an action is triggered
 
+`Given`方法可以接受一个或者多个不同形式的facts，作为一个信息集合提供给单一的规则。当把规则构成RuleBook后，RuleBook运行时会把facts提供给规则，所以Given是用来推断的。
+`When`方法接受一个谓词，谓词使用Facts计算条件，每个规则只能定义一个When
+`Then`方法接受一个`Consumer`或者`BiConsumer`(有结果的规则)，描述了when中的条件为真时的后续动作，一个规则中可以有多个`then()`方法会按照定义的顺序执行。
+### The Using Method
+**Using**方法将会简化传递给`then()`方法的facts集合。多个`using()`方法可以组成链。在`then()`方法之前的所有`using()`方法中指定名称的fact的聚合将可供该`then()`方法使用。上面显示了`using()`如何工作的示例。
+### The Stop Method
+**Stop**方法会中断rule chain。如果定义规则时指定了`stop()`方法，就意味着当`when()`为真时，在`then()`中的行为完成后，rule chain就会被打断，链中后续的rule不会被执行。
+### Working With Facts
+通过`given()`方法提供facts给规则，Facts包含在`NameValueReferableMap`(FactMap是实现)，是一种特殊的Map，可以方便的访问fact中包含的对象，fact存在的原因是，总是存在对规则所使用的对象的引用，即使替换了不可变的对象，人们也会认为事实仍然存在并提供对代表性对象的命名引用。Facts有很多方便的方法，因为`NameValueReferableMap`是实际传递给`when()`与`then()`方法的对象，这些方法与Map一样，facts包含一个key/value对，但是在大多数场景，key只是value的字符表示形式，在这种情况下，Fatc支持一个参数值的构造方法。此外还提供的方法:
+- `getOne()`: 如果`FactMap`中只有一个Fact则获取Fact的值
+- `getValue(String name)`: 获取name表示的Fact的值
+- `setValue(String name, T value)`: 生成一个Fact
+- `put(Fact fact)`: 添加一个Fact，使用Fact的名字作为Map的key
+- `toString()`: 当只有一个Fact存在时，获取Fact值的`toString()`方法返回的字符串
+
+下面方法是接口`NameValueReferrableTypeConvertible`的方法，`TypeConvertibleFactMap`是这个接口的实现，也是`NameValueReferableMap`的装饰器。
+- `getStrVal(String name)` gets the value of the Fact by name as a String
+- `getDblVal(String)` gets the value of the Fact by name as a Double
+- `getIntVal(String)` gets the value of the Fact by name as an Integer
+- `getBigDeciVal(String)` gets the value of the Fact by name as a BigDecimal
+- `getBoolVal(String)` gets the value of the Fact by name as a Boolean
+
+### Auditing Rules
+Rules auditing可以通过`asAuditor()`方法启动。
+```java
+ RuleBook rulebook = RuleBookBuilder.create().asAuditor()
+   .addRule(rule -> rule.withName("Rule1").withNoSpecifiedFactType()
+     .when(facts -> true)
+     .then(facts -> { } ))
+   .addRule(rule -> rule.withName("Rule2").withNoSpecifiedFactType()
+     .when(facts -> false)
+     .then(facts -> { } )).build();
+     
+ rulebook.run(new FactMap());
+```
+使用`asAuditor()`方法，RuleBook中的每个命名规则都会注册为一个*Auditable Rule*，每个*Auditable Rule*都会在RuleBook中存储状态。当规则注册为*Auditable Rule*时，`RuleStatus=NONE`，在RuleBook运行后，运行失败的规则或者条件不满足的规则的`RuleStatus=SKIPPED`，条件满足并成功执行`then()`的规则`RuleStatus=EXECUTED`，可以通过以下的方式获取状态
+```java
+ Auditor auditor = (Auditor)rulebook;
+ System.out.println(auditor.getRuleStatus("Rule1")); //prints EXECUTED
+ System.out.println(auditor.getRuleStatus("Rule2")); //prints SKIPPED
+```
+所有规则与它们状态可以通过下面的方式获取
+```java
+ Map<String, RuleStatus> auditMap = auditor.getRuleStatusMap();
+```
+### Rule Chain Behavior
+缺省情况下，加载规则时发现错误或者运行规则时抛出异常，这些规则会从rule chain中移除，换句话说，发生错误的规则会被skip，一个规则只有在条件为真且`then()`正常执行时才能stop整个rule chain。这个行为可以改变:
+```java
+RuleBook ruleBook = RuleBookBuilder.create()
+    .addRule(
+        RuleBuilder.create(GoldenRule.class, RuleChainActionType.STOP_ON_FAILURE)
+            .withFactType(String.class)
+            .when(facts -> true)
+            .then(consumer)
+            .stop()
+            .build())
+    .addRule(
+        RuleBuilder.create()
+            .withFactType(String.class)
+            .when(facts -> true)
+            .then(consumer)
+            .build())
+    .build();
+```
+在上面的例子中，第一个规则的默认的`RuleChainActionType.CONTINUE_ON_FAILURE `将会变更为`RuleChainActionType.STOP_ON_FAILURE`，这回保证如果第一个规则发生错误，第二个规则将永不会得到执行，但是不会抛出异常。如果要抛出异常并stop整个rule chain，使用下面的设置
+```java
+RuleBook ruleBook = RuleBookBuilder.create()
+    .addRule(
+        RuleBuilder.create(GoldenRule.class, RuleChainActionType.ERROR_ON_FAILURE)
+            .withFactType(String.class)
+            .when(facts -> true)
+            .then(consumer)
+            .build())
+    .addRule(
+        RuleBuilder.create()
+            .withFactType(String.class)
+            .when(facts -> true)
+            .then(consumer)
+            .build())
+    .build();
+```
+- CONTINUE_ON_FAILURE: 默认的`RuleChainActionType`，如果规则匹配错误或者发生异常跳过规则
+- ERROR_ON_FAILURE: 规则抛出异常时，stop整个rule chain
+- STOP_ON_FAILURE: rules that have their RuleState set to BREAK will stop the RuleChain if the rule's condition is false or if an exception is thrown
+
+## POJO Rules
+v0.2版本中加入了POJO规则，将规则注解到POJO类上，然后使用`RuleBookRunner`来扫描某个package下面的所有规则来创建RuleBook。
+### 一个例子
+```java
+package com.example.rulebook.helloworld;
+
+import com.deliveredtechnologies.rulebook.annotations.*;
+import com.deliveredtechnologies.rulebook.RuleState;
+
+@Rule
+public class HelloWorld {
+
+  @Given("hello")
+  private String hello;
+
+  @Given("world")
+  private String world;
+
+  @Result
+  private String helloworld;
+
+  @When
+  public boolean when() {
+      return true;
+  }
+
+  @Then
+  public RuleState then() {
+      helloworld = hello + " " + world;
+      return RuleState.BREAK;
+  }
+}
+```
+### A New MegaBank Example With POJO Rules
+MegaBank改变了利率调整政策。他们现在还接受最多包含3名申请人的贷款申请。如果所有申请人的信用评分都低于600，那么他们必须支付当前利率的4 倍。然而，如果所有申请人的信用评分都低于700，但至少有一个申请人的信用评分高于600，那么他们必须在费率之上额外支付一分。此外，如果任何申请人的信用评分为700 或以上，并且所有申请人手头可用现金总和大于或等于50,000美元，那么他们的利率将降低四分之一个百分点。如果至少一名申请人是首次购房者，并且至少一名申请人的信用评分超过600，那么在进行所有其他调整后，他们的计算利率将降低20%。
+### POJO Rules Explained
+POJO规则是通过`@Rule`注解定义的，`RuleBookRunner`会认为定义的类为一个规则，Facts通过`@Given`注解注入到POJO，`@Given`注解的名字就是fact的名字，`@Given`也可以匹配Fact值的类型或者本身就是fact，两者之间的最大区别在于，如果事实的通用对象发生更改，则应用于不可变对象的更改不会沿着规则链传播（因为它将成为一个新对象）。但是，如果您在Fact对象上设置值，这些更改将保留在规则链中。`@When`注解注释到方法上，也就是执行条件，方法必须是无参并返回boolean的。`@Then`注释到方法上，表示要执行的规则行为，`@Then`方法必须是无参的可选的返回`RuleState`，如果POJO中存在多个`@Then`方法。`@Result`表示规则的结果。
 # QLExpress
 一个总台脚本引擎/解析工具，用于阿里的电商业务规则、表达式、特殊数学公式计算、语法分析、脚本二次定制等场景。特点:
 - 线程安全，引擎运算过程中的产生的临时变量都是ThreadLocal的
@@ -544,4 +670,56 @@ QLExpress与本地JVM交互的方式有:
         <version>0.2.0</version>
     </dependency>
 ```
+# Evrete
+Evrete是一个前向推理Java规则引擎，实现了RETE算法，兼容Java规则引擎规范JSR94。历史上，该引擎被设计为全面规则管理系统的快速、轻量级替代方案，还带来了自己的特性:
+- Rule authoring
+  - 规则可以从外部输入或者内联为Java8代码
+  - 规则可以通过注解书写
+  - 库本身是一个灵活的工具，支持创建自定义的DSL
+- Intuitive and developer-friendly
+  - 库的类型系统允许它处理各种类型的对象包括JSON、XML
+  - 流式Builder，Java的函数式接口等最佳实践让你的代码简洁清晰
+  - 关键组件暴露为SPI可以定制化
+- Performance and security
+  - 引擎的算法与内存使用支持大规模数据
+  - 内置支持`Java Security Manager`防止规则中的恶意代码造成破坏
 
+添加依赖
+```xml
+<dependency>
+    <groupId>org.evrete</groupId>
+    <artifactId>evrete-core</artifactId>
+    <version>3.2.00</version>
+</dependency>
+```
+## Quick start
+以下是一个简单的规则示例，该规则从会话内存中删除除了质数之外的每个整数。
+```java
+public class PrimeNumbersInline {
+    public static void main(String[] args) {
+        KnowledgeService service = new KnowledgeService();
+        Knowledge knowledge = service.newKnowledge().builder()
+                .newRule("prime numbers")
+                .forEach("$i1", Integer.class, "$i2", Integer.class, "$i3",
+                        Integer.class)
+                .where("$i1 * $i2 == $i3").execute(ctx -> ctx.deleteFact("$i3"))
+                .build();
+        
+        try (StatefulSession session = knowledge.newStatefulSession()) {
+            // Inject candidates
+            for (int i = 2; i <= 100; i++) {
+                session.insert(i);
+            }
+            
+            // Execute rules
+            session.fire();
+            
+            // Print current memory state
+            session.forEachFact((handle, o) -> System.out.println(o));
+        }
+        service.shutdown();
+    }
+}
+```
+## About
+一个兼容标准、轻量、开源、开发者友好的Java规则引擎，适用于任何规模或者复杂性的系统。
