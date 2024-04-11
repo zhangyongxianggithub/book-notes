@@ -457,7 +457,19 @@ public class Application {
 ```
 另一种技术可以实现类似的结果，还具有将不同类型发送到同一主题的额外能力。具体参考[Delegating Serializer and Deserializer](https://docs.spring.io/spring-kafka/reference/kafka/serdes.html#delegating-serialization)
 ### Using `DefaultKafkaProducerFactory`
+发送消息需要一个`ProducerFactory`来创建生产者。如果不使用事务，`DefaultKafkaProducerFactory`会创建一个所有客户端使用的单例生产者。这是kafka官方推荐的方式。但是如果你调用template的`flush()`方法，这回造成使用同一个producer的其他线程的客户端阻塞。从2.3版本开始，`DefaultKafkaProducerFactory`有个新的属性`producerPerThread`，当设置为`true`，工厂将会为每个线程都创建一个生产者。当`producerPerThread=true`后，当生产者不在被需要，用户代码需要调用工厂上的`closeThreadBoundProducer()`方法，这会关闭生产者并从`ThreadLocal`中移除生产者。调用`reset()`或者`destroy()`不会清理这些生产者。当创建一个`DefaultKafkaProducerFactory`时，key/value的`Serializer`可以从配置中获取，也可以直接传递`Serializer`对象到`DefaultKafkaProducerFactory`的构造函数来创建，可以复用`Serializer`，你还可以提供`Supplier<Serializer>`用来为每个producer创建各自的`Serializer`对象。
+```java
+@Bean
+public ProducerFactory<Integer, CustomValue> producerFactory() {
+    return new DefaultKafkaProducerFactory<>(producerConfigs(), null, () -> new CustomValueSerializer());
+}
 
+@Bean
+public KafkaTemplate<Integer, CustomValue> kafkaTemplate() {
+    return new KafkaTemplate<Integer, CustomValue>(producerFactory());
+}
+```
+从2.5.10版本开始，
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners

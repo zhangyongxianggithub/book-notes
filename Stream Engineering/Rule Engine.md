@@ -1,3 +1,5 @@
+[TOC]
+>In programming, simplicity and clarity are not a dispensable luxury, but a crucial matter that decides between success and failure. - E. Dijkstra
 # 开源的方案
 - incubator-kie-drools
 - easy-rules
@@ -18,6 +20,31 @@
 - 平滑热刷: 编排规则、脚本组件，不需要重启应用即时刷新，实时替换逻辑
 - 支持度广: JDK8~JDK17,Spring 2.x ~ Spring 3.x
 - 高级特性: 很多
+# RuleBook
+RuleBook是用Java开发的，可以通过Lambda DSL或者POJOs来描述rule。还在为代码中大量的if/else烦恼？你需要一个抽象运训通过规则的形式将它们互相解耦。RuleBook就是你正在等待的规则抽象。
+## Getting RuleBook
+```xml
+<dependency>
+    <groupId>com.deliveredtechnologies</groupId>
+    <artifactId>rulebook-core</artifactId>
+    <version>0.12</version>
+</dependency>
+```
+## Using RuleBook
+```java
+RuleBook ruleBook = RuleBookBuilder.create()
+    .addRule(rule -> rule.withNoSpecifiedFactType()
+      .then(f -> System.out.print("Hello "))
+      .then(f -> System.out.println("World")))
+    .build();
+RuleBook ruleBook = RuleBookBuilder.create()
+    .addRule(rule -> rule.withNoSpecifiedFactType().then(f -> System.out.print("Hello ")))
+    .addRule(rule -> rule.withNoSpecifiedFactType().then(f -> System.out.println("World")))
+    .build();
+ruleBook.run(new FactMap());
+```
+### 一个更复杂的场景
+MegaBank时一个家庭信贷业务的银行。
 # QLExpress
 一个总台脚本引擎/解析工具，用于阿里的电商业务规则、表达式、特殊数学公式计算、语法分析、脚本二次定制等场景。特点:
 - 线程安全，引擎运算过程中的产生的临时变量都是ThreadLocal的
@@ -497,11 +524,9 @@ QLExpress与本地JVM交互的方式有:
   - 通过 import 可以导入JVM中存在的任何类并且使用, 默认情况下会导入`java.lang`, `java.util`以及`java.util.stream`
 
 在不同的场景下，应用可以配置不同的安全级别，安全级别由低到高：
-- 黑名单控制：QLExpress默认会阻断一些高危的系统 API, 用户也可以自行添加, 但是开放对 JVM 中其他所有类与方法的访问, 最灵活, 但是很容易被反射工具类绕过，只适用于脚本安全性有其他严格控制的场景，禁止直接运行终端用户输入
-
-白名单控制：QLExpress 支持编译时白名单和运行时白名单机制, 编译时白名单设置到类级别, 能够在语法检查阶段就暴露出不安全类的使用, 但是无法阻断运行时动态生成的类(比如通过反射), 运行时白名单能够确保运行时只可以直接调用有限的 Java 方法, 必须设置了运行时白名单, 才算是达到了这个级别
-
-沙箱模式：QLExpress 作为一个语言沙箱, 只允许通过自定义函数/操作符/宏与应用交互, 不允许与 JVM 中的类产生交互
+- 黑名单控制: QLExpress默认会阻断一些高危的系统API, 用户也可以自行添加, 但是开放对JVM中其他所有类与方法的访问, 最灵活, 但是很容易被反射工具类绕过，只适用于脚本安全性有其他严格控制的场景，禁止直接运行终端用户输入
+- 白名单控制: QLExpress支持编译时白名单和运行时白名单机制, 编译时白名单设置到类级别, 能够在语法检查阶段就暴露出不安全类的使用, 但是无法阻断运行时动态生成的类(比如通过反射), 运行时白名单能够确保运行时只可以直接调用有限的 Java 方法, 必须设置了运行时白名单, 才算是达到了这个级别
+- 沙箱模式：QLExpress作为一个语言沙箱, 只允许通过自定义函数/操作符/宏与应用交互, 不允许与JVM中的类产生交互
 
 
 # RuleEngine
