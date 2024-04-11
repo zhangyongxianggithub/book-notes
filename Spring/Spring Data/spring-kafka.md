@@ -469,7 +469,148 @@ public KafkaTemplate<Integer, CustomValue> kafkaTemplate() {
     return new KafkaTemplate<Integer, CustomValue>(producerFactory());
 }
 ```
-从2.5.10版本开始，
+从2.5.10版本开始，工厂创建后，你还可以更新生产者的属性。有时候有用，比如你要更新SSL的证书位置等情况。变更不会影响到已创建的生产者实例。调用`reset()`会关闭现有的生产者实例并使用新的属性创建信息的生产者。但是能不能将事务的生产者工厂转变为非事务的，也不能把非事务的转变为事务的。新的变更属性的方法
+```java
+void updateConfigs(Map<String, Object> updates);
+
+void removeConfig(String configKey);
+```
+从2.8版本开始，如果你提供序列化对象到生产者，工厂会调用`configure()`方法来配置它们为相关的配置属性。
+### Using `ReplyingKafkaTemplate`
+2.1.3版本引入了一个`KafkaTemplate`的子类来提供request/reply语义。这个类被命名为`ReplyingKafkaTemplate`，有2个额外的方法:
+```java
+RequestReplyFuture<K, V, R> sendAndReceive(ProducerRecord<K, V> record);
+
+RequestReplyFuture<K, V, R> sendAndReceive(ProducerRecord<K, V> record,
+    Duration replyTimeout);
+```
+参考[Request/Reply with Message<?>](https://docs.spring.io/spring-kafka/reference/kafka/sending-messages.html#exchanging-messages)。结果是一个`CompletableFuture`，结果有一个`sendFuture`属性是`KafkaTemplate.send()`的结果。从3.0版本开始，从这些方法返回的futures变更为`CompletableFuture`而不是`ListenableFuture`。如果使用了第一个方法没有设置`replyTimeout`参数，那么会使用默认的`defaultReplyTimeout`属性设置的值(5秒)。从2.8.8版本开始，template有一个新方法`waitForAssignment`。当reply container配置为`auto.offset.reset=latest`这会很有用，可以to avoid sending a request and a reply sent before the container is initialized.当使用手动分区分配(无组管理)时，等待时间必须大于容器的`pollTimeout`属性，因为直到第一次轮询完成后才会发送通知。下面是一个使用的例子:
+```java
+@SpringBootApplication
+public class KRequestingApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(KRequestingApplication.class, args).close();
+    }
+
+    @Bean
+    public ApplicationRunner runner(ReplyingKafkaTemplate<String, String, String> template) {
+        return args -> {
+            if (!template.waitForAssignment(Duration.ofSeconds(10))) {
+                throw new IllegalStateException("Reply container did not initialize");
+            }
+            ProducerRecord<String, String> record = new ProducerRecord<>("kRequests", "foo");
+            RequestReplyFuture<String, String, String> replyFuture = template.sendAndReceive(record);
+            SendResult<String, String> sendResult = replyFuture.getSendFuture().get(10, TimeUnit.SECONDS);
+            System.out.println("Sent ok: " + sendResult.getRecordMetadata());
+            ConsumerRecord<String, String> consumerRecord = replyFuture.get(10, TimeUnit.SECONDS);
+            System.out.println("Return value: " + consumerRecord.value());
+        };
+    }
+
+    @Bean
+    public ReplyingKafkaTemplate<String, String, String> replyingTemplate(
+            ProducerFactory<String, String> pf,
+            ConcurrentMessageListenerContainer<String, String> repliesContainer) {
+
+        return new ReplyingKafkaTemplate<>(pf, repliesContainer);
+    }
+
+    @Bean
+    public ConcurrentMessageListenerContainer<String, String> repliesContainer(
+            ConcurrentKafkaListenerContainerFactory<String, String> containerFactory) {
+
+        ConcurrentMessageListenerContainer<String, String> repliesContainer =
+                containerFactory.createContainer("kReplies");
+        repliesContainer.getContainerProperties().setGroupId("repliesGroup");
+        repliesContainer.setAutoStartup(false);
+        return repliesContainer;
+    }
+
+    @Bean
+    public NewTopic kRequests() {
+        return TopicBuilder.name("kRequests")
+            .partitions(10)
+            .replicas(2)
+            .build();
+    }
+
+    @Bean
+    public NewTopic kReplies() {
+        return TopicBuilder.name("kReplies")
+            .partitions(10)
+            .replicas(2)
+            .build();
+    }
+
+}
+```
+可以使用SpringBoot自动配置的容器工厂来创建reply container。如果你正在为reply使用一个deserializer，你可以使用`ErrorHandlingDeserializer`代理你的反序列化器。 这样，如果`RequestReplyFuture`异常结束，你可以获得`ExecutionException`异常，从2.6.7版本开始，除了检测`DeserializationException`，template也可以调用`replyErrorChecker`函数，如果它返回了一个异常，future就是异常结束的。下面是一个例子:
+```java
+template.setReplyErrorChecker(record -> {
+    Header error = record.headers().lastHeader("serverSentAnError");
+    if (error != null) {
+        return new MyException(new String(error.value()));
+    }
+    else {
+        return null;
+    }
+});
+
+...
+
+RequestReplyFuture<Integer, String, String> future = template.sendAndReceive(record);
+try {
+    future.getSendFuture().get(10, TimeUnit.SECONDS); // send ok
+    ConsumerRecord<Integer, String> consumerRecord = future.get(10, TimeUnit.SECONDS);
+    ...
+}
+catch (InterruptedException e) {
+    ...
+}
+catch (ExecutionException e) {
+    if (e.getCause instanceof MyException) {
+        ...
+    }
+}
+catch (TimeoutException e) {
+    ...
+}
+```
+template设置了一个header(`KafkaHeaders.CORRELATION_ID`)，由服务端透明返回的。下面使用`@KafkaListener`响应这个request/reply
+```java
+@SpringBootApplication
+public class KReplyingApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(KReplyingApplication.class, args);
+    }
+
+    @KafkaListener(id="server", topics = "kRequests")
+    @SendTo // use default replyTo expression
+    public String listen(String in) {
+        System.out.println("Server received: " + in);
+        return in.toUpperCase();
+    }
+
+    @Bean
+    public NewTopic kRequests() {
+        return TopicBuilder.name("kRequests")
+            .partitions(10)
+            .replicas(2)
+            .build();
+    }
+
+    @Bean // not required if Jackson is on the classpath
+    public MessagingMessageConverter simpleMapperConverter() {
+        MessagingMessageConverter messagingMessageConverter = new MessagingMessageConverter();
+        messagingMessageConverter.setHeaderMapper(new SimpleKafkaHeaderMapper());
+        return messagingMessageConverter;
+    }
+
+}
+```
+`@KafkaListener`基础设施回显correlation ID并决定reply topic。查看[Forwarding Listener Results using @SendTo](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/annotation-send-to.html)获取sending replies的更多信息。template使用默认的header`KafKaHeaders.REPLY_TOPIC`来指出reply发送的topic。从2.2版本开始
 ### Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
 #### Message Listeners
