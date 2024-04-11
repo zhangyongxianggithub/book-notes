@@ -44,7 +44,13 @@ RuleBook ruleBook = RuleBookBuilder.create()
 ruleBook.run(new FactMap());
 ```
 ### 一个更复杂的场景
-MegaBank时一个家庭信贷业务的银行。
+MegaBank发放住房贷款。如果申请人的信用评分低于600，那么他们必须支付当前利率的4倍。如果申请人的信用评分在600分但低于700分之间，那么他们必须在信用评分的基础上额外支付一点。如果申请人的信用评分至少为700，并且手头至少有25,000美元现金，那么他们的利率将降低四分之一个百分点。如果申请人是首次购房者，则根据信用评分进行调整后，他们的计算利率可享受20%的折扣(注: 首次购房折扣仅适用于信用评分为600或以上的申请人)。
+### Thread Safety
+RuleBook是线程安全的。但是`FactMaps`与其他的`NameValueReferableMap`实现不是线程安全的。也就是说，一个RuleBook类型的实例对象可以在不同的线程中使用不同的Facts正常运行。在不同的线程中，使用同一个`FactMap`可能会产生异常结果。`Facts`表示`RuleBook`的一次调用的数据，`RuleBooks`表示可复用的规则集合。
+## RuleBook DSL详细说明
+RuleBook的Java DSL使用了` Given-When-Then`的格式，由BDD与相关的测试框架推广开来。很多概念都来自借鉴自BDD，应该使用句子来描述规则，并且应该使用翻译成代码库的通用语言来定义规则。
+### Given-When-Then: RuleBook语言的根本
+
 # QLExpress
 一个总台脚本引擎/解析工具，用于阿里的电商业务规则、表达式、特殊数学公式计算、语法分析、脚本二次定制等场景。特点:
 - 线程安全，引擎运算过程中的产生的临时变量都是ThreadLocal的
