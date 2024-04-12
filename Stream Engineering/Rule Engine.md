@@ -835,4 +835,4 @@ session.fire((handle, object) -> {
 // Session has ended and can not be reused
 ```
 ## Working Memory
-
+Working memory是保存会话并操作facts的地方。Evrete提供了默认的SPI实现，
