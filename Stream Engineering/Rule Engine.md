@@ -835,4 +835,219 @@ session.fire((handle, object) -> {
 // Session has ended and can not be reused
 ```
 ## Working Memory
-Working memory是保存会话并操作facts的地方。Evrete提供了默认的SPI实现，
+Working memory是保存会话并操作facts的地方。Evrete提供了working memory数据结构默认的SPI实现，开发这可以提供他们自定义的方案吗比如database、NoSQL或者基于文件系统的实现。内部，Evrete对于有状态或者无状态的working memories没有区别。然而，查询内容是完全不同的。检查有状态会话的memory，开发者可以调用`org.evrete.api.StatefulSession`实例上的流式方法:
+- `<T> T getFact(FactHandle handle);`
+- `<T> StatefulSession forEachFact(Class<T> type, Consumer<T> consumer);`
+- `<T> StatefulSession forEachFact(String type, Consumer<T> consumer);`
+- `<T> StatefulSession forEachFact(Class<T> type, Predicate<T> filter, Consumer<T> consumer);`
+- `<T> StatefulSession forEachFact(String type, Predicate<T> filter, Consumer<T> consumer);`
+- `StatefulSession forEachFact(BiConsumer<FactHandle, Object> consumer);`
+- `StatefulSession forEachFact(Consumer<Object> consumer);`
+
+与规则条件不同，`forEachFact()`方法种的`Predicate<T>`过滤条件不是RETE算法的一部分，因此不会被优化，开发者需要考虑将他们作为遍历方法，=并据此设计应用。对于short-lived`org.evrete.api.StatelessSession`实例来说，memory检查就是会话的`fire()`方法的一部分
+- `void fire(Consumer<Object> consumer);`
+- `void fire(Predicate<Object> filter, Consumer<Object> consumer);`
+- `<T> void fire(String type, Consumer<T> consumer);`
+- `<T> void fire(String type, Predicate<T> filter, Consumer<T> consumer);`
+- `<T> void fire(Class<T> type, Consumer<T> consumer);`
+- `<T> void fire(Class<T> type, Predicate<T> filter, Consumer<T> consumer);`
+
+如果开发人员只对会话如何更改插入的事实感兴趣，并且memory实现支持引用相等(默认实现支持)，则可以使用以下`fire(...)`方法完全跳过内存扫描:
+- `void fire();`
+- `void insertAndFire(Object... objects);`
+
+下面是一个简单自解释的例子，展示了无状态会话中通过引用更新facts
+```java
+Knowledge knowledge = service
+        .newKnowledge()
+        .builder()
+        .newRule()
+        .forEach("$ai", AtomicInteger.class)
+        .where("$ai.get() < 10")
+        .execute(context -> {
+            AtomicInteger obj = context.get("$ai");
+            obj.incrementAndGet();
+            context.update(obj);
+        })
+        .build();
+
+StatelessSession session = knowledge.newStatelessSession();
+
+AtomicInteger obj = new AtomicInteger(0);
+System.out.println("Pre-value:  " + obj.get()); // Prints 0
+session.insertAndFire(obj);
+System.out.println("Post-value: " + obj.get()); // Prints 10
+```
+## Rule Builders
+使用Evrete，` org.evrete.api.builders.RuleSetBuilder`与`org.evrete.api.builders.RuleBuilder`都是用来创建与发布规则的基础类，开发者可以使用这些构建器来编写内联规则或者使用DSL编写规则。`RuleBuilder`包含下面的声明
+- A mandatory fact types selector - `forEach(...)`
+- Zero or more optional `where(...)`clauses.
+- A mandatory action clause - `execute(...)`
+
+`RuleBuilder`实例对象可以从`Knowledge`或者`RuleSession`上下文获取，他们都被设计为流式的接口，这样一个规则的LHS与RHS部分都可以通过个链接命令添加到规则集合中。
+```java
+KnowledgeService service = new KnowledgeService();
+Knowledge knowledge = service
+        .newKnowledge()
+        .builder()                      // Start of the ruleset
+        .newRule("Rule 1")
+        .forEach(
+            "$c", Customer.class,
+            "$o", Order.class
+        )
+        .where("$c.active")
+        .where("$c.id == $o.customer.id")
+        .execute(this::rule1Rhs)
+        .newRule("Rule 2")
+        .forEach("$s", Shipment.class)
+        .where("$s.delivered == true")
+        .execute(this::rule2Rhs)
+        .build();                       // End of the ruleset
+
+StatefulSession session = knowledge.newStatefulSession();
+```
+LHS=facts+conditions, RHS=actions。
+## Left Hand Side
+facts/conditions的声明也叫做LHS(left hand side)，定义哪些fact以及在哪些条件下将传递到规则的action块(RHS- right hand side)。语义上来说，每个规则定义的LHS基本等同于SQL的`SELECT ... FROM .... WHERE ...`结构，定义包含fact声明与可选的条件。每个Rule都有一个或者多个fact声明，每个fact声明包含一个类型与一个变量。fact变量就是在条件以及随后的action中的引用句柄，Fact变量必须在规则中唯一，以`$`标志开头。fact的类型定义了它的属性，从内部来看，Evrete不依赖Java的类型系统，但是当fact类型是通过Java类来定义时，引擎会检查Java类并自动推导fact的类型属性。调用`RuleBuilder`实例上的`forEach(...)`方法来声明Facts。
+```java
+RuleBuilder<Knowledge> rb = knowledge
+    .builder()
+    .newRule("Rule 1");
+
+rb.forEach(
+        "$c", Customer.class,
+        "$o", Order.class
+    )
+    // End of fact declarations
+    // ...
+    ;
+```
+参考[org.evrete.api.LhsFactSelector](https://www.evrete.org/apidocs/3.2.00/org.evrete.core/org/evrete/api/LhsFactSelector.html)来获取更多的声明的细节与方便的方法。Fact条件可以表示为字符串或者不同类型的谓词。比如下面的3个例子都是等价的
+```java
+RuleBuilder<Knowledge> rb = knowledge
+    .builder()
+    .newRule("Rule 1");
+
+rb.forEach(
+        "$c", Customer.class,
+        "$o", Order.class
+    )
+    .where("$c.active == true")
+    .where("$o.customer == $c")
+    // ...
+    ;
+```
+```java
+RuleBuilder<Knowledge> rb = knowledge
+    .builder()
+    .newRule("Rule 1");
+
+rb.forEach(
+        "$c", Customer.class,
+        "$o", Order.class
+    )
+    .where(this::condition1, "$c.active")
+    .where(this::condition2, "$o.customer.id", "$c.id")
+    // ...
+    ;
+
+boolean condition1(IntToValue values) {
+    return values.get(0);
+}
+
+boolean condition2(IntToValue values) {
+    int id1 = values.get(0);
+    int id2 = values.get(1);
+    return id1 == id2;
+}
+```
+```java
+RuleBuilder<Knowledge> rb = knowledge
+    .builder()
+    .newRule("Rule 1");
+
+rb.forEach(
+        "$c", Customer.class,
+        "$o", Order.class
+    )
+    .where(this::condition1, "$c.active")
+    .where(this::condition2, "$o.customer.id", "$c.id")
+    // ...
+    ;
+
+boolean condition1(Object[] values) {
+    return (boolean) values[0];
+}
+
+boolean condition2(Object[] values) {
+    int id1 = (int) values[0];
+    int id2 = (int) values[1];
+    return id1 == id2;
+}
+```
+多个where()条件会通过`AND`连接。当使用函数式接口作为条件时，需要在predicate函数式接口后提供相关的field引用。参考[org.evrete.api.FieldReference](https://www.evrete.org/apidocs/3.2.00/org.evrete.core/org/evrete/api/FieldReference.html)API文档获取field引用的细节。在Evrete中，条件不属于规则，相反，规则使用条件的引用，也就是条件的handles，这样规则引擎可以检测逻辑相等性或者反转条件等，以便在多个规则中复用他们。在大多数场景中，规则引擎会自动将条件转换为condition handles，开发者可以明确的获取condition handles并在`where()`指令中使用它们，参考下面的资源获取细节与案例用法
+- [Change Conditions](https://www.evrete.org/guides/howto/change-conditions/) in the Guides section
+- [org.evrete.api.builders.RuleBuilder](https://www.evrete.org/apidocs/3.2.00/org.evrete.core/org/evrete/api/builders/RuleBuilder.html)与它的多个`createCondition()`方法。
+## Right Hand Side
+规则的RHS是一个方法，对于声明的facts，每个满足条件条件的组合都会调用RHS一次。在规则构建器中，RHS是通过`execute(...)`方法定义的，最终完成整个规则的定义并返回当前的ruleset构建器。
+```java
+// Execute RHS as a functional interface
+RuleSetBuilder<C> execute(Consumer<RhsContext> consumer);
+// Execute RHS as Java source code
+RuleSetBuilder<C> execute(String literalRhs);
+// Sets the RHS to "do nothing"
+RuleSetBuilder<C> execute();
+```
+`org.evrete.api.RhsContext`接口提供必要的方法来检索、更新、删除facts。如果你还没决定好要执行的action就使用一个空的`execute()`方法。不用说，将规则的LHS/RHS都表示为函数式接口可以将规则集完全集成到开发人员的应用程序上下文中。
+```java
+knowledge
+    .builder()
+    .newRule();
+    .forEach(
+        "$c", Customer.class,
+        "$o", Order.class
+    )
+    .where(this::condition, "$o", "$c")
+    .execute(this::action)
+    .build();
+    // ...
+
+boolean condition(IntToValue values) {
+    Order o = values.get(0);
+    Customer c = values.get(1);
+    // call a REST API, query a database, etc
+    // ...
+}
+
+void action(RhsContext ctx) {
+    Order o = ctx.get("$o");
+    Customer c = ctx.get("$c");
+    // process, update, write to a stream,
+    // save to a file or a database...
+    // ...
+}
+```
+当规则操作以字符串形式提供时，引擎会即时生成并编译一个Java类，其方法的主体与所提供的操作字符串完全相同。例如，像这样的操作声明：
+```java
+knowledge
+    .builder()
+    .newRule("My rule")
+    .forEach("$c", Customer.class)
+    .where("$c.rating > 1000.0")
+    .execute("System.out.println($c);")
+    .build()
+    .newStatefulSession();
+```
+底层编译的Java类类似下面的代码:
+```java
+class Rhs036355 implements RhsContext {
+    // ....
+
+    void doRhs(Customer $c) {
+        // RHS START
+        System.out.println($c);
+        // RHS END
+    }
+}
+```
+对文字RHS的支持是Evrete扩展性接口的一部分，允许开发人员通过提供`org.evrete.api.spi.LiteralSourceCompiler`的替代实现来覆盖它。Evrete
