@@ -723,3 +723,102 @@ public class PrimeNumbersInline {
 ```
 ## About
 一个兼容标准、轻量、开源、开发者友好的Java规则引擎，适用于任何规模或者复杂性的系统。
+## Getting Started
+添加下面的核心依赖，如果要使用注解与JSR94的支持，也需要加入额外的依赖。
+```xml
+<!-- Evrete core dependency -->
+<dependency>
+    <groupId>org.evrete</groupId>
+    <artifactId>evrete-core</artifactId>
+    <version>3.2.00</version>
+</dependency>
+```
+### Key Concepts
+主要分为几个模块:
+- Type System: 库的逻辑类型系统
+- Knowledge Service: Evrete的根对象与配置
+- Rulesets: 规则的类型与它们的生命周期
+- Rule Sessions: 有状态与无状态的会话以及如何使用它们
+- Working Memory: working memory的描述与它的基本功能
+- Rule Builders: 一个简短的描述与基本的使用
+#### Type System
+在Evrete中，所有的fact类型都是逻辑的并使用一个字符串标识符与它关联的Java类表示，也就是相同Java实例可以有不同的逻辑类型。比如说XML，如果你处理XML facts，这些实例大概率是`org.w3c.dom.Document`Java类型，它们的逻辑类型可能是不同的。field的默认的逻辑类型来自关联的Java类的getter方法或者public fields。除了这些默认字段之外，您还可以将自定义字段定义为关联Java类的函数。领域类可能不太适合规则创作，而自定义字段可以提供额外的抽象级别并大大简化规则条件:
+#### Knowledge Service
+`org.evrete.KnowledgeService`是所有Evrete应用的根组件，它包含了初始配置、安全设置、内部内存集合的工厂与一个Java executor实例。应用需要确保每个配置只有一个`KnowledgeService`实例。
+```java
+// Service with a default configuration
+KnowledgeService service = new KnowledgeService();
+```
+```java
+// Service with a custom configuration
+Configuration conf = new Configuration();
+KnowledgeService service = new KnowledgeService(conf);
+```
+#### Rulesets
+一个Ruleset，也就是一组逻辑相关联的规则形成的集合。构成每个规则引擎的核心概念。处理这些规则很有挑战性都是CPU密集操作。规则引擎通过将输入预处理为一种优化表示形式来解决这个问题。Evrete也采用了类似的形式，将Ruleset分成2种类型或者说是2个阶段。
+- `org.evrete.api.Knowledge`: 表示预编译或者优化后的规则集合，一个模板来产生未来的rule sessions
+- `org.evrete.api.RuleSession`: 建立连接来操作session数据，可以是有状态的或者无状态的
+
+Evrete的进一步区别在于它能够绕过预处理阶段并方便向现有会话添加规则:
+```java
+Knowledge knowledge = service
+        .newKnowledge()
+        .builder()
+        .newRule()
+        //
+        //
+        .build();
+StatelessSession session = knowledge.newStatelessSession();
+```
+Without knowledge
+```java
+StatelessSession session = service
+        .newStatelessSession()
+        .builder()
+        .newRule()
+        //
+        //
+        .build();
+```
+#### Rule Sessions
+Java规则引擎API规范定义了2种类型的会话:
+- 有状态会话: 一个专门的会话，facts的生命周期与会话的生命周期相同
+- 无状态会话: 一个request/response会话，执行完自动关闭
+
+规范也强制指出每个insert到会话的fact都有它自己的handle，一个序列化的唯一的标识符可以用来检索、删除或者更新fact。Evrete支持2种会话` org.evrete.api.StatefulSession`与`org.evrete.api.StatelessSession`。
+有状态会话:
+```java
+try (StatefulSession session = knowledge.newStatefulSession()) {
+    Customer customer = new Customer();
+    FactHandle customerHandle = session.insert(customer);
+
+    // Commit changes
+    session.fire();
+
+    // Direct memory inspection
+    customer = session.getFact(customerHandle);
+    customer.setLimit(57125.00);
+    session.update(customerHandle, customer)
+    session.fire();
+
+    //
+    //  More inserts, updates and deletes
+    //
+}
+```
+无状态会话
+```java
+StatelessSession session = knowledge.newStatelessSession();
+Customer customer = new Customer();
+Invoice invoice = new Invoice();
+FactHandle customerHandle = session.insert(customer);
+FactHandle invoiceHandle = session.insert(invoice);
+
+// Commit and inspect memory
+session.fire((handle, object) -> {
+    // Inspect memory objects
+});
+// Session has ended and can not be reused
+```
+## Working Memory
+
