@@ -1050,4 +1050,268 @@ class Rhs036355 implements RhsContext {
     }
 }
 ```
-对文字RHS的支持是Evrete扩展性接口的一部分，允许开发人员通过提供`org.evrete.api.spi.LiteralSourceCompiler`的替代实现来覆盖它。Evrete
+对文字RHS的支持是Evrete扩展性接口的一部分，允许开发人员通过提供`org.evrete.api.spi.LiteralSourceCompiler`的替代实现来覆盖它。Evrete允许在运行时改变规则的action，不论规则是在一个预编译的`knowledge`规则集合中还是规则是一个live`RuleSession`实例对象，你都可以随时检索与更改规则的action
+```java
+void setRhs(String literalRhs);
+
+void setRhs(Consumer<RhsContext> rhs);
+
+Consumer<RhsContext> getRhs();
+
+void chainRhs(Consumer<RhsContext> anotherRhs);
+```
+## Conflict Resolution
+当一个规则集合包含2个或者以上的规则时，规则作者或者开发者可能想要设置执行的顺序或者有条件的执行规则。一个重要的考虑因素是，如果规则的执行对会话内存产生副作用，会发生什么情况。解决冲突就是一种方式，通知引擎如何处理这种情况。Evrete3种机制，开发者可以用来解决冲突
+- Salience
+- ActivationManager
+- ActivationMode
+
+### Rule Salience
+开箱即用，引擎使用的是规则的自然出现顺序，就是越早出现的，优先级(salience)越高。可以通过`setSalience()`方法覆盖默认的，默认情况下，每个规则使用一个降序的排序来作为salience，也就是0,-1,-2,....。开发者可以通过为`Knowledge`与`RuleSession`实例对象设置一个自定义的`Comparator`来完全忽略salience。下面的例子定义了一个规则排序器
+```java
+ruleset.setRuleComparator(
+    (rule1, rule2) -> {
+        double val1 = rule1.get("SORT-PROPERTY", 1.0);
+        double val2 = rule2.get("SORT-PROPERTY", 1.0);
+        return Double.compare(val1, val2);
+    }
+);
+```
+### Activation Manager
+在Evrete中，每一个规则集合都会关联一个默认的`org.evrete.api.ActivationManager`，本质上是一个激活过滤器。默认的实现对所有的规则不做任何限制，并且激活所有的规则。你可以自定义一个来替换默认的allow-all策略，自定义过滤器策略可以通过使用规则的`ACTIVATION-GROUP` meta-paramter确保在一个activation组的所有规则，只有一个被激活
+```java
+public class SampleActivationManager implements ActivationManager {
+    private final Set<String> activatedGroups = new HashSet<>();
+
+    @Override
+    public void onAgenda(int sequenceId, List<RuntimeRule> agenda) {
+        // New agenda resets activation history
+        activatedGroups.clear();
+    }
+
+    @Override
+    public boolean test(RuntimeRule rule) {
+        return !activatedGroups.contains(getActivationGroup(rule));
+    }
+
+    @Override
+    public void onActivation(RuntimeRule rule, long count) {
+        String activationGroup = getActivationGroup(rule);
+        activatedGroups.add(activationGroup);
+    }
+
+    static String getActivationGroup(RuntimeRule rule) {
+        // Reading rule's meta property
+        return Objects.requireNonNull(rule.get("ACTIVATION-GROUP"));
+    }
+}
+```
+指定activation manager的2种方式:
+- 一个无参构造函数的工厂类
+- 使用activation manager更新会话
+
+```java
+// Knowledge-wide approach
+Knowledge knowledge = service
+    .newKnowledge()
+    .setActivationManagerFactory(SampleActivationManager.class)
+    .newRule("Rule 1")
+    .salience(20)
+    .set("ACTIVATION-GROUP", "AG1")
+    // .....
+
+StatefulSession session = knowledge.newStatefulSession();
+
+// Overriding activation manager for a session
+session.setActivationManager(new SampleActivationManager());
+```
+### Activation Mode
+当session调用了`fire()`方法后，引擎的处理类似下面的伪代码:
+```java
+while [there are changes in session memory] do:
+  1. create an agenda - a sorted list of rules affected by the changes
+  2. for each rule in the agenda do:
+      2.1 activate the rule (if permitted by the ActivationManager)
+      2.2 if the activation did not incur any memory changes,
+          then continue with the next rule
+      2.3 if it did ...
+
+       - "Then what? We're in the middle of dealing with previous
+          changes, what should we do with the new ones?"
+```
+如果没有规则改变内存，唯一的改变就是第一次的会话内存的初始化，`while`循环只会执行一次，如果规则改变了内存，比如说插入了一个新的fact，引擎需要处理这种新的情况。规则引擎如何处理这种情况是通过它的**conflict resolution strategy**决定的，冲突解决不是Rete算法的一部分，规则引擎必须自己决定如何处理。冲突解决是与*Working Memory Action (WMA)*的概念极度相关的，一个WMA可以被认为是改变working memory中某些内容的意图。不论我们是在外部调用了`insert/update/delete`方法还是在规则的action部分调用，引擎不会马上变更，而且是创建一个WMA集合并buffered。
+```
+[UPDATE] HANDLE=12359 FACT=Invoice{total="346.7"}
+[INSERT] HANDLE=52552 FACT=Customer{id="8"}
+[DELETE] HANDLE=27658
+[DELETE] HANDLE=32353
+```
+当调用`fire()`方法，引擎处理WMA buffer，对Rete节点求值，计算agenda，执行规则的action，如果产生新的WMA就添加到队列中，继续处理，当WMAbuffer空了，`fire()`方法完成处理循环。Evrete提供了2种相对比较简单的*conflict resolution strategies*，它们由` org.evrete.api.ActivationMode`参数指定。
+- `ActivationMode.CONTINUOUS`: 引擎执行agenda上的所有的规则并收集由action产生的WMA，一旦引擎处理完agenda，收集到的WMA组成一个新的WMAbuffer，这种策略，agenda上的所有规则都不知道前面规则创建的WMA。
+- `ActivationMode.DEFAULT`: 使用一个内部的版本机制，一个规则action块可以看到agenda上前面一个规则作出的变更，删除的或者有了新的版本的fact会从当前的action块排除，这种方式的运行逻辑类似Drools库。
+
+可以在`Knowledge`与`RuleSession`对象实例上配置模式.
+```java
+// Global setting, each new session will inherit this choice
+knowledge.setActivationMode(ActivationMode.DEFAULT);
+
+// As a new session create argument
+StatefulSession session = knowledge.newStatefulSession(ActivationMode.DEFAULT);
+
+// The strategy can be changed at any time
+session.setActivationMode(ActivationMode.CONTINUOUS);
+```
+Evrete的最佳实践
+- No rule flows: 规则的执行最好不要依赖顺序，带有flow的规则通常会更慢且难以维护，除此以外，无序规则可以像软件包一样打包与复用。如果您决定朝这个方向发展，引入和使用flags、events或semaphores等非领域类可能会派上用场。无论如何，谁说你不能使用一组辅助类？
+- Avoid unnecessary updates: 虽然`update()`看起来与`insert()`与`delete()`方法组合看起来差不多，但是规则引擎更难处理`update()`，在规则的action部分更新一个fact会导致大量事件发生，比如重新对Rete节点求值或者重新执行fact matching。仅当条件依赖fact的属性时，才需要使用`update()`方法，否则，除非您使用序列化/反序列化fact的自定义`org.evrete.api.FactStorage`实现，否则对可变fact的任何更改都会立即适用于其他fact和规则，不需要显式`update()`调用。
+
+2种策略的唯一区别就是如何对待规则action部分的`delete()`与`update()`调用，如果你不用这2个方法，你不需要考虑activation mode。`CONTINUOUS`始终是一个安全的模式，简单可预测容易debug与维护。`DEFAULT`模式更适合你从Drools向Evrete快速而平滑的迁移。
+## Annotated Java Rules
+AJR也是支持的，通过`org.evrete.api.spi.DSLKnowledgeProvider`SPI的实现提供，也是创建自定义DSL的入口点。扩展模块只依赖Evrete的public的API，当出现在classpath下，AJR模块expose3个DSL实现:
+- `JAVA-SOURCE`: 使用annotated Java sources使用
+- `JAVA-CLASS`: 使用annotated Java classes使用
+- `JAVA-JAR`: 使用annotated Java archives使用
+
+### Getting Started
+AJR是轻量级的包，不需要任何的第三方依赖，只需要包含核心依赖就行了
+```xml
+<!-- Annotated Java Rules -->
+<dependency>
+    <groupId>org.evrete</groupId>
+    <artifactId>evrete-dsl-java</artifactId>
+    <version>3.2.00</version>
+</dependency>
+```
+```java
+KnowledgeService service = new KnowledgeService();
+Knowledge knowledge = service
+        .newKnowledge(
+                "JAVA-SOURCE", // <-- name of the DSL implementation
+                new URL("https://www.evrete.org/examples/PrimeNumbersSource.java")
+        );
+```
+开发者可以实现下面的导入方法:
+```java
+newKnowledge(String dsl, InputStream... streams) throws IOException;
+newKnowledge(String dsl, URL... resources) throws IOException;
+newKnowledge(String dsl, Class<?>... classes) throws IOException;
+newKnowledge(String dsl, Reader... readers) throws IOException;
+newKnowledge(String dsl, String... sources) throws IOException;
+```
+使用`JAVA-JAR`源类型需要额外的配置参数，指示引擎将哪些类视为规则集
+```java
+KnowledgeService service = new KnowledgeService();
+// Configuring JAR source
+service
+    .getConfiguration()
+    .setProperty("org.evrete.dsl.rule-classes", "com.abc.rule.RuleSet1, com.abc.rule.RuleSet2");
+
+InputStream is = getStream(); // Create a stream somewhere in your app
+Knowledge knowledge = service.newKnowledge("JAVA-JAR", is);
+```
+### Key Concepts
+规则使用`@Rule`表示
+- 方法参数就是规则的fact声明(LHS)
+- 对于不是.java的规则元，参数必须使用`@Fact`注解
+- 方法体本身是规则的action(RHS)
+- 方法名是规则的名字
+- 规则通过方法名升序或者降序，除非指定了`salience`参数
+
+规则可以由或者没有一个额外的`@Where`注解，表示规则条件
+- `@Where`注解的参数可以是普通的文本集合，对其他方法引用的集合，或者2者的组合
+- 引用的条件方法需要使用`@MethodPredicate`注释
+- 条件方法必须是public的并且返回boolean类型
+
+`@PhaseListener`放在方法上，通过session的生命周期事件触发，比如session creation、fireing、closure等。`@FieldDeclaration`放到方法上，声明可以用在条件中的fact属性。如果规则类继承了`org.evrete.api.ActivationManager`，这些类自动成功activation过滤器。开发人员可以在规则集中声明类helper方法和字段，并在条件、规则actions、字段声明、事件侦听器和冲突解决中全面使用它们。
+静态与非静态类成员
+- 静态的field值是在一个`Knowledge`的所有会话间共享
+- 非静态的field值是会话作用域的，因为引擎会为每一个会话创建一个专门的实例对象
+### Annotation Reference
+- `@RuleSet`: 一个可选的注解，给予规则集一个有意义的名字并且指定默认的排序策略
+  ```java
+    @RuleSet(value = "Ruleset name", defaultSort = RuleSet.Sort.BY_NAME)
+    public class MyRuleset {
+        // ....
+    }
+  ```
+- `@Rule`: 标注一个规则方法，可以是静态的或者非静态的，但是必须是public void的，每个规则方法都有一个可选的` org.evrete.api.RhsContext`参数外加一个或者多个任意的其他参数，这些参数会被认为是fact声明:
+  ```java
+    @Rule(value="Invoice payment", salience=10)
+    public void someMethod(Customer $c, Invoice $i, RhsContext ctx) {
+        $c.updateLimit($i.getTotal());
+        $i.markPaid();
+        ctx.update($c);
+    }
+  ```
+  注解接受2个可选的参数:
+  - `value()`: 规则的名字，如果没有指定使用方法名
+  - `salience()`: rule的salience
+  
+  fact声明需要使用`@Fact`注解
+- `@Where`: 一个可选的注解，声明`@Rule`方法的条件，接受2个参数:
+  - `value()`: 一个可选的条件数组
+  - `asMethods()`: 对条件方法的引用的数组
+  
+  下面是一个例子:
+  ```java
+    @Rule
+    @Where(
+        value = {"$i.paid == false", "$c.active == true"},
+        asMethods = {
+            @MethodPredicate(
+                method = "testMethod1",
+                args = {"$i", "$c.id"}
+            )
+        }
+    )
+    public void myRule(Invoice $i, Customer $c) {
+        // ....
+    }
+
+    public boolean testMethod1(Invoice i, int customerId) {
+        return i.getCustomer().getId() == customerId;
+    }
+  ```
+- `@MethodPredicate`: 方法定义了一个条件方法的引用。接受2个参数:
+  - `method()`: 方法的名字，条件方法必须是public boolean的
+  - `args()`: 指定要传输给方法的fact，类型必须匹配
+- `@Fact`: 
+## 高级主题
+本节主要致力于配置和扩展库API。对于库的高级用法，请访问[指南](https://www.evrete.org/guides)部分，其中包含可运行的示例和每个步骤的全面说明。
+### Configuration
+初始配置是在`KnowledgeService`初始化期间设置的，然后子组件复制配置，以便后续更改不会影响父配置。
+```java
+Configuration conf = new Configuration();
+conf.setProperty("PROP1", "1000");
+
+KnowledgeService service = new KnowledgeService(conf);
+
+// Knowledge instance will have the property "PROP1" set to "1000"
+Knowledge knowledge = service.newKnowledge();
+
+// This will NOT override the service configuration
+knowledge
+    .getConfiguration()
+    .setProperty("PROP1", "2000");
+```
+默认配置预先填充了`System.getProperties()`中的值，这允许通过Java命令行`-Dprop=value`参数进行配置。支持的参数
+|Name|component|默认值|描述|
+|:---|:---|:---|:---|
+|`evrete.core.parallelism`|Core|CPU核数|内部使用的executor service的处理器核数|
+|`evrete.core.warn-unknown-types`|Core|true|当未知类型的fact插入到session时是否告警|
+|`evrete.core.fact-identity-strategy`|Core|"identity"|fact标识的策略，可以是identity(fact1 == fact2)或者equals(fact1.equals(fact2))|
+|`evrete.core.insert-buffer-size`|Core|4096|用于insert、update、delete的每个会话的action buffer的大小|
+|`evrete.spi.memory-factory`|Core||`org.evrete.api.spi.MemoryFactoryProvider`的实现类名|
+|`evrete.spi.expression-resolver`|Core||`org.evrete.api.spi.ExpressionResolverProvider`的实现类名|
+|`evrete.spi.type-resolver`|Core||`org.evrete.api.spi.TypeResolverProvider`的实现类名|
+|`org.evrete.dsl.rule-classes`|AJR||空格或者逗号分隔的类，这些类是AJR规则集合|
+|`evrete.impl.rule-base-class`|	SPI Impl|"org.evrete.spi.minimal.BaseRuleClass"|每一个编译的LHS与RHS类的父类|
+|`org.evrete.jsr94.dsl-name`|JSR94||DSL实现名，必须是`org.evrete.api.spi.DSLKnowledgeProvider`的实现类|
+|`org.evrete.jsr94.ruleset-name`|JSR94||一个规则集合的名字|
+|`org.evrete.jsr94.ruleset-description`|JSR94||规则集合的描述|
+|`org.evrete.jsr94.rule-description`|JSR94||规则的描述|
+
+### Multithreading
+Evrete使用`ForkJoinPool`来对条件求值。你可以通过`evrete.core.parallelism`配置参数调整并行度。Rule action运行在调用session的`fire()`方法的线程上。从3.2.00版本开始，会话的`insert()`、`update()`、`delete()`都是线程安全的。对于其他的使用，引擎不保证线程安全，开发者自己负责保证线程安全。
+### Extensibility API
+
