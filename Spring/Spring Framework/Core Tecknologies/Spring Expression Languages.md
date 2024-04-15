@@ -51,13 +51,42 @@ Expression exp = parser.parseExpression("'Hello World'.bytes.length");
 int length = (Integer) exp.getValue();
 ```
 
-也可以使用对象的构造方法构造对象，上面的getValue方法需要进行类型转换，有重载的传入class对象的方法可以不需要类型转换；SpEL表达式最常用的用法是给定一个参数名，到指定的对象中去获取参数名所代表的值；用法如下：
+也可以使用对象的构造方法构造对象:
+```java
+ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression("new String('hello world').toUpperCase()"); 
+String message = exp.getValue(String.class);
+```
+注意泛型方法`public <T> T getValue(Class<T> desiredResultType)`的使用，这个方法避免了需要转型的操作，如果表达式的求值结果不能转为T或则通过注册的类型转换器也无法转换，则抛出`EvaluationException`异常。SpEL表达式最常用的用法是在一个指定的对象上对表达式求值。这个对象也叫做root对象，下面的例子展示了如何获取`Inventor`类实例的`name`属性值以及如何在布尔表达式中引用`name`属性
+```java
+// Create and set a calendar
+GregorianCalendar c = new GregorianCalendar();
+c.set(1856, 7, 9);
 
-1.4.2.1 求值上下文
-EvaluationContext接口是用来在计算表达式时解析属性、方法、域或者执行类型转换的，有2个接口实现：
-SimpleEvaluationContext，提供了基本的SpEL语言特性的子集支持，由于不全面，所以需要被严格限制；
-StandardEvaluationContext，提供了全部的SpEL语言特性支持；
-SimpleEvaluationContext不支持Java类型引用、构造函数与bean引用等；缺省情况下，SpEL使用Spring环境中的org.springframework.core.convert. ConversionService进行类型转换；这个转换器服务包含了很多内置的类型转换，也可以实现自定义的类型转换器。
+// The constructor arguments are name, birthday, and nationality.
+Inventor tesla = new Inventor("Nikola Tesla", c.getTime(), "Serbian");
+
+ExpressionParser parser = new SpelExpressionParser();
+
+Expression exp = parser.parseExpression("name"); // Parse name as an expression
+String name = (String) exp.getValue(tesla);
+// name == "Nikola Tesla"
+
+exp = parser.parseExpression("name == 'Nikola Tesla'");
+boolean result = exp.getValue(tesla, Boolean.class);
+// result == true
+```
+## Understanding EvaluationContext
+`EvaluationContext`接口是用来在计算表达式时解析属性、方法、field或者执行类型转换的，有2个接口实现：
+- SimpleEvaluationContext，提供了基本的SpEL语言特性与配置选项的子集，适用于不需要SpEL语言语法全部特性的表达式，且表达式应受到有意义限制。数据绑定表达式和基于属性的过滤器都属于这种表达式
+- StandardEvaluationContext，提供了全部的SpEL语言特性与配置选项支持，可以在这个上下文中指定默认的root对象或者配置求值相关的策略
+
+`SimpleEvaluationContext`只支持SpEL语法的一部分，不支持Java类型引用、构造函数与bean引用等，它还要求开发者明确的指定表达式中属性与方法的支持级别，缺省情况下，`create()`静态工厂方法仅允许读取属性，你还可以通过builder来配置所需的确切的支持级别，针对下面的某一项或者某些组合。
+- Custom PropertyAccessor only (no reflection)
+- Data binding properties for read-only access
+- Data binding properties for read and write
+## 类型转换
+缺省情况下，SpEL使用Spring环境中的`org.springframework.core.convert.ConversionService`进行类型转换；这个转换器服务包含了很多内置的类型转换器，也可以实现自定义的类型转换器。另外，它还可以识别泛型，也就是说，当在表达式中使用泛型类型时，SpEL会尝试进行转换以维护它遇到的任何对象的类型正确性。
 1.4.2.2 解析器配置
 可以使用解析器配置对象配置SpEL解析器；SpelParserConfiguration；
 1.4.2.3 SpEL编译
