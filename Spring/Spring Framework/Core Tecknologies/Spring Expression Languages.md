@@ -153,15 +153,116 @@ Expression expr = parser.parseExpression("payload");
 MyMessage message = new MyMessage();
 Object payload = expr.getValue(message);
 ```
-当你指定编译模式时，也可以指定`Classloader`(null也是可以的)，编译后的表达式定义在提供的`ClassLoader`的子`Classloader`里面。
+当你指定编译模式时，也可以指定`Classloader`(null也是可以的)，编译后的表达式定义在提供的`ClassLoader`的子`Classloader`里面。如果指定了`Classloader`，需要确保它能加载到所有表达式中出现的类型。如果没有指定，则会使用一个默认的`Classloader`，通常是运行表达式的线程的Classloader。第二种方式是用来配置Spring组件内部的SpEL的，此时不能通过配置对象配置，在这种场景下，可以通过系统属性或者配置属性配置`spring.expression.compiler.mode`为`SpelCompilerMode`注解值。
+## Compiler Limitations
+Spring也不会对所有的表达式都编译，主要关注的是可能在性能比较重要的场景中使用的常见表达式，下面的表达式是不能被编译的
+- 涉及到赋值的表达式
+- 依赖conversion服务的表达式
+- 使用自定义的resolvers或者accessor的表达式
+- 使用重载运算符的表达式
+- 使用数组构造语法的表达式
+- 使用selection或者projection的表达式
+
 # 在bean定义中使用表达式
-在XML或者基于Java注解的bean定义方式中可以使用表达式，使用的形式为#{expression}。
+在XML或者基于Java注解的bean定义方式中都可以使用表达式，使用的形式为`#{expression}`。
 XML的配置方式如下所示：
+```xml
+<bean id="numberGuess" class="org.spring.samples.NumberGuess">
+	<property name="randomNumber" value="#{ T(java.lang.Math).random() * 100.0 }"/>
+
+	<!-- other properties -->
+</bean>
+```
+应用上下文中的所有bean在SpEL中都是变量，变量名就是bean的名字，这包括Spring的标准Bean，比如用来访问运行环境的`environment`与`systemProperties`、`systemEnvironment`。下面是一个访问`systemProperties`的例子:
+```xml
+<bean id="taxCalculator" class="org.spring.samples.TaxCalculator">
+	<property name="defaultLocale" value="#{ systemProperties['user.region'] }"/>
+	<!-- other properties -->
+</bean>
+```
+也可以访问其他的bean
+```xml
+<bean id="numberGuess" class="org.spring.samples.NumberGuess">
+	<property name="randomNumber" value="#{ T(java.lang.Math).random() * 100.0 }"/>
+	<!-- other properties -->
+</bean>
+<bean id="shapeGuess" class="org.spring.samples.ShapeGuess">
+	<property name="initialShapeSeed" value="#{ numberGuess.randomNumber }"/>
+	<!-- other properties -->
+</bean>
+```
+在基于Java的配置方式中使用`@Value`的方式，可以放在field上、方法上或者方法与构造函数的参数上。下面的例子设置一个field的默认值
+```java
+public class FieldValueTestBean {
+
+	@Value("#{ systemProperties['user.region'] }")
+	private String defaultLocale;
+
+	public void setDefaultLocale(String defaultLocale) {
+		this.defaultLocale = defaultLocale;
+	}
+
+	public String getDefaultLocale() {
+		return this.defaultLocale;
+	}
+}
+```
+下面的例子是使用setter方法的等价形式
+```java
+public class PropertyValueTestBean {
+
+	private String defaultLocale;
+
+	@Value("#{ systemProperties['user.region'] }")
+	public void setDefaultLocale(String defaultLocale) {
+		this.defaultLocale = defaultLocale;
+	}
+
+	public String getDefaultLocale() {
+		return this.defaultLocale;
+	}
+}
+```
+自动注入的方法与构造函数也可以使用`@Value`注解，如下所示:
+```java
+public class SimpleMovieLister {
+
+	private MovieFinder movieFinder;
+	private String defaultLocale;
+
+	@Autowired
+	public void configure(MovieFinder movieFinder,
+			@Value("#{ systemProperties['user.region'] }") String defaultLocale) {
+		this.movieFinder = movieFinder;
+		this.defaultLocale = defaultLocale;
+	}
+
+	// ...
+}
+public class MovieRecommender {
+
+	private String defaultLocale;
+
+	private CustomerPreferenceDao customerPreferenceDao;
+
+	public MovieRecommender(CustomerPreferenceDao customerPreferenceDao,
+			@Value("#{systemProperties['user.country']}") String defaultLocale) {
+		this.customerPreferenceDao = customerPreferenceDao;
+		this.defaultLocale = defaultLocale;
+	}
+
+	// ...
+}
+```
+# 语言参考
+## 简单文本表达式
+简单文本里面支持的数据类型如下:
+- String: 使用单引号活着双引号扩起来的字符串，字符串中出现的单引号字符需要转义，双单引号是转义前缀。
+- Number: 支持负号、exponential notation、小数点、整数、16进制整数、实数
+- Boolean: true/false
+- Null: null
 
 
-在基于Java的配置方式中使用@Value的方式。
-1.4.4 语言参考
-1.4.4.1 简单文本表达式
 支持字符串、数字、布尔、与null等；
 1.4.4.2 Properties、Arrays、Lists、Maps、Indexers
 访问Object的属性，数组的属性或者Map的属性；大小写不敏感；
