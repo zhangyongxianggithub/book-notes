@@ -86,12 +86,75 @@ boolean result = exp.getValue(tesla, Boolean.class);
 - Data binding properties for read-only access
 - Data binding properties for read and write
 ## 类型转换
-缺省情况下，SpEL使用Spring环境中的`org.springframework.core.convert.ConversionService`进行类型转换；这个转换器服务包含了很多内置的类型转换器，也可以实现自定义的类型转换器。另外，它还可以识别泛型，也就是说，当在表达式中使用泛型类型时，SpEL会尝试进行转换以维护它遇到的任何对象的类型正确性。
-1.4.2.2 解析器配置
-可以使用解析器配置对象配置SpEL解析器；SpelParserConfiguration；
-1.4.2.3 SpEL编译
-SpEL提供了极大的灵活性，但是求值计算的过程就没有考虑到性能，在一般的表达式语言使用环境中，使用是没问题的，但是集成到Spring环境中是，就需要考虑SpEL的性能；SpEL编译器就是为了解决这个问题；
-1.4.3 在bean定义中使用表达式
+缺省情况下，SpEL使用Spring环境中的`org.springframework.core.convert.ConversionService`进行类型转换；这个转换器服务包含了很多内置的类型转换器，也可以实现自定义的类型转换器。另外，它还可以识别泛型，也就是说，当在表达式中使用泛型类型时，SpEL会尝试进行转换以维护它遇到的任何对象的类型正确性。假设使用`setValue()`方法为一个`List<Boolean>`类型的属性赋值`List`，SpEL会识别到list的元素需要转换成`Boolean`，下面是一个例子:
+```java
+class Simple {
+	public List<Boolean> booleanList = new ArrayList<>();
+}
+
+Simple simple = new Simple();
+simple.booleanList.add(true);
+
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+// "false" is passed in here as a String. SpEL and the conversion service
+// will recognize that it needs to be a Boolean and convert it accordingly.
+parser.parseExpression("booleanList[0]").setValue(context, simple, "false");
+
+// b is false
+Boolean b = simple.booleanList.get(0);
+```
+## 解析器配置
+可以受用解析器配置对象来配置SpEL表达式解析器: `org.springframework.expression.spel.SpelParserConfiguration`，配置对象可以控制某些表达式组件的行为，如果您对数组或集合进行索引并且指定索引处的元素为null，则SpEL可以自动创建该元素。当使用由属性引用链组成的表达式时，这非常有用。如果对数组或列表进行索引并指定超出数组或列表当前大小末尾的索引，SpEL可以自动增长数组或列表以容纳该索引。为了在指定索引处添加元素，SpEL将在设置指定值之前尝试使用元素类型的默认构造函数创建元素。如果元素类型没有默认构造函数，则null将被添加到数组或列表中。如果没有知道如何设置该值的内置或自定义转换器，则 null将保留在数组或列表中的指定索引处。以下示例演示了如何自动增长列表:
+```java
+class Demo {
+	public List<String> list;
+}
+
+// Turn on:
+// - auto null reference initialization
+// - auto collection growing
+SpelParserConfiguration config = new SpelParserConfiguration(true, true);
+
+ExpressionParser parser = new SpelExpressionParser(config);
+
+Expression expression = parser.parseExpression("list[3]");
+
+Demo demo = new Demo();
+
+Object o = expression.getValue(demo);
+
+// demo.list will now be a real collection of 4 entries
+// Each entry is a new empty String
+```
+缺省情况下，一个SpEL表达式不能超过10000个字符，这是可配置的，通过`maxExpressionLength`配置，如果你创建了一个`SpelExpressionParser`，你可以指定`maxExpressionLength`，如果你想要设置`ApplicationContext`中用于解析SpEL表达式的`SpelExpressionParser`的`maxExpressionLength`，你可以通过JVM系统属性或者名叫`spring.context.expression.maxLength`的系统属性来指定最大长度，具体参考[Supported Spring Properties](https://docs.spring.io/spring-framework/reference/appendix.html#appendix-spring-properties)
+## SpEL编译
+Spring提供了SpEL表达式基本的编译器，表达式是解释执行的，这种方式求值比较灵活但是不提供性能优化，在临时的表达式语言使用环境中使用是没问题的，但是集成到Spring环境中时，就需要考虑SpEL的性能；SpEL编译器就是为了解决这个问题。在求值时，编译器生成一个Java类，包含了运行时的表达式行为并使用这个类来式实现更快的表达式求值，由于缺少类型信息，编译器使用一个表达式解释执行时产生的类型信息来辅助编译。比如，Spring不指导表达式中引用的属性的类型，但是在第一次解释执行时，它就会知道，因此，如果表达式中的元素类型在不同的时间如果不一致，这种方式就会产生问题。因此，编译只适用于表达式中的元素类型信息不回发生变更的情况。考虑下面的基本表达式:
+```java
+someArray[0].someProperty.someOtherProperty < 0.1
+```
+由于前面的表达式涉及数组访问、一些属性取消引用和数值运算，因此性能提升非常明显。在运行 50,000次迭代的示例微基准测试中，使用解释器进行评估需要75毫秒，而使用表达式的编译版本只需要 3毫秒。
+## Compiler Configuration
+编译器默认情况下是不开的，你可以通过2种方式打开
+- 使用parser配置
+- 使用Spring属性(无法自定义parser的情况下，比如在SpringContext内部的使用)
+
+编译器有3种运行模式，定义在`org.springframework.expression.spel.SpelCompilerMode`枚举中，它们是:
+- `OFF`: 默认的模式，编译器关闭
+- `IMMEDIATE`: 尽可能的编译表达式，通常是在第一次解释执行后，如果编译后的表达式运行失败，通常是因为元素类型改变，表达式求值的调用会接收到求值异常
+- `MIXED`: 表达式可以在解释执行与编译执行之间切换，在解释执行几次后，切换到编译执行，如果编译执行出问题，表达式自动切换回解释执行，然后某个时间后生成新的编译形式并切换回编译执行
+
+`IMMEDIATE`模式的存在是因为`MIXED`模式可能会导致具有副作用的表达式出现问题。如果编译表达式在部分成功后崩溃，则它可能已经做了一些影响系统状态的事情。如果发生这种情况，调用者可能不希望它以解释模式静默地重新运行，因为表达式的一部分可能会运行两次。在选择一个模式后，使用`SpelParserConfiguration`来配置解析器，下面是一个例子:
+```java
+SpelParserConfiguration config = new SpelParserConfiguration(SpelCompilerMode.IMMEDIATE,
+		this.getClass().getClassLoader());
+SpelExpressionParser parser = new SpelExpressionParser(config);
+Expression expr = parser.parseExpression("payload");
+MyMessage message = new MyMessage();
+Object payload = expr.getValue(message);
+```
+当你指定编译模式时，也可以指定`Classloader`(null也是可以的)，编译后的表达式定义在提供的`ClassLoader`的子`Classloader`里面。
+# 在bean定义中使用表达式
 在XML或者基于Java注解的bean定义方式中可以使用表达式，使用的形式为#{expression}。
 XML的配置方式如下所示：
 
