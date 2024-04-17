@@ -262,9 +262,30 @@ public class MovieRecommender {
 - Boolean: true/false
 - Null: null
 
+由于Spring表达式设计与实现的原因，数字始终是按照正数存储的，在求值计算时使用0-x表示-x。也就是说，不能表示Java中的最小负数。如果你要在表达式中使用类型的最小负数，有2种方式:
+- 使用最小负数的常量表示，比如Integer.MIN_VALUE，表示成`T(Integer).MIN_VALUE`，需要一个`StandardEvaluationContext`
+- -2^31, 只能用在`EvaluationContext`中
 
-支持字符串、数字、布尔、与null等；
-1.4.4.2 Properties、Arrays、Lists、Maps、Indexers
+下面是简单的使用例子
+```java
+ExpressionParser parser = new SpelExpressionParser();
+
+// evaluates to "Hello World"
+String helloWorld = (String) parser.parseExpression("'Hello World'").getValue();
+
+// evaluates to "Tony's Pizza"
+String pizzaParlor = (String) parser.parseExpression("'Tony''s Pizza'").getValue();
+
+double avogadrosNumber = (Double) parser.parseExpression("6.0221415E+23").getValue();
+
+// evaluates to 2147483647
+int maxValue = (Integer) parser.parseExpression("0x7FFFFFFF").getValue();
+
+boolean trueValue = (Boolean) parser.parseExpression("true").getValue();
+
+Object nullValue = parser.parseExpression("null").getValue();
+```
+## Properties、Arrays、Lists、Maps、Indexers
 访问Object的属性，数组的属性或者Map的属性；大小写不敏感；
 1.4.4.3 内联lists
 使用{}表示内联list；内联Map也是同理；
