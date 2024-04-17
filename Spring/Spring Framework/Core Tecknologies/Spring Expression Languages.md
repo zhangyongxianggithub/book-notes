@@ -286,8 +286,49 @@ boolean trueValue = (Boolean) parser.parseExpression("true").getValue();
 Object nullValue = parser.parseExpression("null").getValue();
 ```
 ## Properties、Arrays、Lists、Maps、Indexers
-访问Object的属性，数组的属性或者Map的属性；大小写不敏感；
-1.4.4.3 内联lists
+使用属性引用进行导航非常简单。使用点号表示内嵌的属性值。比如`Inventor`类对象
+```java
+int year = (Integer) parser.parseExpression("birthdate.year + 1900").getValue(context);
+String city = (String) parser.parseExpression("placeOfBirth.city").getValue(context);
+```
+属性名的第一个字母是大小写不敏感的，因此上面的表达式可以写为`Birthdate.Year + 1900`与`PlaceOfBirth.City`，此外属性也能通过方法调用访问，比如`getPlaceOfBirth().getCity()`。数组与线性表的内容可以通过方括号获取如下所示:
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+// Inventions Array
+
+// evaluates to "Induction motor"
+String invention = parser.parseExpression("inventions[3]").getValue(
+		context, tesla, String.class);
+
+// Members List
+
+// evaluates to "Nikola Tesla"
+String name = parser.parseExpression("members[0].name").getValue(
+		context, ieee, String.class);
+
+// List and Array navigation
+// evaluates to "Wireless communication"
+String invention = parser.parseExpression("members[0].inventions[6]").getValue(
+		context, ieee, String.class);
+```
+map的内容需要指定key
+```java
+// Officer's Dictionary
+
+Inventor pupin = parser.parseExpression("officers['president']").getValue(
+		societyContext, Inventor.class);
+
+// evaluates to "Idvor"
+String city = parser.parseExpression("officers['president'].placeOfBirth.city").getValue(
+		societyContext, String.class);
+
+// setting values
+parser.parseExpression("officers['advisors'][0].placeOfBirth.country").setValue(
+		societyContext, "Croatia");
+```
+## 内联lists
 使用{}表示内联list；内联Map也是同理；
 1.4.4.5 数组构造器
 
@@ -314,8 +355,117 @@ T()操作符，相当于Class.forName，引入一个Class的实例；
 为了能够引用到工厂bean1自身，工厂bean的引用形式是&foo。
 1.4.4.14 结构表达式
 三元操作符?:
-1.4.4.16 安全的导航操作符
-?
+## 安全的导航操作符
+安全导航操作符(?)是用来避免`NullPointerException`，来自于Groovy语言。通常来说，当你引用一个对象时，在访问对象的方法或者属性前需要验证对象是不是null，为了避免抛出异常或者null校验，安全导航操作符将会为null-safe操作返回null。下面的例子是如何使用安全导航操作符访问属性
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+Inventor tesla = new Inventor("Nikola Tesla", "Serbian");
+tesla.setPlaceOfBirth(new PlaceOfBirth("Smiljan"));
+
+// evaluates to "Smiljan"
+String city = parser.parseExpression("placeOfBirth?.city") // 在非null的placeOfBirth属性上使用安全导航运算符
+		.getValue(context, tesla, String.class);
+
+tesla.setPlaceOfBirth(null);
+
+// evaluates to null - does not throw NullPointerException
+city = parser.parseExpression("placeOfBirth?.city") // 在null的placeOfBirth属性上使用安全导航运算符
+		.getValue(context, tesla, String.class);
+```
+?也可以用于方法调用。Spring表达式语言支持集合选择与投影的安全导航
+- null-safe selection: ?.?
+- null-safe select first: ?.^
+- null-safe select last: ?.$
+- null-safe projection: ?.!
+
+下面的例子展示了在集合选择中使用安全导航运算符
+```java
+ExpressionParser parser = new SpelExpressionParser();
+IEEE society = new IEEE();
+StandardEvaluationContext context = new StandardEvaluationContext(society);
+String expression = "members?.?[nationality == 'Serbian']"; //members可能是null
+
+// evaluates to [Inventor("Nikola Tesla")]
+List<Inventor> list = (List<Inventor>) parser.parseExpression(expression)
+		.getValue(context);
+
+society.members = null;
+
+// evaluates to null - does not throw a NullPointerException
+list = (List<Inventor>) parser.parseExpression(expression)
+		.getValue(context);
+```
+下面的例子展示了在集合选择中使用null-safe select first
+```java
+ExpressionParser parser = new SpelExpressionParser();
+IEEE society = new IEEE();
+StandardEvaluationContext context = new StandardEvaluationContext(society);
+String expression =
+	"members?.^[nationality == 'Serbian' || nationality == 'Idvor']"; 
+
+// evaluates to Inventor("Nikola Tesla")
+Inventor inventor = parser.parseExpression(expression)
+		.getValue(context, Inventor.class);
+
+society.members = null;
+
+// evaluates to null - does not throw a NullPointerException
+inventor = parser.parseExpression(expression)
+		.getValue(context, Inventor.class);
+```
+下面的例子展示了在集合选择中使用null-safe select last
+```java
+ExpressionParser parser = new SpelExpressionParser();
+IEEE society = new IEEE();
+StandardEvaluationContext context = new StandardEvaluationContext(society);
+String expression =
+	"members?.$[nationality == 'Serbian' || nationality == 'Idvor']"; 
+
+// evaluates to Inventor("Pupin")
+Inventor inventor = parser.parseExpression(expression)
+		.getValue(context, Inventor.class);
+
+society.members = null;
+
+// evaluates to null - does not throw a NullPointerException
+inventor = parser.parseExpression(expression)
+		.getValue(context, Inventor.class);
+```
+下面的例子展示了在集合投影中使用安全导航运算符
+```java
+ExpressionParser parser = new SpelExpressionParser();
+IEEE society = new IEEE();
+StandardEvaluationContext context = new StandardEvaluationContext(society);
+
+// evaluates to ["Smiljan", "Idvor"]
+List placesOfBirth = parser.parseExpression("members?.![placeOfBirth.city]") 
+		.getValue(context, List.class);
+
+society.members = null;
+
+// evaluates to null - does not throw a NullPointerException
+placesOfBirth = parser.parseExpression("members?.![placeOfBirth.city]") 
+		.getValue(context, List.class);
+```
+正如本节开头所提到的，当安全导航运算符对于复合表达式中的特定null-safe操作计算结果为null时，复合表达式的其余部分仍将被计算。这意味着必须在整个复合表达式中应用安全导航运算符，以避免任何`NullPointerException`。给定表达式`#person?.address.city`，如果`#person`为 null，则安全导航运算符(?.)确保在尝试访问`#person`的地址属性时不会引发异常。但是，由于`#person?.address`的计算结果为null，因此在尝试访问null的`city`属性时将引发`NullPointerException`。为了解决这个问题，您可以在整个复合表达式中应用null-safe导航，如`#person?.address?.city`。如果`#person`或`#person?.address`计算结果为null，则该表达式将安全地计算为null。以下示例演示如何在复合表达式中结合使用集合上的null-safe select first运算符(?.^)和null-safe属性访问(?.)。如果`members`为null，则null-safe select first运算符(`members?.^[nationality == 'Serbian']`)的结果将为null，并且安全导航运算符(?.name)的额外使用可确保整个复合表达式的计算结果为null，而不是引发异常。
+```java
+ExpressionParser parser = new SpelExpressionParser();
+IEEE society = new IEEE();
+StandardEvaluationContext context = new StandardEvaluationContext(society);
+String expression = "members?.^[nationality == 'Serbian']?.name"; 
+
+// evaluates to "Nikola Tesla"
+String name = parser.parseExpression(expression)
+		.getValue(context, String.class);
+
+society.members = null;
+
+// evaluates to null - does not throw a NullPointerException
+name = parser.parseExpression(expression)
+		.getValue(context, String.class);
+```
 1.4.4.17 集合选择
 .?[selectionExpression]
 1.4.4.18 集合保护
