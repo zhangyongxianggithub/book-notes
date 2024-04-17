@@ -612,7 +612,35 @@ ListenableFuture<QueryResult> queryFuture =
     Futures.transformAsync(rowKeyFuture, queryFunction, queryExecutor);
 ```
 许多其他操作可以通过`ListenableFuture`有效支持，而仅靠`Future`无法支持。不同的操作可以由不同的执行器执行，并且单个`ListenableFuture`可以有多个操作在等待它。当多个操作应在另一个操作开始时立即开始时（扇出），`ListenableFuture`就会起作用：它会触发所有请求的回调。只要稍微多做一些工作，我们就可以扇入，或者在其他几个future完成后立即触发`ListenableFuture`进行计算:请参阅[Futures.allAsList](https://google.github.io/guava/releases/snapshot/api/docs/src-html/com/google/common/util/concurrent/Futures.html#line.1276)的实现作为示例。
+|Method|描述|
+|:---|:---|
+|`transformAsync(ListenableFuture<A>, AsyncFunction<A, B>, Executor)`|返回一个新的`ListenableFuture`，它的计算结果是`AsyncFunction`作用于给定的`ListenableFuture`结果的后计算结果|
+|`transform(ListenableFuture<A>, Function<A, B>, Executor)`|与上一个的逻辑差不多|
+|`allAsList(Iterable<ListenableFuture<V>>)`|返回一个新的`ListenableFuture`,它的结果是一个list，里面包含所有的输入的future的结果，如果future存在失败或者取消，则新的future也会取消或者失败|
+|`successfulAsList(Iterable<ListenableFuture<V>>)`|返回一个新的`ListenableFuture`,它的结果是一个list，里面包含输入的成功执行的future的结果，如果future存在失败或者取消，则使用null代替|
 
+`AsyncFunction<A, B>`提供了一种方法`ListenableFuture<B> apply(A input)`，用于异步转换一个值
+```java
+List<ListenableFuture<QueryResult>> queries;
+// The queries go to all different data centers, but we want to wait until they're all done or failed.
+
+ListenableFuture<List<QueryResult>> successfulQueries = Futures.successfulAsList(queries);
+
+Futures.addCallback(successfulQueries, callbackOnSuccessfulQueries);
+```
+需要避免嵌套的Future，比如代码调用了一个接口，返回了一个`Future`，最后的结果很有可能是一个嵌套的Future
+```java
+executorService.submit(new Callable<ListenableFuture<Foo>() {
+  @Override
+  public ListenableFuture<Foo> call() {
+    return otherExecutorService.submit(otherCallable);
+  }
+});
+```
+将会返回一个`ListenableFuture<ListenableFuture<Foo>>`，这个代码是不正确的，因为如果外面的`Future`执行了`cancel`，此时不能结束内部的`Future`。为了避免这个，Guava提供了所有操作`Future`方法的特殊版本，它们都带有*Async后缀
+- `transform(ListenableFuture<A>, Function<A, B>, Executor)`
+- `transformAsync(ListenableFuture<A>, AsyncFunction<A, B>, Executor)`
+- `ExecutorService.submit(Callable) and submitAsync(AsyncCallable<A>, Executor)`
 # Service
 Guava的Service接口表示一个带有可操作状态与启动/停止方法的对象，比如: web服务器，RPC服务器，Timer等，像这样需要适当的启动和关闭管理的服务，状态管理是非常重要的，尤其是在涉及多个线程或调度的情况下。Guava提供了一些框架来为您管理状态逻辑和线程同步的细节。
 ## Using a Service
