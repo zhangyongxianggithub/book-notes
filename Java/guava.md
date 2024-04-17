@@ -611,6 +611,7 @@ AsyncFunction<RowKey, QueryResult> queryFunction =
 ListenableFuture<QueryResult> queryFuture =
     Futures.transformAsync(rowKeyFuture, queryFunction, queryExecutor);
 ```
+许多其他操作可以通过`ListenableFuture`有效支持，而仅靠`Future`无法支持。不同的操作可以由不同的执行器执行，并且单个`ListenableFuture`可以有多个操作在等待它。当多个操作应在另一个操作开始时立即开始时（扇出），`ListenableFuture`就会起作用：它会触发所有请求的回调。只要稍微多做一些工作，我们就可以扇入，或者在其他几个future完成后立即触发`ListenableFuture`进行计算:请参阅[Futures.allAsList](https://google.github.io/guava/releases/snapshot/api/docs/src-html/com/google/common/util/concurrent/Futures.html#line.1276)的实现作为示例。
 
 # Service
 Guava的Service接口表示一个带有可操作状态与启动/停止方法的对象，比如: web服务器，RPC服务器，Timer等，像这样需要适当的启动和关闭管理的服务，状态管理是非常重要的，尤其是在涉及多个线程或调度的情况下。Guava提供了一些框架来为您管理状态逻辑和线程同步的细节。
