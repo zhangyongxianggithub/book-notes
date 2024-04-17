@@ -565,6 +565,53 @@ Table<String, Character, Integer> table = Tables.newCustomTable(
 2. transpose
 `transpose(Table<R, C, V>)`方法可以让你将`Table<R,C,V>`视为`Table<C,R,V>`
 3. wrappers
+# Concurrency
+并发是一个很难的问题，通过简单的抽象也能把并发处理简化。为了简化问题，Guava扩展了`Future`接口为`ListenableFuture`。我们强烈建议你始终使用`ListenableFuture`而不是`Future`。因为 :
+- `Futures`的大多数方法都需要`ListenableFuture`
+- 切换到`ListenableFuture`很简单
+- 工具方法的提供者不需要提供统一个方法的多个变体
+
+传统的`Future`接口表示一个异步计算的结果，异步计算就是一个可能已经产生或者没有产生结果的计算过程。`Future`可以当作是一个正在计算的过程一个handle，一个服务的承诺，未来会提供我们一个服务的结果。`ListenableFuture`允许你注册计算过程结束的回调，这是传统的`Future`无法做到的。`ListenableFuture`添加回调的方式是`addListener(Runnable, Executor)`，指定当计算结束后，`Runnable`将会在`Executor`上运行。更多的用户可能更喜欢`Futures.addCallback(ListenableFuture<V>, FutureCallback<V>, Executor)`， `FutureCallback<V>`接口含有2个方法:
+- `onSuccess(V)`,如果future执行完后执行
+- `onFailure(Throwable)`, future执行失败时执行
+
+相比JDK的`ExecutorService.submit(Callable)`方式来创建异步计算，Guava提供了`ListeningExecutorService`接口，接口返回`ListenableFuture`而`ExecutorService`返回`Future`。为了将`ExecutorService`转换为一个`ListeningExecutorService`使用`MoreExecutors.listeningDecorator(ExecutorService)`。
+```java
+ListeningExecutorService service = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(10));
+ListenableFuture<Explosion> explosion = service.submit(
+    new Callable<Explosion>() {
+      public Explosion call() {
+        return pushBigRedButton();
+      }
+    });
+Futures.addCallback(
+    explosion,
+    new FutureCallback<Explosion>() {
+      // we want this handler to run immediately after we push the big red button!
+      public void onSuccess(Explosion explosion) {
+        walkAwayFrom(explosion);
+      }
+      public void onFailure(Throwable thrown) {
+        battleArchNemesis(); // escaped the explosion!
+      }
+    },
+    service);
+```
+另外，如果你想要将使用`FutureTask`的代码迁移到Guava，Guava提供了` ListenableFutureTask.create(Callable<V>)`与`ListenableFutureTask.create(Runnable, V)`便捷方法，与JDK不同，`ListenableFutureTask`不能直接创建。如果你使用的计算过程是直接设置值的而不是通过计算得到，可以使用`AbstractFuture<V>`或者`SettableFuture`. 如果你要将其他方法提供的`Future`转换为`ListenableFuture`,除了使用`JdkFutureAdapters.listenInPoolThread(Future)`没有别的办法，如果可能，最好修改源代码让其返回`ListenableFuture`。
+
+使用`ListenableFuture`的最重要的原因是其支持复杂的异步操作链。
+```java
+ListenableFuture<RowKey> rowKeyFuture = indexService.lookUp(query);
+AsyncFunction<RowKey, QueryResult> queryFunction =
+  new AsyncFunction<RowKey, QueryResult>() {
+    public ListenableFuture<QueryResult> apply(RowKey rowKey) {
+      return dataService.read(rowKey);
+    }
+  };
+ListenableFuture<QueryResult> queryFuture =
+    Futures.transformAsync(rowKeyFuture, queryFunction, queryExecutor);
+```
+
 # Service
 Guava的Service接口表示一个带有可操作状态与启动/停止方法的对象，比如: web服务器，RPC服务器，Timer等，像这样需要适当的启动和关闭管理的服务，状态管理是非常重要的，尤其是在涉及多个线程或调度的情况下。Guava提供了一些框架来为您管理状态逻辑和线程同步的细节。
 ## Using a Service
