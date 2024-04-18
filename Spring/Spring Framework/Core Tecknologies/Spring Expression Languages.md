@@ -328,12 +328,44 @@ String city = parser.parseExpression("officers['president'].placeOfBirth.city").
 parser.parseExpression("officers['advisors'][0].placeOfBirth.country").setValue(
 		societyContext, "Croatia");
 ```
-## 内联lists
+## 内联lists && 内联map
 使用{}表示内联list；内联Map也是同理；
-1.4.4.5 数组构造器
+```java
+// evaluates to a Java list containing the four numbers
+List numbers = (List) parser.parseExpression("{1,2,3,4}").getValue(context);
 
-1.4.4.6 方法
+List listOfLists = (List) parser.parseExpression("{{'a','b'},{'x','y'}}").getValue(context);
+```
+`{}`表示一个空的数组，如果数组全部由常量组成，则数组本身就是常量的，计算结果也是常量，不会每次求值时产生新的数组。`{key:value}`表示map。
+```java
+// evaluates to a Java map containing the two entries
+Map inventorInfo = (Map) parser.parseExpression("{name:'Nikola',dob:'10-July-1856'}").getValue(context);
 
+Map mapOfMaps = (Map) parser.parseExpression("{name:{first:'Nikola',last:'Tesla'},dob:{day:10,month:'July',year:1856}}").getValue(context);
+```
+`{:}`本身表示一个空map，常量的理论与数组相同，key可以不用引号扩起来，如果有特殊字符比如.需要用引号扩起来。
+## Array Construction
+你可以使用java语法来构造数组。比如:
+```java
+int[] numbers1 = (int[]) parser.parseExpression("new int[4]").getValue(context);
+
+// Array with initializer
+int[] numbers2 = (int[]) parser.parseExpression("new int[] {1, 2, 3}").getValue(context);
+
+// Multi dimensional array
+int[][] numbers3 = (int[][]) parser.parseExpression("new int[4][5]").getValue(context);
+```
+构造多维数组的时候不能直接用字面量初始化。直接构造数组的表达式比如`new int[4]`或者`new int[]{1,2,3}`不能被编译。
+## 方法
+你可以使用Java编程语法来调用方法，你也可以调用字面量上的方法。变参也是支持的。下面是一个例子:
+```java
+// string literal, evaluates to "bc"
+String bc = parser.parseExpression("'abc'.substring(1, 3)").getValue(String.class);
+
+// evaluates to true
+boolean isMember = parser.parseExpression("isMember('Mihajlo Pupin')").getValue(
+		societyContext, Boolean.class);
+```
 1.4.4.7 操作符
 关系运算符都是支持的，但是注意任何值都比null大；支持instanceof判断对象类型，也支持matches进行正则表达式匹配；逻辑运算符and or not；数学运算符。
 1.4.4.8 赋值
