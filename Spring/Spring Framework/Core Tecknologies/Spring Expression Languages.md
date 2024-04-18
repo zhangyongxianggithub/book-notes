@@ -366,7 +366,210 @@ String bc = parser.parseExpression("'abc'.substring(1, 3)").getValue(String.clas
 boolean isMember = parser.parseExpression("isMember('Mihajlo Pupin')").getValue(
 		societyContext, Boolean.class);
 ```
-1.4.4.7 操作符
+## 操作符
+Spring支持如下的操作符
+- 关系操作符: 关系运算符使用通用的标记符号，可以比较数字类型与实现了`Comparable`接口的类型，下面是一个例子:
+  ```java
+	// evaluates to true
+	boolean trueValue = parser.parseExpression("2 == 2").getValue(Boolean.class);
+
+	// evaluates to false
+	boolean falseValue = parser.parseExpression("2 < -5.0").getValue(Boolean.class);
+
+	// evaluates to true
+	boolean trueValue = parser.parseExpression("'black' < 'block'").getValue(Boolean.class);
+
+	// uses CustomValue:::compareTo
+	boolean trueValue = parser.parseExpression("new CustomValue(1) < new CustomValue(2)").getValue(Boolean.class);
+  ```
+  null值的大于与小于比较的规则，任何值都大于null。null表示nothing而不是0值。每个运算符都有简单的等价的文本表示，这是为了避免符号在特定的表达式中可能有别的含义
+  - lt/<
+  - gt/>
+  - le/<=
+  - ge/>=
+  - eq/==
+  - ne/!=
+  
+  文本运算符都是忽略大小写的。除此以外，SpEl还支持`between`、`instanceof`、基于正则表达式的`matches`运算符。下面是例子:
+  ```java
+	boolean result;
+
+	// evaluates to true
+	result = parser.parseExpression(
+			"1 between {1, 5}").getValue(Boolean.class);
+
+	// evaluates to false
+	result = parser.parseExpression(
+			"1 between {10, 15}").getValue(Boolean.class);
+
+	// evaluates to true
+	result = parser.parseExpression(
+			"'elephant' between {'aardvark', 'zebra'}").getValue(Boolean.class);
+
+	// evaluates to false
+	result = parser.parseExpression(
+			"'elephant' between {'aardvark', 'cobra'}").getValue(Boolean.class);
+
+	// evaluates to true
+	result = parser.parseExpression(
+			"123 instanceof T(Integer)").getValue(Boolean.class);
+
+	// evaluates to false
+	result = parser.parseExpression(
+			"'xyz' instanceof T(Integer)").getValue(Boolean.class);
+
+	// evaluates to true
+	result = parser.parseExpression(
+			"'5.00' matches '^-?\\d+(\\.\\d{2})?$'").getValue(Boolean.class);
+
+	// evaluates to false
+	result = parser.parseExpression(
+			"'5.0067' matches '^-?\\d+(\\.\\d{2})?$'").getValue(Boolean.class);
+  ```
+  `between`运算符的语法`<input> between {<range_begin>, <range_end>}`是`<input> >= <range_begin> && <input> <= <range_end>}`的快捷简写形式。需要注意基本类型，因为它们会被装箱成它们的包装类型，比如`1 instanceof T(int)`得到的是false，`1 instanceof T(Integer)`得到的是true
+- 逻辑运算符: 支持下面的逻辑运算符
+  - and(&&)
+  - or(||)
+  - not(!)
+  
+  文本运算符是忽略大小写的，下面是一个例子:
+  ```java
+	// -- AND --
+
+	// evaluates to false
+	boolean falseValue = parser.parseExpression("true and false").getValue(Boolean.class);
+
+	// evaluates to true
+	String expression = "isMember('Nikola Tesla') and isMember('Mihajlo Pupin')";
+	boolean trueValue = parser.parseExpression(expression).getValue(societyContext, Boolean.class);
+
+	// -- OR --
+
+	// evaluates to true
+	boolean trueValue = parser.parseExpression("true or false").getValue(Boolean.class);
+
+	// evaluates to true
+	String expression = "isMember('Nikola Tesla') or isMember('Albert Einstein')";
+	boolean trueValue = parser.parseExpression(expression).getValue(societyContext, Boolean.class);
+
+	// -- NOT --
+
+	// evaluates to false
+	boolean falseValue = parser.parseExpression("!true").getValue(Boolean.class);
+
+	// -- AND and NOT --
+
+	String expression = "isMember('Nikola Tesla') and !isMember('Mihajlo Pupin')";
+	boolean falseValue = parser.parseExpression(expression).getValue(societyContext, Boolean.class);
+  ```
+- 字符串运算符: 支持下面的字符串运算符
+  - concatenation(+)
+  - subtraction(-)
+  - repeat(*)
+  
+  ```java
+	// -- Concatenation --
+	// evaluates to "hello world"
+	String helloWorld = parser.parseExpression("'hello' + ' ' + 'world'")
+			.getValue(String.class);
+
+	// -- Character Subtraction --
+
+	// evaluates to 'a'
+	char ch = parser.parseExpression("'d' - 3")
+			.getValue(char.class);
+
+	// -- Repeat --
+
+	// evaluates to "abcabc"
+	String repeated = parser.parseExpression("'abc' * 2")
+			.getValue(String.class);
+  ```
+- 数学运算符: 支持下面的数字数学运算符，带有优先级
+  - addition (+)
+  - subtraction (-)
+  - increment (++)
+  - decrement (--)
+  - multiplication (*)
+  - division (/)
+  - modulus (%)
+  - exponential power (^)
+  
+  除法与取余运算符可以用`div`与`mod`表示，下面是例子
+  ```java
+	Inventor inventor = new Inventor();
+	EvaluationContext context = SimpleEvaluationContext.forReadWriteDataBinding().build();
+
+	// -- Addition --
+
+	int two = parser.parseExpression("1 + 1").getValue(int.class);  // 2
+
+	// -- Subtraction --
+
+	int four = parser.parseExpression("1 - -3").getValue(int.class);  // 4
+
+	double d = parser.parseExpression("1000.00 - 1e4").getValue(double.class);  // -9000
+
+	// -- Increment --
+
+	// The counter property in Inventor has an initial value of 0.
+
+	// evaluates to 2; counter is now 1
+	two = parser.parseExpression("counter++ + 2").getValue(context, inventor, int.class);
+
+	// evaluates to 5; counter is now 2
+	int five = parser.parseExpression("3 + ++counter").getValue(context, inventor, int.class);
+
+	// -- Decrement --
+
+	// The counter property in Inventor has a value of 2.
+
+	// evaluates to 6; counter is now 1
+	int six = parser.parseExpression("counter-- + 4").getValue(context, inventor, int.class);
+
+	// evaluates to 5; counter is now 0
+	five = parser.parseExpression("5 + --counter").getValue(context, inventor, int.class);
+
+	// -- Multiplication --
+
+	six = parser.parseExpression("-2 * -3").getValue(int.class);  // 6
+
+	double twentyFour = parser.parseExpression("2.0 * 3e0 * 4").getValue(double.class);  // 24.0
+
+	// -- Division --
+
+	int minusTwo = parser.parseExpression("6 / -3").getValue(int.class);  // -2
+
+	double one = parser.parseExpression("8.0 / 4e0 / 2").getValue(double.class);  // 1.0
+
+	// -- Modulus --
+
+	int three = parser.parseExpression("7 % 4").getValue(int.class);  // 3
+
+	int oneInt = parser.parseExpression("8 / 5 % 2").getValue(int.class);  // 1
+
+	// -- Exponential power --
+
+	int maxInt = parser.parseExpression("(2^31) - 1").getValue(int.class);  // Integer.MAX_VALUE
+
+	int minInt = parser.parseExpression("-2^31").getValue(int.class);  // Integer.MIN_VALUE
+
+	// -- Operator precedence --
+
+	int minusTwentyOne = parser.parseExpression("1+2-3*8").getValue(int.class);  // -21
+  ```
+- 赋值运算符: 设置一个属性值，使用赋值运算符(=)，可以通过表达式的`setValue`或者`getValue`实现，下面是例子:
+  ```java
+	Inventor inventor = new Inventor();
+	EvaluationContext context = SimpleEvaluationContext.forReadWriteDataBinding().build();
+
+	parser.parseExpression("name").setValue(context, inventor, "Aleksandar Seovic");
+
+	// alternatively
+	String aleks = parser.parseExpression(
+			"name = 'Aleksandar Seovic'").getValue(context, inventor, String.class);
+  ```
+- 重载运算符
 关系运算符都是支持的，但是注意任何值都比null大；支持instanceof判断对象类型，也支持matches进行正则表达式匹配；逻辑运算符and or not；数学运算符。
 1.4.4.8 赋值
 给对象里面的属性赋值可以使用setValue或者getValue都可以；
