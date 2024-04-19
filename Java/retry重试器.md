@@ -496,7 +496,7 @@ public @interface RemoteRetryable {
 关于如何配置AOP拦截器的更多的信息参考Spring框架文档。前面的例子在拦截器中使用了一个默认的`RetryTemplate`，位了改变policy或者listener，你只需要将一个RetryTemplate注入到拦截器中。
 # Failsafe
 ## Overview
-FailSafe是一个轻量化的0以来的用于处理错误的库。主要是在Java8+以上的版本中使用。它有简洁与灵活的得API定义。主要的工作原理是将执行逻辑包裹到一个或者多个resilience policies中。这些policies可以按需组合或者聚合。
+FailSafe是一个轻量化的用于处理错误的库。主要是在Java8+以上的版本中使用。它有简洁与灵活的API定义。主要的工作原理是将执行逻辑包裹到一个或者多个resilience policies中。这些policies可以按需组合或者聚合。
 ### Setup
 添加最新的[Failsafe](https://maven-badges.herokuapp.com/maven-central/dev.failsafe/failsafe)依赖到你的项目中
 ### Getting Started
@@ -542,7 +542,7 @@ executor.run(this::connect);
 ## POLICIES
 ### Policies Overview
 分为几类:
-- Failure Handling, Failsafe通过检测错误来添加resilience并处理错误。每个policy定义什么情况下是失败并且如何处理这些失败。默认情况下，policies处理所有所有抛出的异常。也可以配置只处理某些特定的异常或者情况:
+- Failure Handling, Failsafe通过检测错误来添加resilience并处理错误。每个policy定义什么情况下是失败并且如何处理这些失败。默认情况下，policies处理所有抛出的异常。也可以配置只处理某些特定的异常或者情况:
   ```java
   policyBuilder
   .handle(ConnectException.class, SocketException.class)
@@ -563,7 +563,7 @@ executor.run(this::connect);
   .compose(timeout)
   .get(supplier);
   ```
-  也可以写成这样`Failsafe.with(fallback, retryPolicy, circuitBreaker, timeout).get(supplier);`。当执行时，实际的执行如下`Fallback(RetryPolicy(CircuitBreaker(Timeout(Supplier))))`。policy组合首先执行最外面的policy，这个policy内部在嗲偶用下一个policy，一直下去。一直到用户提供的`Runnable`或者`Supplier`。执行的结果或者异常向上一层一层返回。按照定义决定是否处理。每一个oplicy自己决定是否允许继续执行或者如何处理执行结果或者异常。比如`RetryPolicy`会重试执行，会再一次的调用内部的policy或者返回执行的结果或者异常。`CircuitBreaker`可能会在到达`Supplier`之前抛出异常。考虑下面的policy组合的执行
+  也可以写成这样`Failsafe.with(fallback, retryPolicy, circuitBreaker, timeout).get(supplier);`。当执行时，实际的执行如下`Fallback(RetryPolicy(CircuitBreaker(Timeout(Supplier))))`。policy组合首先执行最外面的policy，这个policy内部在调用下一个policy，一直下去。一直到用户提供的`Runnable`或者`Supplier`。执行的结果或者异常向上一层一层返回。按照定义决定是否处理。每一个oplicy自己决定是否允许继续执行或者如何处理执行结果或者异常。比如`RetryPolicy`会重试执行，会再一次的调用内部的policy或者返回执行的结果或者异常。`CircuitBreaker`可能会在到达`Supplier`之前抛出异常。考虑下面的policy组合的执行
   ![execution](retry/composition.png)
   - Failsafe calls the Fallback
   - Fallback calls the RetryPolicy
@@ -618,7 +618,7 @@ builder.withDelay(1, 10, ChronoUnit.SECONDS);
 ```
 或者基于执行结果或者异常计算的延迟。
 #### Jitter
-你还可以天际随机的抖动因子:
+你还可以添加随机的抖动因子:
 ```java
 builder.withJitter(.1);
 builder.withJitter(Duration.ofMillis(100));
