@@ -569,13 +569,43 @@ Spring支持如下的操作符
 	String aleks = parser.parseExpression(
 			"name = 'Aleksandar Seovic'").getValue(context, inventor, String.class);
   ```
-- 重载运算符
-关系运算符都是支持的，但是注意任何值都比null大；支持instanceof判断对象类型，也支持matches进行正则表达式匹配；逻辑运算符and or not；数学运算符。
-1.4.4.8 赋值
-给对象里面的属性赋值可以使用setValue或者getValue都可以；
-1.4.4.9 类型
-T()操作符，相当于Class.forName，引入一个Class的实例；
-1.4.4.10 构造方法
+- 重载运算符: 缺省情况下，定义在SpEL的操作枚举中的数学运算符`ADD, SUBTRACT, DIVIDE, MULTIPLY, MODULUS, POWER`，支持简单的类型比如数字。通过提供`OperatorOverloader`重载，表达式语言可以让其他类型支持这些操作。比如，如果你要重载`ADD`操作符，使用+拼接2个list，可以这么实现:
+  ```java
+	pubic class ListConcatenation implements OperatorOverloader {
+
+		@Override
+		public boolean overridesOperation(Operation operation, Object left, Object right) {
+			return (operation == Operation.ADD &&
+					left instanceof List && right instanceof List);
+		}
+
+		@Override
+		public Object operate(Operation operation, Object left, Object right) {
+			if (operation == Operation.ADD &&
+					left instanceof List list1 && right instanceof List list2) {
+
+				List result = new ArrayList(list1);
+				result.addAll(list2);
+				return result;
+			}
+			throw new UnsupportedOperationException(
+				"No overload for operation %s and operands [%s] and [%s]"
+					.formatted(operation, left, right));
+		}
+	}
+  ```
+  然后我们将实现注册到`StandardEvaluationContext`中，我们可以对类似`{1, 2, 3} + {4, 5}`这样的表达式求值。
+  ```java
+	StandardEvaluationContext context = new StandardEvaluationContext();
+	context.setOperatorOverloader(new ListConcatenation());
+
+	// evaluates to a new list: [1, 2, 3, 4, 5]
+	parser.parseExpression("{1, 2, 3} + {2 + 2, 5}").getValue(context, List.class);
+  ```
+  一个`OperatorOverloader`不能改变一个操作符的默认语义。使用重载操作符的表达式不能被编译。
+## Types
+
+## Constructors
 可以直接调用类的构造方法；必须是全路径的类；
 1.4.4.11 变量
 变量使用#name的形式引用，使用EvaluationContext的setVariable方法设置变量；比如：
