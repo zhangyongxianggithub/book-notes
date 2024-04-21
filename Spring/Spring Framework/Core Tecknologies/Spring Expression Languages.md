@@ -626,20 +626,166 @@ p.parseExpression(
 			'Albert Einstein', 'German'))").getValue(societyContext);
 ```
 ## Variables
-你可以在表达式中引用变量，语法`#variableName`，变量是使用`EvaluationContext`的`setVariable()`方法设置的。变量必须是字母、下划线或者$开头。
-1.4.4.11 变量
-变量使用#name的形式引用，使用EvaluationContext的setVariable方法设置变量；比如：
+你可以在表达式中引用变量，语法`#variableName`，变量是使用`EvaluationContext`的`setVariable()`方法设置的。变量必须是字母、下划线或者$开头。当你向`EvaluationContext`中设置变量或者root context object，建议这些对象的类型都是`public`，否则，涉及具有非public类型的变量或根上下文对象的某些类型的SpEL表达式可能无法计算或编译。因为变量与`Function`共享上下文的同一个命名空间，需要确保2者名字不回冲突。
+```java
+Inventor tesla = new Inventor("Nikola Tesla", "Serbian");
+EvaluationContext context = SimpleEvaluationContext.forReadWriteDataBinding().build();
+context.setVariable("newName", "Mike Tesla");
+parser.parseExpression("name = #newName").getValue(context, tesla);
+System.out.println(tesla.getName());  // "Mike Tesla"
+```
+`#this`变量是内置的始终指向当前的求值上下文。`#root`也是内置的，引用root context obejct。`#this`会随着当前正在求值表达式的不同部分而不同，`#root`始终是相同的。
+```java
+// Create a list of prime integers.
+List<Integer> primes = List.of(2, 3, 5, 7, 11, 13, 17);
 
-#this始终指向当前的求值对象；#root变量指向root context对象；#this会根据求值表达式的变化而变化，root不会。
-1.4.4.12 函数
-函数保存在EvaluationContext中，定义函数的方法如下：
+// Create parser and set variable 'primes' as the list of integers.
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadWriteDataBinding().build();
+context.setVariable("primes", primes);
 
-1.4.4.13 Bean引用
-向EvaluationContext注入一个Bean解析器的时候，可以引用到Bean；例子如下：
+// Select all prime numbers > 10 from the list (using selection ?{...}).
+String expression = "#primes.?[#this > 10]";
 
-为了能够引用到工厂bean1自身，工厂bean的引用形式是&foo。
-1.4.4.14 结构表达式
-三元操作符?:
+// Evaluates to a list containing [11, 13, 17].
+List<Integer> primesGreaterThanTen =
+		parser.parseExpression(expression).getValue(context, List.class);
+```
+```java
+// Create parser and evaluation context.
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadWriteDataBinding().build();
+
+// Create an inventor to use as the root context object.
+Inventor tesla = new Inventor("Nikola Tesla");
+tesla.setInventions("Telephone repeater", "Tesla coil transformer");
+
+// Iterate over all inventions of the Inventor referenced as the #root
+// object, and generate a list of strings whose contents take the form
+// "<inventor's name> invented the <invention>." (using projection !{...}).
+String expression = "#root.inventions.![#root.name + ' invented the ' + #this + '.']";
+
+// Evaluates to a list containing:
+// "Nikola Tesla invented the Telephone repeater."
+// "Nikola Tesla invented the Tesla coil transformer."
+List<String> results = parser.parseExpression(expression)
+		.getValue(context, tesla, List.class);
+```
+## Functions
+你可以扩展SpEL，注册UDF。可以在表达式中调用，语法`#functionName(...)`，函数可以注册为`EvaluationContext`中的变量。`StandardEvaluationContext`也定义了`registerFunction(…​)`方法，可以注册函数为`java.lang.reflect.Method`或者`java.lang.invoke.MethodHandle`。下面是注册函数的例子
+```java
+Method method = ...;
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+context.setVariable("myFunction", method);
+```
+下面的例子
+```java
+public abstract class StringUtils {
+	public static String reverseString(String input) {
+		return new StringBuilder(input).reverse().toString();
+	}
+}
+```
+你可以使用前面的函数注册UDF并使用
+```java
+ExpressionParser parser = new SpelExpressionParser();
+
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+context.setVariable("reverseString",
+		StringUtils.class.getMethod("reverseString", String.class));
+
+// evaluates to "olleh"
+String helloWorldReversed = parser.parseExpression(
+		"#reverseString('hello')").getValue(context, String.class);
+```
+也可以通过`java.lang.invoke.MethodHandle`的方式注册函数，如果`MethodHandle`目标和参数在注册之前已完全绑定，则这可能会更有效； 但是，也支持部分绑定的handles。考虑方法`String#formatted(String, Object…​)`，根据模板与参数产生一个message。你可以将这个方法注册为一个`MethodHandle`，下面的例子:
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+MethodHandle mh = MethodHandles.lookup().findVirtual(String.class, "formatted",
+		MethodType.methodType(String.class, Object[].class));
+context.setVariable("message", mh);
+// evaluates to "Simple message: <Hello World>"
+String message = parser.parseExpression("#message('Simple message: <%s>', 'Hello World', 'ignored')")
+		.getValue(context, String.class);
+```
+如上所述，还支持绑定`MethodHandle`并注册绑定的`MethodHandle`。如果目标和所有参数都被绑定，这会更高效。在这种情况下，SpEL表达式中不需要任何参数，如以下示例所示:
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+String template = "This is a %s message with %s words: <%s>";
+Object varargs = new Object[] { "prerecorded", 3, "Oh Hello World!", "ignored" };
+MethodHandle mh = MethodHandles.lookup().findVirtual(String.class, "formatted",
+		MethodType.methodType(String.class, Object[].class))
+		.bindTo(template)
+		.bindTo(varargs); //here we have to provide arguments in a single array binding
+context.setVariable("message", mh);
+
+// evaluates to "This is a prerecorded message with 3 words: <Oh Hello World!>"
+String message = parser.parseExpression("#message()")
+		.getValue(context, String.class);
+```
+## Bean References
+如果求值上下文配置了bean解析器。你可以在表达式中引用bean，使用`@`前缀符号。比如下面的代码:
+```java
+ExpressionParser parser = new SpelExpressionParser();
+StandardEvaluationContext context = new StandardEvaluationContext();
+context.setBeanResolver(new MyBeanResolver());
+
+// This will end up calling resolve(context,"something") on MyBeanResolver during evaluation
+Object bean = parser.parseExpression("@something").getValue(context);
+```
+如果要引用工厂bean本身，需要在bean的名字前面加上`&`符号
+```java
+ExpressionParser parser = new SpelExpressionParser();
+StandardEvaluationContext context = new StandardEvaluationContext();
+context.setBeanResolver(new MyBeanResolver());
+// This will end up calling resolve(context,"&foo") on MyBeanResolver during evaluation
+Object bean = parser.parseExpression("&foo").getValue(context);
+```
+## 三元操作符(If-Then-Else)
+你可以使用三元操作符执行if-then-else条件逻辑。比如下面的
+```java
+String falseString = parser.parseExpression(
+		"false ? 'trueExp' : 'falseExp'").getValue(String.class);
+parser.parseExpression("name").setValue(societyContext, "IEEE");
+societyContext.setVariable("queryName", "Nikola Tesla");
+
+expression = "isMember(#queryName)? #queryName + ' is a member of the ' " +
+		"+ Name + ' Society' : #queryName + ' is not a member of the ' + Name + ' Society'";
+
+String queryResultString = parser.parseExpression(expression)
+		.getValue(societyContext, String.class);
+// queryResultString = "Nikola Tesla is a member of the IEEE Society"
+```
+## Elvis操作符
+Elvis操作符是三目运算符的简写形式，用在Groovy语言中。三目运算符的语法通常需要一个变量重复2次。比如:
+```java
+String name = "Elvis Presley";
+String displayName = (name != null ? name : "Unknown");
+```
+你可以使用Elvis运算符(得名于Elvis的发型)。
+```java
+ExpressionParser parser = new SpelExpressionParser();
+String name = parser.parseExpression("name?:'Unknown'").getValue(new Inventor(), String.class);
+System.out.println(name);  // 'Unknown'
+```
+SpEL的Elvis操作符除了检查null以外还会检查空字符串。
+```java
+ExpressionParser parser = new SpelExpressionParser();
+EvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
+
+Inventor tesla = new Inventor("Nikola Tesla", "Serbian");
+String name = parser.parseExpression("name?:'Elvis Presley'").getValue(context, tesla, String.class);
+System.out.println(name);  // Nikola Tesla
+
+tesla.setName("");
+name = parser.parseExpression("name?:'Elvis Presley'").getValue(context, tesla, String.class);
+System.out.println(name);  // Elvis Presley
+```
+你可以在表达式的默认值相关中使用Elvis操作符。
+
 ## 安全的导航操作符
 安全导航操作符(?)是用来避免`NullPointerException`，来自于Groovy语言。通常来说，当你引用一个对象时，在访问对象的方法或者属性前需要验证对象是不是null，为了避免抛出异常或者null校验，安全导航操作符将会为null-safe操作返回null。下面的例子是如何使用安全导航操作符访问属性
 ```java
@@ -751,10 +897,33 @@ society.members = null;
 name = parser.parseExpression(expression)
 		.getValue(context, String.class);
 ```
-1.4.4.17 集合选择
-.?[selectionExpression]
-1.4.4.18 集合保护
-1.4.4.19 表达式模板
-表达式模板允许在普通的文本中混合更多的求值块，形成一个文本模板；每个求值块都是通过特定的前缀与后缀包围的，定义求值块的前缀与后缀字符可以自由定义；缺省的是#{}分隔符。下面是一个例子：
+## 集合选择
+选择是强大的表达式语言特性。可以将一个集合转换成另外一种集合。选择使用`.?[selectionExpression]`语法。它过滤集合并返回一个新的集合。包含了原来元素的一部分。比如下面的例子:
+```java
+List<Inventor> list = (List<Inventor>) parser.parseExpression(
+		"members.?[nationality == 'Serbian']").getValue(societyContext);
+```
+选择支持数组或者实现了`java.lang.Iterable`与`java.util.Map`接口的实例。对于数组或者迭代来说，选择会作用于每个元素。对于map来说，选择作用于每个entry，entry的key与value可以在表达式中使用。下面是一个例子:
+```java
+Map newMap = parser.parseExpression("#map.?[value < 27]").getValue(Map.class);
+```
+除了返回所有选定的元素之外，您还可以仅检索第一个或最后一个元素。要获取与选择表达式匹配的第一个元素，语法为`.^[selectionExpression]`,要获取与选择表达式匹配的最后一个元素，语法为`.$[selectionExpression]`。
+## 集合投影
+投影让集合驱动子表达式的计算，结果是一个新集合。投影的语法是`.![projectionExpression]`。例如，假设我们有一个发明家列表，但想要他们出生的城市列表。实际上，我们希望评估发明人列表中每个条目的`placeOfBirth.city`。以下示例使用投影来执行此操作:
+```java
+// evaluates to ["Smiljan", "Idvor"]
+List placesOfBirth = parser.parseExpression("members.![placeOfBirth.city]")
+		.getValue(societyContext, List.class);
+```
+数组和任何实现`java.lang.Iterable`或`java.util.Map`的对象都支持投影。当使用map驱动投影时，将根据map中的每个条目(表示为Java Map.Entry)计算投影表达式。跨map投影的结果是一个列表，其中包含针对每个map条目的投影表达式的评估。
+## 表达式模板
+表达式模板允许在普通的文本中混合更多的求值块，形成一个文本模板；每个求值块都是通过特定的前缀与后缀包围的，定义求值块的前缀与后缀字符可以自由定义；缺省的是`#{}`分隔符。下面是一个例子：
+```java
+String randomPhrase = parser.parseExpression(
+		"random number is #{T(java.lang.Math).random()}",
+		new TemplateParserContext()).getValue(String.class);
 
-上面的例子中，表达式最终的结果是普通的文本’random number is ’与#{}的求值结果拼接而成的，这个例子中，求值的结果是调用random()方法的结果，parseExpression()方法的第二个参数是ParserContext类型，ParserContext接口用来影响解析的过程，这是为了在解析过程中支持表达式模板的功能，TemplateParserContext的内容如下：
+// evaluates to "random number is 0.7038186818312008"
+
+```
+上面的例子中，表达式最终的结果是普通的文本random number is与`#{}`的求值结果拼接而成的，这个例子中，求值的结果是调用`random()`方法的结果，`parseExpression()`方法的第二个参数是`ParserContext`类型，`ParserContext`接口用来影响解析的过程，这是为了在解析过程中支持表达式模板的功能，TemplateParserContext的内容如下.
