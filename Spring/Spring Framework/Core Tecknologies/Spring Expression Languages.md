@@ -604,9 +604,29 @@ Spring支持如下的操作符
   ```
   一个`OperatorOverloader`不能改变一个操作符的默认语义。使用重载操作符的表达式不能被编译。
 ## Types
-
+你可以使用特殊的`T`操作符来指定一个`java.lang.Class`类型的实例。使用这个操作符来调用静态方法。`StandardEvaluationContext`使用一个`TypeLocator`来发现类型，`StandardTypeLocator`本身内置了对`java.lang`包的支持，也就是说当`T()`引用的是`java.lang`包里面的类型时是不需要使用全限定名的。但是其他类型的引用需要。下面是使用的例子:
+```java
+Class dateClass = parser.parseExpression("T(java.util.Date)").getValue(Class.class);
+Class stringClass = parser.parseExpression("T(String)").getValue(Class.class);
+boolean trueValue = parser.parseExpression(
+		"T(java.math.RoundingMode).CEILING < T(java.math.RoundingMode).FLOOR")
+		.getValue(Boolean.class);
+```
+如果你的应用或者框架有自己的`EvaluationContext`，你可能需要配置一个带有自己的`Classloader`的`StandardTypeLocator`来确保`SpEL`表达式解析器可以去加载类。
 ## Constructors
-可以直接调用类的构造方法；必须是全路径的类；
+可以使用`new`操作符调用类的构造方法，构造方法需要类的全限定名，除了`java.lang`包下面的类。下面是一个例子:
+```java
+Inventor einstein = p.parseExpression(
+		"new org.spring.samples.spel.inventor.Inventor('Albert Einstein', 'German')")
+		.getValue(Inventor.class);
+
+// create new Inventor instance within the add() method of List
+p.parseExpression(
+		"Members.add(new org.spring.samples.spel.inventor.Inventor(
+			'Albert Einstein', 'German'))").getValue(societyContext);
+```
+## Variables
+你可以在表达式中引用变量，语法`#variableName`，变量是使用`EvaluationContext`的`setVariable()`方法设置的。变量必须是字母、下划线或者$开头。
 1.4.4.11 变量
 变量使用#name的形式引用，使用EvaluationContext的setVariable方法设置变量；比如：
 
