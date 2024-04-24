@@ -481,7 +481,7 @@ type Wheel struct {
 ```
 可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有它的方法(生成的是代理方法)。有点类似继承。
 ## JSON
-JSON发送与接收格式化信息的标准，Go内置了对JSON、XML等格式化信息的编解码支持。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。把Go的数据结构转换为JSON叫做marshal，通过`json.marshal`实现
+JSON定义发送与接收信息的标准格式，Go内置了对JSON、XML等格式化信息的编解码支持。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。把Go的数据结构转换为JSON叫做marshal，通过`json.marshal`实现
 ```go
 type Movie struct {
 	Title  string
