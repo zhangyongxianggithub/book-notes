@@ -1899,7 +1899,53 @@ Viper中的配置项是不区分大小写的。
 		fmt.Println("Config file changed:", e.Name)
 	})
    ```
-5. 从`io.Reader`读取配置，
+5. 从`io.Reader`读取配置，实现自己所需的配置源提供给viper
+   ```go
+	viper.SetConfigType("yaml") // 或者 viper.SetConfigType("YAML")
+
+	// 任何需要将此配置添加到程序中的方法。
+	var yamlExample = []byte(`
+	Hacker: true
+	name: steve
+	hobbies:
+	- skateboarding
+	- snowboarding
+	- go
+	clothing:
+	jacket: leather
+	trousers: denim
+	age: 35
+	eyes : brown
+	beard: true
+	`)
+	viper.ReadConfig(bytes.NewBuffer(yamlExample))
+	viper.Get("name") // 这里会得到 "steve"
+   ```
+6. 覆盖设置
+   配置可能来自不同的来源
+   ```go
+	viper.Set("Verbose", true)
+	viper.Set("LogFile", LogFile)
+   ```
+7. 注册与使用别名
+   允许多个键引用单个值
+   ```go
+	viper.RegisterAlias("loud", "Verbose")  // 注册别名（此处loud和Verbose建立了别名）
+	viper.Set("verbose", true) // 结果与下一行相同
+	viper.Set("loud", true)   // 结果与前一行相同
+
+	viper.GetBool("loud") // true
+	viper.GetBool("verbose") // true
+   ```
+8. 使用环境变量
+   支持环境变量，涉及到环境变量的有5种方法
+   - `AutomaticEnv()`
+   - `BindEnv(string...) : error`
+   - `SetEnvPrefix(string)`
+   - `SetEnvKeyReplacer(string...) *strings.Replacer`
+   - `AllowEmptyEnv(bool)`
+  
+   viper在处理环境变量时区分大小写。
 # gin
 # gorm
 
