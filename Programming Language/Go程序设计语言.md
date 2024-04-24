@@ -1940,12 +1940,25 @@ Viper中的配置项是不区分大小写的。
 8. 使用环境变量
    支持环境变量，涉及到环境变量的有5种方法
    - `AutomaticEnv()`
-   - `BindEnv(string...) : error`
-   - `SetEnvPrefix(string)`
-   - `SetEnvKeyReplacer(string...) *strings.Replacer`
+   - `BindEnv(string...) : error`有种形式通过键名或者变量名2种方式读取，优先通过变量名的方式
+   - `SetEnvPrefix(string)`: 读取环境变量时使用前缀
+   - `SetEnvKeyReplacer(string...) *strings.Replacer`: 重写健的生成方式
    - `AllowEmptyEnv(bool)`
   
    viper在处理环境变量时区分大小写。
+   ```go
+	fmt.Println(os.Environ())
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("HOMEBREW") // 将自动转为大写
+	err := viper.BindEnv("PREFIX")
+	if err != nil {
+		return
+	}
+	id := viper.Get("PREFIX") // 13
+	fmt.Println(id)
+   ```
+9. 使用Flags
+    可以绑定到命令行参数，支持Cobra的Pflag。
 # gin
 # gorm
 
