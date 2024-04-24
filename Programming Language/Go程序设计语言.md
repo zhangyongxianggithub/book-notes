@@ -1858,7 +1858,48 @@ Viper中的配置项是不区分大小写的。
 2. 读取配置文件
    Viper要知道去哪里找配置文件。可以搜索多个路径，一个Viper只支持一个配置文件。Viper没有默认的搜索路径设置。
    ```go
+	func main() {
+		viper.SetConfigFile("./toml.toml") // 指定配置文件路径
+		viper.SetConfigName("config")      // 配置文件名称(无扩展名)
+		// viper.SetConfigType("toml")        // 如果配置文件的名称中没有扩展名，则需要配置此项
+		// viper.AddConfigPath("/Users/zhangyongxiang/Projects/go-practice/viper/") // 查找配置文件所在的路径
+		viper.AddConfigPath("$HOME/.appname") // 多次调用以添加多个搜索路径
+		viper.AddConfigPath(".")              // 还可以在工作目录中查找配置
+		err := viper.ReadInConfig()           // 查找并读取配置文件
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+				// 配置文件未找到错误；如果需要可以忽略
+				fmt.Println("config.json file not found")
+			} else { // 处理读取配置文件的错误
+				panic(fmt.Errorf("Fatal error config.json file: %s \n", err))
+			}
+		}
+		fmt.Println(viper.GetString("format"))
+
+	}
    ```
+3. 写入配置文件，存储运行时所做的修改，使用2种方式:
+   - WriteConfig: viper写入预定义文件，如果没有则不会写入
+   - SafeWriteConfig: 配置写入预定义文件，如果存在则不覆盖
+   - WriteConfigAs: 配置写入给定的文件，如果存在则覆盖
+   - WriteConfigAs: 配置写入给定的文件，如果存在不覆盖
+   
+   ```go
+	viper.WriteConfig() // 将当前配置写入“viper.AddConfigPath()”和“viper.SetConfigName”设置的预定义路径
+	viper.SafeWriteConfig()
+	viper.WriteConfigAs("/path/to/my/.config")
+	viper.SafeWriteConfigAs("/path/to/my/.config") // 因为该配置文件写入过，所以会报错
+	viper.SafeWriteConfigAs("/path/to/my/.other_config")
+   ```
+4. 监控并重新读取配置文件，运行时实时读取配置文件的更新。提供一个回调函数在发生变更运行
+   ```go
+	viper.WatchConfig()
+	viper.OnConfigChange(func(e fsnotify.Event) {
+	// 配置文件发生变更之后会调用的回调函数
+		fmt.Println("Config file changed:", e.Name)
+	})
+   ```
+5. 从`io.Reader`读取配置，
 # gin
 # gorm
 
