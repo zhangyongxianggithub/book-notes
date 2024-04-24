@@ -101,6 +101,7 @@
 - [viper](#viper)
 	- [viper是什么?](#viper是什么)
 	- [把值存入Viper](#把值存入viper)
+	- [从Viper获取值](#从viper获取值)
 - [gin](#gin)
 - [gorm](#gorm)
 
@@ -1958,7 +1959,27 @@ Viper中的配置项是不区分大小写的。
 	fmt.Println(id)
    ```
 9. 使用Flags
-    可以绑定到命令行参数，支持Cobra的Pflag。
+    可以绑定到命令行参数，支持Cobra的Pflag。这里暂时没看懂什么意思
+10. 远程Key/Value存储支持
+
+## 从Viper获取值
+获取值的方法如下:
+- `Get(key string) : interface{}`
+- `GetBool(key string) : bool`
+- `GetFloat64(key string) : float64`
+- `GetInt(key string) : int`
+- `GetIntSlice(key string) : []int`
+- `GetString(key string) : string`
+- `GetStringMap(key string) : map[string]interface{}`
+- `GetStringMapString(key string) : map[string]string`
+- `GetStringSlice(key string) : []string`
+- `GetTime(key string) : time.Time`
+- `GetDuration(key string) : time.Duration`
+- `IsSet(key string) : bool`
+- `AllSettings() : map[string]interface{}`
+
+找不到对应的键的时候返回0值，使用`IsSet()`方法检查键是否存在。
+1. 使用点号访问嵌套的键
 # gin
 # gorm
 
