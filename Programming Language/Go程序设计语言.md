@@ -89,6 +89,7 @@
 	- [go工具](#go工具)
 - [package \& module](#package--module)
 - [go工具](#go工具-1)
+	- [go编译与依赖](#go编译与依赖)
 	- [go env](#go-env)
 - [测试](#测试)
 	- [go test工具](#go-test工具)
@@ -1684,6 +1685,9 @@ Go工具主要用来下载、查询、格式化、构建、测试以及安装Go�
    `go list`列出包是否再工作空间中，输出导入路径。`go list ...`列出工作空间中的所有包。`go list -json hash`json格式输出包的完整记录。
 # package & module
 # go工具
+## go编译与依赖
+构建标志是`build`、`clean`、`get`、`install`、`list`、`run`、`test`共用的
+- `-p n`: 
 ## go env
 go环境变量可以直接在系统中设置或者通过Go的命令行工具设置。`go env <NAME>`查看环境变量，
 `go env -w <NAME>=<VALUE>`设置环境变量，比如
@@ -1698,7 +1702,13 @@ go env -w GO111MODULE=on
   - bin: 存放可执行文件
 - GOBIN: 编译后的程序的目录，`go install`也会安装到这个目录下面，一般就是`${GOPATH}/bin`目录
 - GOOS: 交叉编译用的，默认是当前操作系统
-- GOARCH: CPU架构，默认是当前计算机的，
+- GOARCH: CPU架构，默认是当前计算机的
+- AR: 当使用gccgp构建时操作库文档文件使用的命令，默认是ar
+- CC: 用来编译C代码的命令
+- CXX: 用来编译C++代码的命令
+- CGO_ENABLED: 是否支持cgo命令，0/1
+- CGO_CFLAGS: 当编译C代码时，cgo传给编译器的Flags
+- CGO_CFLAGS_ALLOW: 一个正则表达式，提供了允许出现在#cgo CFLAGS源代码指令中的额外的flags
 # 测试
 测试是自动化测试的简称，编写简单的程序来确保程序在该测试中针对特定输入产生预期的输出。
 ## go test工具
