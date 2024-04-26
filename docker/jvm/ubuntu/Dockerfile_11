@@ -1,7 +1,7 @@
-from azul/zulu-openjdk:8u322
+from azul/zulu-openjdk:11
 label org.opencontainers.image.authors="zhangyongxiang@baidu.com"
 env TZ Asia/Shanghai
-run apt update && apt install -y language-pack-zh-hans
+run apt update && apt install -y language-pack-zh-hans && apt clean
 env LC_ALL zh_CN.utf8
 env LANG zh_CN.UTF-8
 env LANGUAGE zh_CN:zh
