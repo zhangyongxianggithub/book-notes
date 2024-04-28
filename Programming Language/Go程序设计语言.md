@@ -1693,7 +1693,11 @@ Go工具主要用来下载、查询、格式化、构建、测试以及安装Go�
 # package & module
 # go工具
 ## go编译与依赖
-构建标志是`build`、`clean`、`get`、`install`、`list`、`run`、`test`共用的
+功法
+>go build [-o output] [build flags] [packages]
+
+编译由道路路径命名的包与依赖，但不会安装结果。如果build的参数是来自一个目录下的几个go文件，build认为他们是一个包下的源代码文件。当编译包时，build忽略_test.go结尾的文件。当编译一个main包时，build将生成的可执行文件写入以包导入路径的最后一个文件夹(不是版本号的)命名的输出文件。编写Windows可执行文件时会添加`.exe`后缀。因此`go build example/sam`会写入sam或sam.exe。`go build example.com/foo/v2`写入foo或foo.exe，而不是v2.exe。当从多个go文件来编译一个包时，可执行程序是第一个source文件的名字，`go build ed.go rx.go`生成ed或者ed.exe。当编译多个包或者一个非main包时，build只是编译包但是丢弃编译的结果，只是检查包可以被编译。`-o`参数强制build将编译后的结果写入到指定的文件或者文件夹。如果指定的是一个已存在的文件夹或者是/或者\结尾，生成的结果会被写入到这个目录中。build标志是`build`、`clean`、`get`、`install`、`list`、`run`、`test`共用的
+- `-C dir`: 
 - `-p n`: 
 ## go env
 go环境变量可以直接在系统中设置或者通过Go的命令行工具设置。`go env <NAME>`查看环境变量，
@@ -1716,6 +1720,14 @@ go env -w GO111MODULE=on
 - GODEBUG: 开启debug模式
 - GOENV: Go环境配置文件的路径，设置`GOENV=off`将会禁用默认的配置文件
 - GOFLAGS: `-flag=value`分隔的列表，如果go命令能够识别给定的flag，默认会添加到Go命令中。
+- GOINSECURE: 逗号分隔的模块路径前缀glob模式(语法类似Go的path.Match)，这些模块会通过不安全的方式拉取，只对直接拉取的依赖生效，GOINSECURE不会禁用校验和计算，GOPRIVATE或者GONOSUMDB与这个有关
+- GOPROXY: Go模块代理的URL，参考https://golang.org/ref/mod#environment-variables与https://golang.org/ref/mod#module-proxy
+- GOPRIVATE, GONOPROXY, GONOSUMDB: 逗号分隔的模块路径前缀glob模式(语法类似Go的path.Match)，这些模块会被直接拉取并且不会与checksum database比较
+- GOSUMDB: checksum database的名字还有可选的public key与URL，参考https://golang.org/ref/mod#authenticating
+- GOTOOLCHAIN: 控制使用哪个Go工具链，参考https://go.dev/doc/toolchain.
+- GOTMPDIR: 一个目录，go命令用来写临时的源代码文件、包与二进制文件的地方
+- GOVC: 
+- GOWORK: 在模块模式下，使用`go.work`作为workspace文件，在默认情况下或者GOWORLK=auto，go命令会在当前目录或者子目录下寻找go.work文件，如果找到有效的go.work文件，其中指定的模块将共同用作主要模块。如果GOWORK=off，或者工作区中找不到go.work文件，workspace模式被禁用。
 - AR: 当使用gccgp构建时操作库文档文件使用的命令，默认是ar
 - CC: 用来编译C代码的命令
 - CXX: 用来编译C++代码的命令
