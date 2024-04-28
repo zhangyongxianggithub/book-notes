@@ -1717,7 +1717,6 @@ go env -w GO111MODULE=on
 - GOMODCACHE: go命令下载模块的目录
 - GODEBUG: 开启debug模式
 - GOENV: Go环境配置文件的路径，设置`GOENV=off`将会禁用默认的配置文件
-- GOFLAGS: `-flag=value`分隔的列表，如果go命令能够识别给定的flag，默认会添加到Go命令中。
 - GOINSECURE: 逗号分隔的模块路径前缀glob模式(语法类似Go的path.Match)，这些模块会通过不安全的方式拉取，只对直接拉取的依赖生效，GOINSECURE不会禁用校验和计算，GOPRIVATE或者GONOSUMDB与这个有关
 - GOPROXY: Go模块代理的URL，参考https://golang.org/ref/mod#environment-variables与https://golang.org/ref/mod#module-proxy
 - GOPRIVATE, GONOPROXY, GONOSUMDB: 逗号分隔的模块路径前缀glob模式(语法类似Go的path.Match)，这些模块会被直接拉取并且不会与checksum database比较
@@ -1726,6 +1725,7 @@ go env -w GO111MODULE=on
 - GOTMPDIR: 一个目录，go命令用来写临时的源代码文件、包与二进制文件的地方
 - GOVC: 
 - GOWORK: 在模块模式下，使用`go.work`作为workspace文件，在默认情况下或者GOWORLK=auto，go命令会在当前目录或者子目录下寻找go.work文件，如果找到有效的go.work文件，其中指定的模块将共同用作主要模块。如果GOWORK=off，或者工作区中找不到go.work文件，workspace模式被禁用。
+- GOFLAGS: `-flag=value`分隔的列表，如果go命令能够识别给定的flag，默认会添加到Go命令中。每一个entry都必须是独立的flag。因为entry是空格分隔的，所以entry的value不要出现空格，命令行上出现的同名flag会在这个变量后生效，因此会覆盖环境变量
 - AR: 当使用gccgp构建时操作库文档文件使用的命令，默认是ar
 - CC: 用来编译C代码的命令
 - CXX: 用来编译C++代码的命令
