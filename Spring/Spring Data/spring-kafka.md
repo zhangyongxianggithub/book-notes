@@ -610,9 +610,96 @@ public class KReplyingApplication {
 
 }
 ```
-`@KafkaListener`基础设施回显correlation ID并决定reply topic。查看[Forwarding Listener Results using @SendTo](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/annotation-send-to.html)获取sending replies的更多信息。template使用默认的header`KafKaHeaders.REPLY_TOPIC`来指出reply发送的topic。从2.2版本开始
+`@KafkaListener`基础设施回显correlation ID并决定reply topic。查看[Forwarding Listener Results using @SendTo](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/annotation-send-to.html)获取sending replies的更多信息。template使用默认的header`KafKaHeaders.REPLY_TOPIC`来指出reply发送的topic。从2.2版本开始，template尝试检测reply容器中配置的topic与partition，如果容器配置坚挺一个topic或者监听一个`TopicPartitionOffset`，那么这些设置将会被用来设置reply headers。如果容器没有配置，开发者必须自己设置reply headers。在这个场景下，容器初始化时会打印一个`INFO`日志消息，下面的例子使用了`KafkaHeaders.REPLY_TOPIC`:
+```java
+record.headers().add(new RecordHeader(KafkaHeaders.REPLY_TOPIC, "kReplies".getBytes()));
+```
+如果你配置了一个reply的`TopicPartitionOffset`，你可以在多个templat中使用同一个reply topic，只需要他们监听不同的partition。如果配置了一个reply topic，每个实例必须使用不同的`group.id`，在这个场景下，所有的实例都接收每条reply，但是只有发送request的实例可以接收到correlation ID，在auto-scalling方面非常有用，但是会额外的消耗一些网络流量与丢弃不想要的reply的开销。当你使用这个设置，我们建议你设置`sharedReplyTopic=true`，这会将非预期的reply的logging level从，默认的ERROR降级为DEBUG。下面是一个配置reply容器来使用一共享的reply的topic的例子:
+```java
+@Bean
+public ConcurrentMessageListenerContainer<String, String> replyContainer(
+        ConcurrentKafkaListenerContainerFactory<String, String> containerFactory) {
+
+    ConcurrentMessageListenerContainer<String, String> container = containerFactory.createContainer("topic2");
+    container.getContainerProperties().setGroupId(UUID.randomUUID().toString()); // unique
+    Properties props = new Properties();
+    props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // so the new group doesn't get old replies
+    container.getContainerProperties().setKafkaConsumerProperties(props);
+    return container;
+}
+```
+如果你有多个client实例并且没有像前面章节讨论的那样进行配置，那么每个实例都需要一个专门的reply topic。还有一种方式是设置`KafkaHeaders.REPLY_PARTITION`并为每个实例使用不同的partition。header是一个4byte的整数，服务端必须使用这个header来将reply发送到正确的partition(在`@KafkaListener`中实现)，在这种场景下，reply容器不能使用Kafka的组管理特性并且必须配置为监听一个特定的partition(通过在`ContainerProperties`中使用`TopicPartitionOffset`)，`DefaultKafkaHeaderMapper`需要classpath中存在jackson库，如果没有，那么message converter中则没有header mapper，那么必须要使用一个`SimpleKafkaHeaderMapper`配置`MessagingMessageConverter`。默认情况下，会用到个header:
+- `KafkaHeaders.CORRELATION_ID`: 用来将reply关联到一个request
+- `KafkaHeaders.REPLY_TOPIC`: 用来通知server端，reply发送的topic
+- `KafkaHeaders.REPLY_PARTITION`: 可选的，用来通知server端，reply发送的topic的partition
+
+这些header都是`@KafkaListener`用来发送reply的，从2.3版本开始，你可以自定义这些header的name，template有3个属性`correlationHeaderName`, `replyTopicHeaderName`与`replyPartitionHeaderName`来设置自定义名字，当你的应用不是一个Spring应用或者不使用`@KafkaListener`时会很有用。如果request应用不是一个spring应用并且在header中设置了correlation信息，你可以在listener container factory配置一个自定义的`correlationHeaderName`属性。
+#### Request/Reply with `Message<?>s`
+2.7版本后，`ReplyingKafkaTemplate`添加了发送/接收spring-messaging的`Message<?>`抽象的功能:
+```java
+RequestReplyMessageFuture<K, V> sendAndReceive(Message<?> message);
+<P> RequestReplyTypedMessageFuture<K, V, P> sendAndReceive(Message<?> message,
+        ParameterizedTypeReference<P> returnType);
+```
+这会使用template默认的`replyTimeout`，所有的方法也有支持设置超时的方法重载版本。如果消费者的`Deserializer`或template的 `MessageConverter`可以无需任何附加信息(不论是配置的还是reply消息中的type metadata)转换payload，使用第一个方法。如果需要提供返回类型的类型信息以协助message converter，请使用第二个方法。这也允许template接收不同的类型的message，即使reply中没有type metadata，例如当服务器端不是Spring应用程序时。下面是后者的一个例子:
+```java
+@Bean
+ReplyingKafkaTemplate<String, String, String> template(
+        ProducerFactory<String, String> pf,
+        ConcurrentKafkaListenerContainerFactory<String, String> factory) {
+
+    ConcurrentMessageListenerContainer<String, String> replyContainer =
+            factory.createContainer("replies");
+    replyContainer.getContainerProperties().setGroupId("request.replies");
+    ReplyingKafkaTemplate<String, String, String> template =
+            new ReplyingKafkaTemplate<>(pf, replyContainer);
+    template.setMessageConverter(new ByteArrayJsonMessageConverter());
+    template.setDefaultTopic("requests");
+    return template;
+}
+```
+```java
+RequestReplyTypedMessageFuture<String, String, Thing> future1 =
+        template.sendAndReceive(MessageBuilder.withPayload("getAThing").build(),
+                new ParameterizedTypeReference<Thing>() { });
+log.info(future1.getSendFuture().get(10, TimeUnit.SECONDS).getRecordMetadata().toString());
+Thing thing = future1.get(10, TimeUnit.SECONDS).getPayload();
+log.info(thing.toString());
+
+RequestReplyTypedMessageFuture<String, String, List<Thing>> future2 =
+        template.sendAndReceive(MessageBuilder.withPayload("getThings").build(),
+                new ParameterizedTypeReference<List<Thing>>() { });
+log.info(future2.getSendFuture().get(10, TimeUnit.SECONDS).getRecordMetadata().toString());
+List<Thing> things = future2.get(10, TimeUnit.SECONDS).getPayload();
+things.forEach(thing1 -> log.info(thing1.toString()));
+```
+### Reply Type `Message<?>`
+当`@KafkaListener`返回一个`Message<?>`，在2.5版本以前，你需要自己设置reply topic与correlation id头信息，比如下面的例子:
+```java
+@KafkaListener(id = "requestor", topics = "request")
+@SendTo
+public Message<?> messageReturn(String in) {
+    return MessageBuilder.withPayload(in.toUpperCase())
+            .setHeader(KafkaHeaders.TOPIC, replyTo)
+            .setHeader(KafkaHeaders.KEY, 42)
+            .setHeader(KafkaHeaders.CORRELATION_ID, correlation)
+            .build();
+}
+```
+从2.5版本开始，框架将会自动检测这些header是否存在并自动设置头信息，如果没有topic设置则检测`@SendTo`注解中的topic或者输入message的`KafkaHeaders.REPLY_TOPIC`头信息，如果输入的message中存在`KafkaHeaders.CORRELATION_ID`与`KafkaHeaders.REPLY_PARTITION`则自动设置到reply消息的消息头。
+```java
+@KafkaListener(id = "requestor", topics = "request")
+@SendTo  // default REPLY_TOPIC header
+public Message<?> messageReturn(String in) {
+    return MessageBuilder.withPayload(in.toUpperCase())
+            .setHeader(KafkaHeaders.KEY, 42)
+            .build();
+}
+```
+### Aggregating Multiple Replies
+
 ### Receiving Messages
-接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个messgae listener或者使用`@KafkaListener`注解。
+接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个message listener或者使用`@KafkaListener`注解。
 #### Message Listeners
 当你使用一个[message listener container](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/message-listener-container.html)时，你必须提供一个listener来接收数据，目前有8个接口用来做message listener，如下:
 ```java
