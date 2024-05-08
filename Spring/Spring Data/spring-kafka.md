@@ -697,8 +697,8 @@ public Message<?> messageReturn(String in) {
 }
 ```
 ### Aggregating Multiple Replies
-
-### Receiving Messages
+`ReplyingKafkaTemplate`严格适用于单个请求/回复场景。对于单个消息的多个接收者返回回复的情况，您可以使用 `AggregatingReplyingKafkaTemplate`。这是[Scatter-Gather企业集成模式[https://www.enterpriseintegrationpatterns.com/patterns/messaging/BroadcastAggregate.html]的客户端实现。与`ReplyingKafkaTemplate`类似，`AggregatingReplyingKafkaTemplate`构造函数接收一个producer工厂与一个listener container(用来接收replies)，还有第三个参数`BiPredicate<List<ConsumerRecord<K, R>>, Boolean> releaseStrategy`，每次接收到一个reply的时候执行，当`predicate`返回true，ConsumerRecords将成为`sendAndReceive`方法返回的`Future`的结果。还有一个附加属性 `returnPartialOnTimeout`(默认false)。当此项设置为true时，部分结果将正常完成`future`(只要至少收到一条回复记录)，而不是使用 `KafkaReplyTimeoutException`来完成`future`。
+## Receiving Messages
 接收消息需要首先配置一个`MessageListenerContainer`，然后提供一个message listener或者使用`@KafkaListener`注解。
 #### Message Listeners
 当你使用一个[message listener container](https://docs.spring.io/spring-kafka/reference/kafka/receiving-messages/message-listener-container.html)时，你必须提供一个listener来接收数据，目前有8个接口用来做message listener，如下:
