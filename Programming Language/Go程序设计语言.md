@@ -1926,5 +1926,6 @@ Viper中的配置项是不区分大小写的。
 2. 可以获取Sub配置
 3. 可以对配置反序列化
 # gin
+用Go编写的HTTP Web框架，类似Martini的API，性能更好。
 # gorm
 
