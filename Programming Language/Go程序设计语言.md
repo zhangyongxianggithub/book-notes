@@ -103,10 +103,11 @@
 - [低级编程](#低级编程)
 - [文件操作](#文件操作)
 	- [介绍](#介绍)
-		- [基础操作](#基础操作)
-		- [读写](#读写)
-		- [压缩](#压缩)
-		- [其他](#其他)
+	- [基础操作](#基础操作)
+	- [读写](#读写)
+	- [压缩](#压缩)
+	- [其他](#其他)
+- [http](#http)
 - [go Context](#go-context)
 - [viper](#viper)
 	- [viper是什么?](#viper是什么)
@@ -1879,7 +1880,7 @@ func display(path string, v reflect.Value) {
 # 文件操作
 ## 介绍
 万物皆文件。Unix的一个基础设计就是万物皆文件(everything is a file)。Go中的底层文件操作集中在os包中，在io、ioutil与bufio包中提供了高级操作。
-### 基础操作
+## 基础操作
 - 创建空文件`newFile, err = os.Create("test.txt")`
 - 截断文件`err := os.Truncate("test.txt", 100)`
 - 获得文件信息`fileInfo, err = os.Stat("test.txt")`
@@ -1910,7 +1911,7 @@ func display(path string, v reflect.Value) {
 - 改变时间戳`err = os.Chtimes("test.txt", lastAccessTime, lastModifyTime)`
 - 硬链接，指向inode，所有的链接被删除后文件才会被删除`  err := os.Link("original.txt", "original_also.txt")`
 - 软连接，存储硬链接的符号`err = os.Symlink("original.txt", "original_sym.txt")`
-### 读写
+## 读写
 - 复制文件`bytesWritten, err := io.Copy(newFile, originalFile)`
 - 跳转到文件指定位置(Seek)，`newPosition, err := file.Seek(offset, whence)`whence用来计算offset的初始位置
   - 0 = 文件开始位置
@@ -2094,7 +2095,7 @@ func display(path string, v reflect.Value) {
 		// 再次调用scanner.Scan()发现下一个token
 	}
   ```
-### 压缩
+## 压缩
 - 打包`zip`文件
   ```go
 	func main() {
@@ -2228,7 +2229,7 @@ func display(path string, v reflect.Value) {
 		}
 	}
   ```
-### 其他
+## 其他
 - 临时文件和目录，`ioutil`提供了两个函数: `TempDir()`和`TempFile()`，如果第一个参数是空，那么会在操作系统的临时文件夹中创建文件或者目录
   ```go
 	func main() {
@@ -2315,6 +2316,8 @@ func display(path string, v reflect.Value) {
 		fmt.Printf("Md5 checksum: %x\n", sum)
 	}
   ```
+# http
+
 # go Context
 # viper
 Go的完整配置解决方案，支持多种类型的配置格式。
