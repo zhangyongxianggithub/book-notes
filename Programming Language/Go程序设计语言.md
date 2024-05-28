@@ -1800,7 +1800,7 @@ func Sprint(x interface{}) string {
 ## reflect.Type和reflect.Value
 反射功能由reflect包提供，包含2个类型
 - Type，表示Go语言的一个类型，一个很多方法的接口，只有一个实现，类型描述符接口值中的动态类型也是类型描述符`reflect.TypeOf(interface{})`把接口中的动态类型以reflect.Type的形式返回。格式化中的%T使用的就是这个反射；
-- Value，包含一个任意类型的值，`reflect.ValueOf(interface{})`把接口中的值以reflect.Value的形式返回，%v使用的是这个反射。`Value.Type()`方法返回值的	`reflect.Type`形式，`reflect.Value.Interface`是ValueOf的逆操作。
+- Value，包含一个任意类型的值，`reflect.ValueOf(interface{})`把接口中的值以reflect.Value的形式返回，%v使用的是这个反射。`Value.Type()`方法返回值的`reflect.Type`形式，`reflect.Value.Interface`是ValueOf的逆操作。
 
 reflect.Value与interface{}都可以包含任意的值，区别是interface{}隐藏了值的布局信息、内置操作和相关方法，只有通过类型断言来做深入的处理，Value有很多方法可以用来分析所包含的值，不用知道它的类型，一个通用格式化函数如下:
 ```go
