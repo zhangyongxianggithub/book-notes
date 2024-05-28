@@ -267,4 +267,41 @@ CREATE INDEX ON items USING hnsw ((embedding::halfvec(3)) halfvec_l2_ops);
 SELECT * FROM items ORDER BY embedding::halfvec(3) <-> '[1,2,3]' LIMIT 5;
 ```
 # Binary Vectors
-
+使用`bit`类型来存储binary vectors
+```sql
+CREATE TABLE items (id bigserial PRIMARY KEY, embedding bit(3));
+INSERT INTO items (embedding) VALUES ('000'), ('111');
+```
+通过汉明距离获得最近邻
+```sql
+SELECT * FROM items ORDER BY embedding <~> '101' LIMIT 5;
+SELECT * FROM items ORDER BY bit_count(embedding # '101') LIMIT 5;
+```
+创建二进制量化的表达式索引
+```sql
+CREATE INDEX ON items USING hnsw ((binary_quantize(embedding)::bit(3)) bit_hamming_ops);
+```
+通过汉明距离获取最近邻
+```sql
+SELECT * FROM items ORDER BY binary_quantize(embedding)::bit(3) <~> binary_quantize('[1,-2,3]') LIMIT 5;
+```
+通过原始向量rerank来获取更好的召回效果
+```sql
+SELECT * FROM (
+    SELECT * FROM items ORDER BY binary_quantize(embedding)::bit(3) <~> binary_quantize('[1,-2,3]') LIMIT 20
+) ORDER BY embedding <=> '[1,-2,3]' LIMIT 5;
+```
+# Sparse Vectors
+使用`sparsevec`类型来哦存储稀疏向量
+```sql
+CREATE TABLE items (id bigserial PRIMARY KEY, embedding sparsevec(5));
+```
+写入向量
+```sql
+INSERT INTO items (embedding) VALUES ('{1:1,3:2,5:3}/5'), ('{1:4,3:5,5:6}/5');
+```
+格式`{index1:value1,index2:value2}/dimensions`，下标从1开始。通过L2距离获取最紧邻
+```sql
+SELECT * FROM items ORDER BY embedding <-> '{1:3,3:1,5:2}/5' LIMIT 5;
+```
+# Hybird Search
