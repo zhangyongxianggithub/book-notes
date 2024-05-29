@@ -305,3 +305,127 @@ INSERT INTO items (embedding) VALUES ('{1:1,3:2,5:3}/5'), ('{1:4,3:5,5:6}/5');
 SELECT * FROM items ORDER BY embedding <-> '{1:3,3:1,5:2}/5' LIMIT 5;
 ```
 # Hybird Search
+与Postgresql的full-text搜索一起实现混合搜索
+```sql
+SELECT id, content FROM items, plainto_tsquery('hello search') query
+    WHERE textsearch @@ query ORDER BY ts_rank_cd(textsearch, query) DESC LIMIT 5;
+```
+# Indexing Subvectors
+使用表达式索引来索引子向量
+```sql
+CREATE INDEX ON items USING hnsw ((subvector(embedding, 1, 3)::vector(3)) vector_cosine_ops);
+```
+通过余弦向量距离获取最近邻
+```sql
+SELECT * FROM items ORDER BY subvector(embedding, 1, 3)::vector(3) <=> subvector('[1,2,3,4,5]'::vector, 1, 3) LIMIT 5;
+```
+通过full vectors来Re-rank获取更好的召回效果
+```sql
+SELECT * FROM (
+    SELECT * FROM items ORDER BY subvector(embedding, 1, 3)::vector(3) <=> subvector('[1,2,3,4,5]'::vector, 1, 3) LIMIT 20
+) ORDER BY embedding <=> '[1,2,3,4,5]' LIMIT 5;
+```
+# Performance
+## Tuning
+使用工具比如[PgTune](https://pgtune.leopard.in.ua/)来为Posgres服务参数设置初始值。比如，`shared_buffers`应该是服务器内存的25%，你可以查看配置文件
+```sql
+SHOW config_file;
+```
+或者检查单个的设置
+```sql
+SHOW shared_buffers;
+```
+记住为了让变更生效需要重启Postgres
+## Loading
+使用`COPY`来批量加载数据
+```sql
+COPY items (embedding) FROM STDIN WITH (FORMAT BINARY);
+```
+## Indexing
+可以参考[HNSW](https://github.com/pgvector/pgvector?tab=readme-ov-file#index-build-time)或者[IVFFlat](https://github.com/pgvector/pgvector?tab=readme-ov-file#index-build-time-1)的索引构建时间，在生产环境，并发创建索引避免阻塞写
+```sql
+CREATE INDEX CONCURRENTLY ...
+```
+## Querying
+使用`EXPLAIN ANALYZE`来debug性能情况
+```sql
+EXPLAIN ANALYZE SELECT * FROM items ORDER BY embedding <-> '[3,1,2]' LIMIT 5;
+```
+为了提高没有使用索引的查询的性能，调高`max_parallel_workers_per_gather`参数
+```sql
+SET max_parallel_workers_per_gather = 4;
+```
+如果向量被normalized to length 1，比如[OpenAI embeddings](https://platform.openai.com/docs/guides/embeddings/which-distance-function-should-i-use), 使用内积来达到最好的性能
+```sql
+SELECT * FROM items ORDER BY embedding <#> '[3,1,2]' LIMIT 5;
+```
+为了提高使用IVFFlat索引的查询的性能，调大inverted lists的数量
+```sql
+CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 1000);
+```
+## Vacuuming
+对HNSW索引进行真空清理可能需要一些时间。可以通过先进行重新索引来加快速度。
+```sql
+REINDEX INDEX CONCURRENTLY index_name;
+VACUUM table_name;
+```
+# Monitoring
+使用pg_stat_statements监控性能
+```sql
+CREATE EXTENSION pg_stat_statements;
+```
+获取慢查询
+```sql
+SELECT query, calls, ROUND((total_plan_time + total_exec_time) / calls) AS avg_time_ms,
+    ROUND((total_plan_time + total_exec_time) / 60000) AS total_time_min
+    FROM pg_stat_statements ORDER BY total_plan_time + total_exec_time DESC LIMIT 20;
+```
+通过对比来自近似搜索的结果与精确搜索的结果监控召回
+```sql
+BEGIN;
+SET LOCAL enable_indexscan = off; -- use exact search
+SELECT ...
+COMMIT;
+```
+# Scaling
+# Frequently Asked Questions
+1. 一个表中能存储多少向量?取决于表的存储上线，表的存储上限是32TB
+2. 支持主从复制吗?支持，使用write-ahead log，支持复制与point-in-time recovery
+3. 如果我想要索引超过2000个维度的向量怎么办？你可以使用half-precision indexing支持最高4000维度，或者binary quantization支持最高64000维度，或者使用降维技术。
+4. 我能否在一列中存储不同维度的向量?你可以使用`vector`类型而不是`vector(3)`
+   ```sql
+   CREATE TABLE embeddings (model_id bigint, item_id bigint, embedding vector, PRIMARY KEY (model_id, item_id));
+   ```
+   但是，你只能在具有相同维度向量的行上创建索引
+   ```sql
+   CREATE INDEX ON embeddings USING hnsw ((embedding::vector(3)) vector_l2_ops) WHERE (model_id = 123);
+   ```
+   或者使用查询
+   ```sql
+   SELECT * FROM embeddings WHERE model_id = 123 ORDER BY embedding::vector(3) <-> '[3,1,2]' LIMIT 5;
+   ```
+5. 向量的精度能否更高?你可以使用`double precision[]`与`numeric[]`类型来存储跟高精度的向量
+   ```sql
+  CREATE TABLE items (id bigserial PRIMARY KEY, embedding double precision[]);
+
+  -- use {} instead of [] for Postgres arrays
+  INSERT INTO items (embedding) VALUES ('{1,2,3}'), ('{4,5,6}');
+   ```
+   可选的，添加一个[check constraint](https://www.postgresql.org/docs/current/ddl-constraints.html)保证数据可以被转换为`vector`并且具有预期的维度
+   ```sql
+   ALTER TABLE items ADD CHECK (vector_dims(embedding::vector) = 3);
+   ```
+   使用表达式索引来构建索引
+   ```sql
+   CREATE INDEX ON items USING hnsw ((embedding::vector(3)) vector_l2_ops);
+   ```
+   或者使用下面的查询
+   ```sql
+   SELECT * FROM items ORDER BY embedding::vector(3) <-> '[3,1,2]' LIMIT 5;
+   ```
+6. 是否索引应该小于内存?不需要，与普通的索引一样，但是如果索引都在内存中那么性能会更好，你可以获取索引的大小
+   ```sql
+   SELECT pg_size_pretty(pg_relation_size('index_name'));
+   ```
+# Troubleshooting
+
