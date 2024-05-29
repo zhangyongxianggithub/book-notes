@@ -428,4 +428,51 @@ COMMIT;
    SELECT pg_size_pretty(pg_relation_size('index_name'));
    ```
 # Troubleshooting
+- 为什么一个查询没有使用到索引?
+  查询需要有一个`order by`与`limit`,并且`order by`的必须是距离计算的结果的升序
+  ```sql
+  -- index
+  ORDER BY embedding <=> '[3,1,2]' LIMIT 5;
+
+  -- no index
+  ORDER BY 1 - (embedding <=> '[3,1,2]') DESC LIMIT 5;
+  ```
+  你可以告诉规划器对查询使用索引
+  ```sql
+  BEGIN;
+  SET LOCAL enable_seqscan = off;
+  SELECT ...
+  COMMIT;
+  ```
+  同时，如果表很小，表扫描没准更快。
+- 为什么一个查询没有使用到并行表扫描
+  当前的计划工具没有将冷存储（out-of-line storage） 纳入成本估算，这可能会让串行扫描看起来更便宜。对于包含冷存储的查询，可以通过以下方式降低并行扫描的成本:
+  ```sql
+  BEGIN;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_setup_cost = 1;
+  SELECT ...
+  COMMIT;
+  ```
+- 为什么对于一个查询来说，添加HNSW索引后，结果反而变少了?
+  搜索结果的数量会受到动态候选列表大小(`hnsw.ef_search`)的限制。由于无效元组或查询中的过滤条件，检索到的结果可能更少。我们建议将 `hnsw.ef_search`设置为查询`LIMIT`的至少两倍。如果您需要超过`500`个结果，请改用`IVFFlat`索引。另外请注意，空向量(`NULL` vectors)和零向量(zero vectors，针对余弦距离)不会被索引
+- 为什么对于一个查询来说，添加IVFFlat索引后，结果反而变少了?
+  该索引可能创建时数据量太少，不足以支持当前列表数量。请暂时删除此索引，等到表中数据量增加后再重建索引。`DROP INDEX index_name;`，结果数也会收到probes数量的限制，记住空向量是不会被索引的。
+# Reference
+## Vector
+### 类型
+每个向量占用`4*dimensions+8`byte的存储空间，每个元素都是一个单精度浮点数，类似Postgres中的`real`类型，所有的元素必须是有限的，向量最多支持16000维度。
+### 操作符
+|Operator|Description|
+|:---:|:---:|
+|+|逐元素加法|
+|-|逐元素减法|
+|*|逐元素乘法|
+|\|\||拼接|
+|<->|欧几里得距离|
+|<#>|负内积|
+|<=>|余弦距离|
+|<+>|曼哈顿距离|
+
+### Functions
 
