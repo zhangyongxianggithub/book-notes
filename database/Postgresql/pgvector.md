@@ -475,4 +475,9 @@ COMMIT;
 |<+>|曼哈顿距离|
 
 ### Functions
-
+|Function|Description|
+|:---:|:---:|
+|binary_quantize(vector)->bit|二进制量化|
+|cosine_distance(vector,vector)->double precision|余弦距离|
+|inner_product(vector,vector)->double precision|内积|
+|l1_distance(vector, vector)->double precision|曼哈顿距离|
