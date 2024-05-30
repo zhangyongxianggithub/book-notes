@@ -481,3 +481,112 @@ COMMIT;
 |cosine_distance(vector,vector)->double precision|余弦距离|
 |inner_product(vector,vector)->double precision|内积|
 |l1_distance(vector, vector)->double precision|曼哈顿距离|
+|l2_distance(vector, vector) → double precision|欧几里得距离|
+|l2_normalize(vector) → vector|欧几里得范数归一化|
+|subvector(vector, integer, integer) → vector|子向量|
+|vector_dims(vector) → integer|向量的维度|
+|vector_norm(vector) → double precision|欧几里得范数|
+
+### Aggregate Functions
+|Function|Description|
+|:---:|:---:|
+|avg(vector) → vector|平均值向量|
+|sum(vector) → vector|累加向量|
+
+## Halfvec
+每个half向量消耗`2*dimensions+8`bytes空间，每个元素都是一个半精度浮点数，所有元素都是有限的，最多支持16000个维度。
+### Operators
+与vector的操作符都是一致的
+### Functions
+与vector的函数都是一致的
+### Aggregate Functions
+|Function|Description|
+|:---:|:---:|
+|avg(vector) → vector|平均值向量|
+|sum(vector) → vector|累加向量|
+
+## Bit
+每个bit向量消耗`dimensions/8+8`个bytes空间
+### Operators
+|Operator|Description|
+|:---:|:---:|
+|<～>|汉明距离|
+|<%>|杰卡德距离|
+### Functions
+|Function|Description|
+|:---:|:---:|
+|hamming_distance(bit,bit)->double precision|汉明距离|
+|jaccard_distance(bit,bit)->double precision|杰卡德距离|
+
+## Sparsevec
+每一个稀疏向量都消耗`8 * non-zero elements + 16`个bytes空间，每一个元素都是一个单精度浮点数，所有元素都是有限的，稀疏向量最多支持16000个非0元素
+### Operators
+|Operator|Description|
+|:---:|:---:|
+|<->|欧几里得距离|
+|<#>|负内积|
+|<=>|余弦距离|
+|<+>|曼哈顿距离|
+### Functions
+|Function|Description|
+|:---:|:---:|
+|cosine_distance(sparsevec,sparsevec)->double precision|余弦距离|
+|inner_product(sparsevec,sparsevec)->double precision|内积|
+|l1_distance(sparsevec, sparsevec)->double precision|曼哈顿距离|
+|l2_distance(sparsevec, sparsevec) → double precision|欧几里得距离|
+|l2_normalize(sparsevec) → vector|欧几里得范数归一化|
+|l2_norm(sparsevec) → double precision|欧几里得范数|
+
+# Installation Notes-Linux/Mac
+如果你的机器上安装了多个Postgres，需要指定pg_config文件的路径。
+```shell
+export PG_CONFIG=/Library/PostgreSQL/16/bin/pg_config
+```
+然后重新运行安装命令，如果有需要可以在运行`make`前运行`make clean`，如果运行`make install`需要sudo权限，那么运行
+```shell
+sudo --preserve-env=PG_CONFIG make install
+```
+Mac上的路径设置如下:
+- EDB installer - `/Library/PostgreSQL/16/bin/pg_config`
+- Homebrew (arm64) - `/opt/homebrew/opt/postgresql@16/bin/pg_config`
+- Homebrew (x86-64) - `/usr/local/opt/postgresql@16/bin/pg_config`
+
+如果编译失败抛出`fatal error: postgres.h: No such file or directory`异常，需要确保Postgres开发文件已经安装到服务器上，对于Ubuntu或者Debian来说，使用
+```shell
+sudo apt install postgresql-server-dev-16
+```
+如果在Mac上编译失败并抛出`warning: no such sysroot directory`的异常，需要重新安装Xcode Command Line Tools。
+默认情况下，为了最好的性能，pgvector会使用`-march=native`编译，然而，如果将编译后的结果和运行在别的机器上会导致`Illegal instruction`的错误。为了可移植性，编译时使用下面的命令
+```shell
+make OPTFLAGS=""
+```
+# Installation Notes-Windows
+如果编译时，抛出`Cannot open include file: 'postgres.h': No such file or directory`异常，需要确保PGROOT是正确的。如果编译时抛出`Access is denied`错误信息，使用administrator用户安装。
+# Additional Installation Methods
+- Docker，获取Docker镜像`docker pull pgvector/pgvector:pg16`，添加了pgvector到Postgres本身的镜像中。你也可以自己构建镜像
+  ```shell
+  git clone --branch v0.7.0 https://github.com/pgvector/pgvector.git
+  cd pgvector
+  docker build --pull --build-arg PG_MAJOR=16 -t myuser/pgvector .
+  ```
+- Homebrew, `brew install pgvector`
+- PGXN, 从[PostgreSQL Extension Network](https://pgxn.org/dist/vector)中安装，`pgxn install vector`
+- APT, Debian与Ubuntu包在[PostgreSQL APT Repository](https://wiki.postgresql.org/wiki/Apt)中可用，执行下面的安装命令`sudo apt install postgresql-16-pgvector`
+- Yum, RPM包在[PostgreSQL Yum Repository](https://yum.postgresql.org/)中可用，执行下面的安装命令
+  ```shell
+  sudo yum install pgvector_16
+  # or
+  sudo dnf install pgvector_16
+  ```
+- pkg
+- conda-forge，`conda install -c conda-forge pgvector`
+- Postgres.app, 直接从[github](https://postgresapp.com/downloads.html)上下载安装包
+
+# Hosted Postgres
+托管的Postgres，在[these providers](https://github.com/pgvector/pgvector/issues/54)中
+
+# Upgrading
+安装最新的版本，就是上面的安装命令，在每个数据库中升级，运行`ALTER EXTENSION vector UPDATE;`，你可以检查当前数据库使用的版本
+```sql
+SELECT extversion FROM pg_extension WHERE extname = 'vector';
+```
