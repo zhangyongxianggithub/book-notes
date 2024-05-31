@@ -1,0 +1,1 @@
+`Spring AI`项目就是把人工智能应用流程化，减少不必要的复杂性。这个项目参考了一些重要的Python项目，比如LangChain与LlamaIndex等，但是Spring AI并不是这些项目的直接移植，这个项目建立在一个观点上即下一波的生成式AI应用不仅是面向Pythion开发者的而是跨语言的。
