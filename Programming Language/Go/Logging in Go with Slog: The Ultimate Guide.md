@@ -105,3 +105,33 @@ logger.LogAttrs(
 }
 ```
 # Creating and using child loggers
+在一个特定的范围内服用一些相同的属性是常用的，而且不需要重复的书写这些信息。子logger就是解决这个问题的，因为子logger会创建一个新的继承父logger的日志记录上下文。创建子logger的方法`Logger.With()`，接受一个或者多个key/value对，返回包含指定属性的心的`Logger`，考虑下面的代码片段，添加进程ID与Go版本到每个日志记录，并把他们存储在`program_info`属性中
+```go
+func main() {
+    handler := slog.NewJSONHandler(os.Stdout, nil)
+    buildInfo, _ := debug.ReadBuildInfo()
+    logger := slog.New(handler)
+    child := logger.With(
+        slog.Group("program_info",
+            slog.Int("pid", os.Getpid()),
+            slog.String("go_version", buildInfo.GoVersion),
+        ),
+    )
+}
+```
+也可以使用`WithGroup()`方法
+```go
+handler := slog.NewJSONHandler(os.Stdout, nil)
+buildInfo, _ := debug.ReadBuildInfo()
+logger := slog.New(handler).WithGroup("program_info")
+
+child := logger.With(
+  slog.Int("pid", os.Getpid()),
+  slog.String("go_version", buildInfo.GoVersion),
+)
+
+child.Warn(
+  "storage is 90% full",
+  slog.String("available_space", "900.1 MB"),
+)
+```
