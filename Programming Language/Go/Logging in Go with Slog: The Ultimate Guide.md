@@ -215,4 +215,121 @@ func main() {
 }
 ```
 `ReplaceAttr()`函数用来定义一个`Record`中的每个key/value对如何被`Handler`处理。
+# Customizing Slog Handlers
+正如前面提到的，`TextHandler`与`JSONHandler`可以使用`HandlerOptions`定制。你在前面的例子中已经看到如何修改最小日志级别与修改属性。目前`HandlerOptions`还支持包含log source。
+```go
+opts := &slog.HandlerOptions{
+    AddSource: true,
+    Level:     slog.LevelDebug,
+}
+```
+根据应用程序环境切换足够多的处理程序也轻而易举。例如，对于开发日志，您可能更喜欢使用`TextHandler`，因为它更易于阅读，然后在生产环境中切换到`JSONHandler`，以获得更大的灵活性并兼容各种日志记录工具。这可以通过环境变量实现
+```go
+var appEnv = os.Getenv("APP_ENV")
+func main() {
+    opts := &slog.HandlerOptions{
+        Level: slog.LevelDebug,
+    }
+
+    var handler slog.Handler = slog.NewTextHandler(os.Stdout, opts)
+    if appEnv == "production" {
+        handler = slog.NewJSONHandler(os.Stdout, opts)
+    }
+
+    logger := slog.New(handler)
+
+    logger.Info("Info message")
+}
+```
+可以实现`Handler`接口自定义日志输出格式或者日志输出目的地。
+```go
+type Handler interface {
+    Enabled(context.Context, Level) bool
+    Handle(context.Context, r Record) error
+    WithAttrs(attrs []Attr) Handler
+    WithGroup(name string) Handler
+}
+```
+- `Enabled()`方法决定根据level是否处理或者丢弃日志，`context`也能用来做决策
+- `Handle()`方法处理发送到handler的每条日志记录，只有在`Enabled()`返回true这个方法才会调用
+- `WithAttrs()`从当前的Handler创建一个新的Handler并添加额外的属性
+- `WithGroup()`从现有Handler创建一个新的Handler，并向其添加指定的组名，以使该名称符合后续属性
+
+下面是一个例子，这个例子使用了`log`、`json` 、[color](https://github.com/fatih/color)包来实现日志的美化输出
+```go
+// NOTE: Not well tested, just an illustration of what's possible
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "io"
+    "log"
+    "log/slog"
+
+    "github.com/fatih/color"
+)
+
+type PrettyHandlerOptions struct {
+    SlogOpts slog.HandlerOptions
+}
+
+type PrettyHandler struct {
+    slog.Handler
+    l *log.Logger
+}
+
+func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
+    level := r.Level.String() + ":"
+
+    switch r.Level {
+    case slog.LevelDebug:
+        level = color.MagentaString(level)
+    case slog.LevelInfo:
+        level = color.BlueString(level)
+    case slog.LevelWarn:
+        level = color.YellowString(level)
+    case slog.LevelError:
+        level = color.RedString(level)
+    }
+
+    fields := make(map[string]interface{}, r.NumAttrs())
+    r.Attrs(func(a slog.Attr) bool {
+        fields[a.Key] = a.Value.Any()
+
+        return true
+    })
+
+    b, err := json.MarshalIndent(fields, "", "  ")
+    if err != nil {
+        return err
+    }
+
+    timeStr := r.Time.Format("[15:05:05.000]")
+    msg := color.CyanString(r.Message)
+
+    h.l.Println(timeStr, level, msg, color.WhiteString(string(b)))
+
+    return nil
+}
+
+func NewPrettyHandler(
+    out io.Writer,
+    opts PrettyHandlerOptions,
+) *PrettyHandler {
+    h := &PrettyHandler{
+        Handler: slog.NewJSONHandler(out, &opts.SlogOpts),
+        l:       log.New(out, "", 0),
+    }
+
+    return h
+}
+```
+社区也提供了几个Handler，一些重要的Handler如下:
+- [tint](https://github.com/lmittmann/tint)，输出彩色日志
+- [slog-sampling](https://github.com/samber/slog-sampling)，通过丢弃重复的日志记录来提高日志吞吐量
+- [slog-multi](https://github.com/samber/slog-multi)
+- [slog-formatter](https://github.com/samber/slog-formatter)，提供更灵活的格式化
+
+# 在Slog中使用context包
 
