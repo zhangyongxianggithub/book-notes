@@ -135,3 +135,84 @@ child.Warn(
   slog.String("available_space", "900.1 MB"),
 )
 ```
+# Customizing Slog levels
+`log/slog`包默认提供了4种日志级别，每个级别都有一个关联的整数
+- `DEBUG`(-4)
+- `INFo`(0)
+- `WARN`(4)
+- `ERROR`(8)
+
+数字值都是精心设计的，为了创建自定义的日志级别。默认打印`INFO`级别的日志，你可以可以通过`HandlerOptions`自定义日志记录的最低级别
+```go
+func main() {
+    opts := &slog.HandlerOptions{
+        Level: slog.LevelDebug,
+    }
+    handler := slog.NewJSONHandler(os.Stdout, opts)
+    logger := slog.New(handler)
+    logger.Debug("Debug message")
+    logger.Info("Info message")
+    logger.Warn("Warning message")
+    logger.Error("Error message")
+}
+```
+这种级别的设置贯穿`handler`的整个生命周期，如果需要最低日志级别动态变更，可以使用`LevelVar`
+```go
+func main() {
+    logLevel := &slog.LevelVar{} // INFO
+    opts := &slog.HandlerOptions{
+        Level: logLevel,
+    }
+    handler := slog.NewJSONHandler(os.Stdout, opts)
+}
+```
+你可以随时变更日志级别`logLevel.Set(slog.LevelDebug)`。自定义日志级别只需要实现`Leveler`接口
+```go
+type Leveler interface {
+    Level() Level
+}
+```
+`Level`本身也实现了`Leveler`接口
+```go
+const (
+    LevelTrace  = slog.Level(-8)
+    LevelFatal  = slog.Level(12)
+)
+```
+一旦你像上面那样定义了自定义日志级别，你就可以通过`Log()`与`LogAttrs()`方法来使用它们。
+```go
+opts := &slog.HandlerOptions{
+    Level: LevelTrace,
+}
+logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
+ctx := context.Background()
+logger.Log(ctx, LevelTrace, "Trace message")
+logger.Log(ctx, LevelFatal, "Fatal level")
+```
+注意自定义日志级别的输出，这可能不是你想要的，你可能想要自定义日志级别名字，这可以通过`handlerOptions`实现
+```go
+var LevelNames = map[slog.Leveler]string{
+    LevelTrace:      "TRACE",
+    LevelFatal:      "FATAL",
+}
+func main() {
+    opts := slog.HandlerOptions{
+        Level: LevelTrace,
+        ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+            if a.Key == slog.LevelKey {
+                level := a.Value.Any().(slog.Level)
+                levelLabel, exists := LevelNames[level]
+                if !exists {
+                    levelLabel = level.String()
+                }
+
+                a.Value = slog.StringValue(levelLabel)
+            }
+
+            return a
+        },
+    }
+}
+```
+`ReplaceAttr()`函数用来定义一个`Record`中的每个key/value对如何被`Handler`处理。
+
