@@ -332,4 +332,32 @@ func NewPrettyHandler(
 - [slog-formatter](https://github.com/samber/slog-formatter)，提供更灵活的格式化
 
 # 在Slog中使用context包
+日志记录方法也有第一个参数是`context.Context`的变体。方法签名如下:
+```go
+func (ctx context.Context, msg string, args ...any)
+```
+考虑下面的程序
+```go
+package main
+
+import (
+    "context"
+    "log/slog"
+    "os"
+)
+
+func main() {
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+    ctx := context.WithValue(context.Background(), "request_id", "req-123")
+
+    logger.InfoContext(ctx, "image uploaded", slog.String("image_id", "img-998"))
+}
+```
+# Error logging with Slog
+记录error的方法
+```go
+err := errors.New("something happened")
+logger.ErrorContext(ctx, "upload failed", slog.Any("error", err))
+```
 
