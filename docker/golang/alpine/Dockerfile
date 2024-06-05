@@ -5,4 +5,4 @@ env TZ Asia/Shanghai
 run echo 'Asia/Shanghai' > /etc/timezone
 run ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 entrypoint ["tini", "-v", "-g", "--"]
-cmd [ "echo","this is a base image for golang executable file" ]
+cmd [ "echo", "this is a base image for golang executable file" ]
