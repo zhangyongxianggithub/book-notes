@@ -6,7 +6,7 @@ RUN echo 'Asia/Shanghai' > /etc/timezone
 RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 RUN wget https://ftp.gnu.org/gnu/gcc/gcc-8.2.0/gcc-8.2.0.tar.gz
 RUN tar -xzvf gcc-8.2.0.tar.gz
-WORKDIR /gcc-8.2.0
+WORKDIR /gcc-8.2.0 
 RUN contrib/download_prerequisites
 ARG GCC_HOME=/opt/compiler/gcc-8.2
 RUN gcc-8.2.0/configure --prefix=/opt/compiler/gcc-8.2 --disable-multilib
