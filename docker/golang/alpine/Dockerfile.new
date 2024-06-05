@@ -1,0 +1,11 @@
+FROM --platform=linux/amd64 iregistry.baidu-int.com/gbi-enterprise/alpine:3.19 AS builder
+RUN wget https://ftp.gnu.org/gnu/gcc/gcc-8.2.0/gcc-8.2.0.tar.gz
+RUN tar -xzvf gcc-8.2.0.tar.gz
+WORKDIR /gcc-8.2.0
+RUN contrib/download_prerequisites
+ARG GCC_HOME=/opt/compiler/gcc-8.2
+RUN ./configure --prefix=${GCC_HOME} --disable-multilib
+RUN make all-gcc && make all-target-libgcc && make install-gcc && make install-target-libgcc
+
+FROM --platform=linux/amd64 iregistry.baidu-int.com/gbi-enterprise/alpine:3.19
+COPY --from=builder /opt/compiler/gcc-8.2 /opt/compiler/gcc-8.2
