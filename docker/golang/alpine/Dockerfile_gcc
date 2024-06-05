@@ -1,0 +1,14 @@
+FROM --platform=linux/amd64 jeanblanchard/alpine-glibc:3.19
+LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
+RUN apk update --no-cache && apk add --no-cache bash tzdata inetutils-telnet tini build-base
+ENV TZ Asia/Shanghai
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+RUN wget https://ftp.gnu.org/gnu/gcc/gcc-8.2.0/gcc-8.2.0.tar.gz
+RUN tar -xzvf gcc-8.2.0.tar.gz
+WORKDIR /gcc-8.2.0
+RUN contrib/download_prerequisites
+ARG GCC_HOME=/opt/compiler/gcc-8.2
+RUN gcc-8.2.0/configure --prefix=/opt/compiler/gcc-8.2 --disable-multilib
+RUN make all-gcc && make all-target-libgcc && make install-gcc && make install-target-libgcc
+ENTRYPOINT ["tini", "-v", "-g", "--"]
