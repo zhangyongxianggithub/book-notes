@@ -355,9 +355,157 @@ func main() {
 }
 ```
 # Error logging with Slog
-记录error的方法
+记录error的方法，使用`slog.Any()`
 ```go
 err := errors.New("something happened")
 logger.ErrorContext(ctx, "upload failed", slog.Any("error", err))
 ```
+为了获取并记录异常栈，你可以使用类似`xerrors`的包来创建带有异常栈的errors，如下:
+```go
+err := xerrors.New("something happened")
+logger.ErrorContext(ctx, "upload failed", slog.Any("error", err))
+```
+在打印到错误日志时，你需要解析、格式化并通过`ReplaceAttr()`函数添加到对应的`Record`。
+```go
+package main
 
+import (
+    "context"
+    "log/slog"
+    "os"
+    "path/filepath"
+
+    "github.com/mdobak/go-xerrors"
+)
+
+type stackFrame struct {
+    Func   string `json:"func"`
+    Source string `json:"source"`
+    Line   int    `json:"line"`
+}
+
+func replaceAttr(_ []string, a slog.Attr) slog.Attr {
+    switch a.Value.Kind() {
+    case slog.KindAny:
+        switch v := a.Value.Any().(type) {
+        case error:
+            a.Value = fmtErr(v)
+        }
+    }
+
+    return a
+}
+
+// marshalStack extracts stack frames from the error
+func marshalStack(err error) []stackFrame {
+    trace := xerrors.StackTrace(err)
+
+    if len(trace) == 0 {
+        return nil
+    }
+
+    frames := trace.Frames()
+
+    s := make([]stackFrame, len(frames))
+
+    for i, v := range frames {
+        f := stackFrame{
+            Source: filepath.Join(
+                filepath.Base(filepath.Dir(v.File)),
+                filepath.Base(v.File),
+            ),
+            Func: filepath.Base(v.Function),
+            Line: v.Line,
+        }
+
+        s[i] = f
+    }
+
+    return s
+}
+
+// fmtErr returns a slog.Value with keys `msg` and `trace`. If the error
+// does not implement interface { StackTrace() errors.StackTrace }, the `trace`
+// key is omitted.
+func fmtErr(err error) slog.Value {
+    var groupValues []slog.Attr
+
+    groupValues = append(groupValues, slog.String("msg", err.Error()))
+
+    frames := marshalStack(err)
+
+    if frames != nil {
+        groupValues = append(groupValues,
+            slog.Any("trace", frames),
+        )
+    }
+
+    return slog.GroupValue(groupValues...)
+}
+
+func main() {
+    h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        ReplaceAttr: replaceAttr,
+    })
+
+    logger := slog.New(h)
+
+    ctx := context.Background()
+
+    err := xerrors.New("something happened")
+
+    logger.ErrorContext(ctx, "image uploaded", slog.Any("error", err))
+}
+
+```
+# Hiding sensitive fields with the LogValuer interface
+`LogValuer`接口可以通过控制特定类型如何输出来标准化日志输出。接口的签名
+```go
+type LogValuer interface {
+    LogValue() Value
+}
+```
+主要的使用场景就是隐藏结构体中的字段。比如，下面的`User`类型，没有实现`LogValuer`接口，当打印实例日志时，敏感信息就会暴露
+```go
+// User does not implement `LogValuer` here
+type User struct {
+    ID        string `json:"id"`
+    FirstName string `json:"first_name"`
+    LastName  string `json:"last_name"`
+    Email     string `json:"email"`
+    Password  string `json:"password"`
+}
+
+func main() {
+    handler := slog.NewJSONHandler(os.Stdout, nil)
+    logger := slog.New(handler)
+
+    u := &User{
+        ID:        "user-12234",
+        FirstName: "Jan",
+        LastName:  "Doe",
+        Email:     "jan@example.com",
+        Password:  "pass-12334",
+    }
+
+    logger.Info("info", "user", u)
+}
+```
+你可以指定这个类型如何在日志中打印，你可以指定只打印ID字段
+```go
+// implement the `LogValuer` interface on the User struct
+func (u User) LogValue() slog.Value {
+    return slog.StringValue(u.ID)
+}
+```
+也可以对多个属性分组
+```go
+func (u User) LogValue() slog.Value {
+    return slog.GroupValue(
+        slog.String("id", u.ID),
+        slog.String("name", u.FirstName+" "+u.LastName),
+    )
+}
+```
+# Using third-party logging backends with Slog
+Slog的主要设计目标就是提供一个统一的日志记录前端`slog.Logger`，而后端(`slog.Handler`)是可定制的
