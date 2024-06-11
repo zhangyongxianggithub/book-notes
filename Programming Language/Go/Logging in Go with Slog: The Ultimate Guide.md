@@ -508,4 +508,119 @@ func (u User) LogValue() slog.Value {
 }
 ```
 # Using third-party logging backends with Slog
-Slog的主要设计目标就是提供一个统一的日志记录前端`slog.Logger`，而后端(`slog.Handler`)是可定制的
+Slog的主要设计目标就是提供一个统一的日志记录前端`slog.Logger`，而后端(`slog.Handler`)是可定制的。这样，所有的日志记录库的日志记录API就都是一致的。也解耦了日志实现与特定的包，这样可以在项目中任意的切换不同的日志实现。下面是一个使用[Zap](https://betterstack.com/community/guides/logging/go/zap/)日志实现的例子。
+```go
+package main
+
+import (
+    "log/slog"
+
+    "go.uber.org/zap"
+    "go.uber.org/zap/exp/zapslog"
+)
+func main() {
+    zapL := zap.Must(zap.NewProduction())
+    defer zapL.Sync()
+    logger := slog.New(zapslog.NewHandler(zapL.Core(), nil))
+    logger.Info(
+        "incoming request",
+        slog.String("method", "GET"),
+        slog.String("path", "/api/user"),
+        slog.Int("status", 200),
+    )
+}
+```
+这个片段床了一个`zap.Logger`实例，然后使用`zapslog.NewHandler`创建了一个`slog.Handler`。最后，将这个handler作为参数传给`slog.New`函数，这样就可以使用`slog.Logger`来记录日志了。切换成不同的日志实现，只需要替换`zapslog.NewHandler`的参数即可。
+```go
+package main
+
+import (
+    "log/slog"
+    "os"
+
+    "github.com/rs/zerolog"
+    slogzerolog "github.com/samber/slog-zerolog"
+)
+
+func main() {
+    zerologL := zerolog.New(os.Stdout).Level(zerolog.InfoLevel)
+
+    logger := slog.New(
+        slogzerolog.Option{Logger: &zerologL}.NewZerologHandler(),
+    )
+
+    logger.Info(
+        "incoming request",
+        slog.String("method", "GET"),
+        slog.String("path", "/api/user"),
+        slog.Int("status", 200),
+    )
+}
+```
+# Best Pratices for writing and storing Go logs
+- Standardize your logging interface: 通过实现`LogValuer`接口，您可以标准化应用程序中各种类型的日志记录方式，以确保它们在日志中的表示在整个应用程序中保持一致。正如我们在本文前面所探讨的那样，这也是确保从应用程序日志中省略敏感字段的有效策略
+- Add a stack trace to your error logs: 为了提升debug问题的能力，你应该在错误日志中添加stack trace，这样，就很容易指出错误发生的位置以及导致错误发生的程序流。slog目前没有提供内置的方式来支持添加stack tarce到错误日志，但是正如前面我们所展示的，可以使用[pkgerrors](https://github.com/pkg/errors)或者[go-xerros](https://github.com/MDobak/go-xerrors)包
+- Lint your Slog statements to enforce consistency: Slog API的一个主要缺点就是，它支持不同的参数类型，在代码库中可能存在不同的日志记录形式，除此以外，你可能想要强制使用统一的key命名约定或者所有的日志记录函数调用都应该包含一个context参数。linter比入[sloglint](https://github.com/go-simpler/sloglint/releases)可以帮助你统一日志风格，下面是一个使用[golangci-lint](https://freshman.tech/linting-golang/)例子:
+  ```yaml
+    linters-settings:
+    sloglint:
+        # Enforce not mixing key-value pairs and attributes.
+        # Default: true
+        no-mixed-args: false
+        # Enforce using key-value pairs only (overrides no-mixed-args, incompatible with attr-only).
+        # Default: false
+        kv-only: true
+        # Enforce using attributes only (overrides no-mixed-args, incompatible with kv-only).
+        # Default: false
+        attr-only: true
+        # Enforce using methods that accept a context.
+        # Default: false
+        context-only: true
+        # Enforce using static values for log messages.
+        # Default: false
+        static-msg: true
+        # Enforce using constants instead of raw keys.
+        # Default: false
+        no-raw-keys: true
+        # Enforce a single key naming convention.
+        # Values: snake, kebab, camel, pascal
+        # Default: ""
+        key-naming-case: snake
+        # Enforce putting arguments on separate lines.
+        # Default: false
+        args-on-sep-lines: true
+  ```
+- Centralize your logs, but persist them to local files first: 通常，最好将写入日志的任务与将日志发送到集中式日志管理系统的任务分离开来。首先将日志写入本地文件可确保在日志管理系统或网络遇到问题时进行备份，从而防止关键数据丢失。此外，在发送日志之前将日志存储在本地有助于缓冲日志，从而允许批量传输，以帮助优化网络带宽使用率并最大限度地减少对应用程序性能的影响。本地日志存储还提供了更大的灵活性，因此如果需要过渡到不同的日志管理系统，则只需修改传送方法，而不是整个应用程序日志记录机制。有关更多详细信息，请参阅我们关于使用 Vector 或 Fluentd 等专用日志传送器的文章。记录到文件并不一定需要您将所选框架配置为直接写入文件，因为 Systemd可以轻松地将应用程序的标准输出和错误流重定向到文件。Docker还默认收集发送到两个流的所有数据并将它们路由到主机上的本地文件
+- Sample your logs: 日志采样是一种仅记录日志条目的代表性子集而非记录每个日志事件的做法。这种技术在高流量环境中非常有用，因为系统会生成大量日志数据，而处理每个条目的成本可能非常高，因为集中式日志解决方案通常根据数据采集率或存储量收费。
+  ```go
+    package main
+
+    import (
+        "fmt"
+        "log/slog"
+        "os"
+
+        slogmulti "github.com/samber/slog-multi"
+        slogsampling "github.com/samber/slog-sampling"
+    )
+
+    func main() {
+        // Will print 20% of entries.
+        option := slogsampling.UniformSamplingOption{
+            Rate: 0.2,
+        }
+
+        logger := slog.New(
+            slogmulti.
+                Pipe(option.NewMiddleware()).
+                Handler(slog.NewJSONHandler(os.Stdout, nil)),
+        )
+
+        for i := 1; i <= 10; i++ {
+            logger.Info(fmt.Sprintf("a message from the gods: %d", i))
+        }
+    }
+  ```
+  第三方框架比入[Zerolog](https://betterstack.com/community/guides/logging/zerolog/#log-sampling-with-zerolog)与[Zap](https://betterstack.com/community/guides/logging/go/zap/#log-sampling-with-zap)已经提供了内置的日志采样功能，使用 Slog，您必须集成第三方handler(例如[slog-sampling](https://github.com/samber/slog-sampling))或开发自定义解决方案。您还可以选择通过专用日志发送程序（例如 Vector）对日志进行采样
+- Use a log management service: 将日志集中到日志管理系统中，可以轻松搜索、分析和监控应用程序在多个服务器和环境中的行为。将所有日志集中到一个位置，可以大大提高您识别和诊断问题的能力，因为您不再需要在不同的服务器之间跳转来收集有关服务的信息。虽然目前有多种日志管理解决方案，但[Better Stack](https://betterstack.com/logs)提供了一种在几分钟内设置集中日志管理的简单方法，其中实时跟踪、警报、仪表板和正常运行时间监控以及事件管理功能内置在现代且直观的界面中。请在此处试用完全免费的计划。
+# Final thoughts
