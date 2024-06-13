@@ -1,122 +1,4 @@
 [TOC]
-- [程序结构](#程序结构)
-	- [名称](#名称)
-	- [声明](#声明)
-	- [变量](#变量)
-	- [赋值](#赋值)
-	- [流程控制](#流程控制)
-		- [if](#if)
-		- [switch](#switch)
-		- [select](#select)
-		- [for](#for)
-		- [range](#range)
-		- [goto/break/continue](#gotobreakcontinue)
-	- [类型声明](#类型声明)
-	- [包和文件](#包和文件)
-	- [作用域](#作用域)
-- [基本数据](#基本数据)
-	- [整数](#整数)
-	- [浮点数](#浮点数)
-	- [复数](#复数)
-	- [布尔值](#布尔值)
-	- [字符串](#字符串)
-	- [常量](#常量)
-- [复合数据类型](#复合数据类型)
-	- [数组](#数组)
-	- [slice](#slice)
-	- [map](#map)
-	- [结构体](#结构体)
-	- [JSON](#json)
-	- [文本和HTML模板](#文本和html模板)
-- [函数](#函数)
-	- [函数声明](#函数声明)
-	- [递归](#递归)
-	- [多返回值](#多返回值)
-	- [错误](#错误)
-	- [函数变量](#函数变量)
-	- [匿名函数](#匿名函数)
-	- [变长函数](#变长函数)
-	- [延迟函数调用](#延迟函数调用)
-	- [宕机](#宕机)
-	- [恢复](#恢复)
-- [方法](#方法)
-	- [方法声明](#方法声明)
-	- [指针接收者的方法](#指针接收者的方法)
-	- [通过结构体内嵌组成类型](#通过结构体内嵌组成类型)
-	- [方法变量与表达式](#方法变量与表达式)
-	- [示例: 位向量](#示例-位向量)
-	- [封装](#封装)
-- [接口](#接口)
-	- [接口既约定](#接口既约定)
-	- [接口类型](#接口类型)
-	- [实现接口](#实现接口)
-	- [使用flag.Value来解析参数](#使用flagvalue来解析参数)
-	- [接口值](#接口值)
-	- [error接口](#error接口)
-	- [类型断言](#类型断言)
-	- [使用类型断言来识别错误](#使用类型断言来识别错误)
-	- [通过接口类型断言来查询特性](#通过接口类型断言来查询特性)
-	- [类型分支](#类型分支)
-	- [示例: 基于标记的XML解析](#示例-基于标记的xml解析)
-	- [一些建议](#一些建议)
-- [goroutine和通道](#goroutine和通道)
-	- [goroutine](#goroutine)
-	- [示例: 并发时钟服务器](#示例-并发时钟服务器)
-	- [示例: 并发回声服务器](#示例-并发回声服务器)
-	- [通道](#通道)
-	- [并行循环](#并行循环)
-	- [示例: 并发的Web爬虫](#示例-并发的web爬虫)
-	- [使用select多路复用](#使用select多路复用)
-	- [示例: 并发目录遍历](#示例-并发目录遍历)
-	- [取消](#取消)
-	- [示例: 聊天服务器](#示例-聊天服务器)
-- [使用共享变量实现并发](#使用共享变量实现并发)
-	- [竟态](#竟态)
-	- [互斥锁: sync.Mutex](#互斥锁-syncmutex)
-	- [读写互斥锁: sync.RWMutex](#读写互斥锁-syncrwmutex)
-	- [内存同步](#内存同步)
-	- [延迟初始化: sync.Once](#延迟初始化-synconce)
-	- [竟态检测器](#竟态检测器)
-	- [示例: 并发非阻塞缓存](#示例-并发非阻塞缓存)
-	- [goroutine与线程](#goroutine与线程)
-- [包和go工具](#包和go工具)
-	- [包简介](#包简介)
-	- [导入路径](#导入路径)
-	- [包的声明](#包的声明)
-	- [导入声明](#导入声明)
-	- [空导入](#空导入)
-	- [包及其命名](#包及其命名)
-	- [go工具](#go工具)
-- [package \& module](#package--module)
-- [go工具](#go工具-1)
-	- [go编译与依赖](#go编译与依赖)
-	- [go env](#go-env)
-- [测试](#测试)
-	- [go test工具](#go-test工具)
-	- [Test函数](#test函数)
-	- [Example函数](#example函数)
-- [反射](#反射)
-	- [为什么使用反射](#为什么使用反射)
-	- [reflect.Type和reflect.Value](#reflecttype和reflectvalue)
-	- [Display: 一个递归的值显示器](#display-一个递归的值显示器)
-	- [访问结构体字段标签](#访问结构体字段标签)
-- [低级编程](#低级编程)
-- [文件操作](#文件操作)
-	- [介绍](#介绍)
-	- [基础操作](#基础操作)
-	- [读写](#读写)
-	- [压缩](#压缩)
-	- [其他](#其他)
-- [http](#http)
-- [go Context](#go-context)
-- [viper](#viper)
-	- [viper是什么?](#viper是什么)
-	- [把值存入Viper](#把值存入viper)
-	- [从Viper获取值](#从viper获取值)
-- [gin](#gin)
-	- [swagger](#swagger)
-- [gorm](#gorm)
-
 # 程序结构
 Go语言中的大程序都从小的基本组件构建而来: 变量存储值，简单表达式通过加/减等操作合并成大的，基本类型通过数组和结构体进行聚合，表达式通过if/for等控制语句来决定执行顺序，语句被组织成函数用于隔离和复用，函数被组织成源文件和包。
 ## 名称
@@ -491,7 +373,7 @@ type Wheel struct {
 ```
 可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有它的方法(生成的是代理方法)。有点类似继承。
 ## JSON
-JSON定义发送与接收信息的标准格式，Go内置了对JSON、XML等格式化信息的编解码支持。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。把Go的数据结构转换为JSON叫做marshal，通过`json.marshal`实现
+JSON定义了信息交互标准格式，Go内置支持JSON、XML等格式化信息的编解码。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。Go->JSON叫做marshal，通过`json.marshal`实现
 ```go
 type Movie struct {
 	Title  string
@@ -499,27 +381,24 @@ type Movie struct {
 	Color  bool `json:"color,omitempty"`
 	Actors []string
 }
-
 var movies = []Movie{
 	{"Casablanca", 1942, false, []string{"Humphrey Bogart", "Ingrid Bergman"}},
 }
-
 func main() {
 	data, err := json.Marshal(movies)
 	if err != nil {
 		log.Fatalf("JSON marshaling failed: %s", err)
 	}
 	fmt.Printf("%s\n", data)
-	
 }
 ```
-使用成员名作为json字段名，只有可导出的成员可以转换为json字段，成员标签是结构体成员在编译期间关联的元信息。可以是任意字符串。将JSON解码为Go数据结构叫做unmarshal，unmarshal操作忽略大小写，但是go数据必须是大写开头的。代码如下:
+成员名作为json字段名，只有可导出的成员可以转换为json字段，成员标签是结构体成员在编译期间关联的元信息。可以是任意字符串。JSON->Go数据结构叫做unmarshal，unmarshal忽略大小写，Go数据必须是大写开头的。代码如下:
 ```go
-	var titles []struct{ Title string }
-	if err := json.Unmarshal(data, &titles); err != nil {
-		log.Fatalf("JSON unmarshaling failed: %s", err)
-	}
-	fmt.Println(titles)
+var titles []struct{ Title string }
+if err := json.Unmarshal(data, &titles); err != nil {
+	log.Fatalf("JSON unmarshaling failed: %s", err)
+}
+fmt.Println(titles)
 ```
 ## 文本和HTML模板
 TODO
