@@ -1,6 +1,6 @@
-为Postgres开发的开发的开源的向量相似度搜索插件。存储向量数据与其他的关系型数据，支持
+为Postgres开发的开源的向量相似度搜索插件。存储向量数据与其他的关系型数据，支持
 - 精确的与近似的最近邻搜索
-- single-precision, half-precision, binary, and sparse vectors
+- 单精度向量, 半精度向量, 二进制向量, 稀疏向量
 - L2距离、内积、余弦距离、L1距离、汉明距离, 杰卡德距离
 - 任何语言的Postgres客户端
 
@@ -72,7 +72,7 @@ SELECT * FROM items ORDER BY embedding <-> '[3,1,2]' LIMIT 5;
 ```sql
 SELECT * FROM items WHERE id != 1 ORDER BY embedding <-> (SELECT embedding FROM items WHERE id = 1) LIMIT 5;
 ```
-获取制定距离内的行
+获取指定距离内的行
 ```sql
 SELECT * FROM items WHERE embedding <-> '[3,1,2]' < 5;
 ```
@@ -97,7 +97,7 @@ SELECT AVG(embedding) FROM items;
 SELECT category_id, AVG(embedding) FROM items GROUP BY category_id;
 ```
 # Indexing
-缺省情况下，pgvector执行精确的最近邻搜索，提供了最完美的召回。你可以添加index来使用金丝的最近邻搜索，提供更快的召回性能，与传统的索引不同，在添加一个金丝索引后，查询的结果是不同的。支持的索引类型
+缺省情况下，pgvector执行精确的最近邻搜索，提供了最完美的召回。你可以添加index来使用近似的最近邻搜索，提供更快的召回性能，与传统的索引不同，在添加一个近似索引后，查询的结果是不同的。支持的索引类型
 - HNSW
 - IVFFlat
 ## HNSW
@@ -389,7 +389,7 @@ COMMIT;
 ```
 # Scaling
 # Frequently Asked Questions
-1. 一个表中能存储多少向量?取决于表的存储上线，表的存储上限是32TB
+1. 一个表中能存储多少向量?取决于表的存储上限，表的存储上限是32TB
 2. 支持主从复制吗?支持，使用write-ahead log，支持复制与point-in-time recovery
 3. 如果我想要索引超过2000个维度的向量怎么办？你可以使用half-precision indexing支持最高4000维度，或者binary quantization支持最高64000维度，或者使用降维技术。
 4. 我能否在一列中存储不同维度的向量?你可以使用`vector`类型而不是`vector(3)`
@@ -404,13 +404,13 @@ COMMIT;
    ```sql
    SELECT * FROM embeddings WHERE model_id = 123 ORDER BY embedding::vector(3) <-> '[3,1,2]' LIMIT 5;
    ```
-5. 向量的精度能否更高?你可以使用`double precision[]`与`numeric[]`类型来存储跟高精度的向量
+5. 向量的精度能否更高?你可以使用`double precision[]`与`numeric[]`类型来存储更高精度的向量
    ```sql
-  CREATE TABLE items (id bigserial PRIMARY KEY, embedding double precision[]);
-
-  -- use {} instead of [] for Postgres arrays
-  INSERT INTO items (embedding) VALUES ('{1,2,3}'), ('{4,5,6}');
+    CREATE TABLE items (id bigserial PRIMARY KEY, embedding double precision[]);
+    -- use {} instead of [] for Postgres arrays
+    INSERT INTO items (embedding) VALUES ('{1,2,3}'), ('{4,5,6}');
    ```
+
    可选的，添加一个[check constraint](https://www.postgresql.org/docs/current/ddl-constraints.html)保证数据可以被转换为`vector`并且具有预期的维度
    ```sql
    ALTER TABLE items ADD CHECK (vector_dims(embedding::vector) = 3);
@@ -556,7 +556,7 @@ Mac上的路径设置如下:
 sudo apt install postgresql-server-dev-16
 ```
 如果在Mac上编译失败并抛出`warning: no such sysroot directory`的异常，需要重新安装Xcode Command Line Tools。
-默认情况下，为了最好的性能，pgvector会使用`-march=native`编译，然而，如果将编译后的结果和运行在别的机器上会导致`Illegal instruction`的错误。为了可移植性，编译时使用下面的命令
+默认情况下，为了最好的性能，pgvector会使用`-march=native`编译，然而，如果将编译后的结果运行在别的机器上会导致`Illegal instruction`的错误。为了可移植性，编译时使用下面的命令
 ```shell
 make OPTFLAGS=""
 ```
