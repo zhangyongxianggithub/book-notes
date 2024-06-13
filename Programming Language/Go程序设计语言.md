@@ -373,7 +373,7 @@ type Wheel struct {
 ```
 可以直接访问`wheel.X`，实际上也是有名字的，就是类型的名称。外围结构体类型不仅获得匿名类型的成员，还有它的方法(生成的是代理方法)。有点类似继承。
 ## JSON
-JSON定义了信息交互标准格式，Go内置支持JSON、XML等格式化信息的编解码。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。Go->JSON叫做marshal，通过`json.marshal`实现
+JSON(Javascript对象标记)定义了信息交互标准格式，Go内置支持JSON、XML等格式化信息的编解码。JSON是数据的高效可读性强的表示方法。JSON的定义与Go的数据类型对应。Go->JSON叫做marshal，通过`json.Marshal`实现，`json.MarchsalIndent`可以输出美化过的JSON
 ```go
 type Movie struct {
 	Title  string
@@ -392,7 +392,13 @@ func main() {
 	fmt.Printf("%s\n", data)
 }
 ```
-成员名作为json字段名，只有可导出的成员可以转换为json字段，成员标签是结构体成员在编译期间关联的元信息。可以是任意字符串。JSON->Go数据结构叫做unmarshal，unmarshal忽略大小写，Go数据必须是大写开头的。代码如下:
+成员名作为json字段名，只有可导出的成员可以转换为json字段，结构体可以有成员标签，成员标签是结构体成员在编译期间关联的元信息，可以是任意字符串，规定为空格分开的`key:"value"`构成，其中标签`json`控制`encoding/json`的行为。几种行为如下:
+- ```Field int `json:"myName"` ```指定json中的字段名
+- ```Field int `json:"myName,omitempty"` ```指定如果值是空的不输出到JSON中
+- ```Field int `json:",omitempty"` ```指定如果值是空的不输出到
+- ```Field int `json:"-"` ```忽略字段
+- ```Field int `json:"-,"` ```输出为`-`
+JSON->Go数据结构叫做unmarshal，unmarshal忽略大小写，Go数据必须是大写开头的。代码如下:
 ```go
 var titles []struct{ Title string }
 if err := json.Unmarshal(data, &titles); err != nil {
@@ -400,6 +406,7 @@ if err := json.Unmarshal(data, &titles); err != nil {
 }
 fmt.Println(titles)
 ```
+使用`json.Decoder()`或者`json.Encoder()`可以多次解析。
 ## 文本和HTML模板
 TODO
 # 函数
