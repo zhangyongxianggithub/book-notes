@@ -1,4 +1,4 @@
-#!/usr/bin/env
+#!/usr/bin/env python3
 from clang.cindex import Index, TranslationUnit, Config
 import clang
 # Config.set_library_file('/Library/Developer/CommandLineTools/usr/lib/libclang.dylib')
