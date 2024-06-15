@@ -1589,6 +1589,9 @@ Go工具主要用来下载、查询、格式化、构建、测试以及安装Go�
 编译由道路路径命名的包与依赖，但不会安装结果。如果build的参数是来自一个目录下的几个go文件，build认为他们是一个包下的源代码文件。当编译包时，build忽略_test.go结尾的文件。当编译一个main包时，build将生成的可执行文件写入以包导入路径的最后一个文件夹(不是版本号的)命名的输出文件。编写Windows可执行文件时会添加`.exe`后缀。因此`go build example/sam`会写入sam或sam.exe。`go build example.com/foo/v2`写入foo或foo.exe，而不是v2.exe。当从多个go文件来编译一个包时，可执行程序是第一个source文件的名字，`go build ed.go rx.go`生成ed或者ed.exe。当编译多个包或者一个非main包时，build只是编译包但是丢弃编译的结果，只是检查包可以被编译。`-o`参数强制build将编译后的结果写入到指定的文件或者文件夹。如果指定的是一个已存在的文件夹或者是/或者\结尾，生成的结果会被写入到这个目录中。build标志是`build`、`clean`、`get`、`install`、`list`、`run`、`test`共用的
 - `-C dir`: 
 - `-p n`: 
+- `-ldflags [pattern=]arg list`: arguments to pass on each go tool link invocation
+- `-tags tag,list`: 额外的构建标签的逗号分隔列表，a comma-separated list of additional build tags to consider satisfied during the build. For more information about build tags, see'go help buildconstraint'. (Earlier versions of Go used aspace-separated list, and that form is deprecated but still recognized.)
+- 
 ## go env
 go环境变量可以直接在系统中设置或者通过Go的命令行工具设置。`go env <NAME>`查看环境变量，
 `go env -w <NAME>=<VALUE>`设置环境变量，比如

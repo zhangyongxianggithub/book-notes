@@ -1,8 +1,9 @@
 - MUSL
 - GNU toolchain
 - static linking
-- dynamic linking
+- dynamic linking [静态链接动态链接静态库共享库这些概念的详解](http://blog.champbay.com/2019/11/25/%e9%9d%99%e6%80%81%e9%93%be%e6%8e%a5%e5%8a%a8%e6%80%81%e9%93%be%e6%8e%a5%e9%9d%99%e6%80%81%e5%ba%93%e5%85%b1%e4%ba%ab%e5%ba%93%e8%bf%99%e4%ba%9b%e6%a6%82%e5%bf%b5%e7%9a%84%e8%af%a6%e8%a7%a3/)
 - GLic编译器这些要搞定
+- [Golang中的ldflags的作用](http://blog.champbay.com/2019/11/26/ldflags%E5%9C%A8golang%E7%BC%96%E8%AF%91%E4%B8%AD%E7%9A%842%E4%B8%AA%E4%BD%9C%E7%94%A8/)
 # Introduction
 从Go1.5版本开始，可以为不同的平台比如Windows、MacOS、Linux、Solaries与Android的交叉编译应用。交叉编译应用允许你在开发机上为不同的操作系统构建二进制可执行文件。本文解释了如何为Go应用(包含使用了CGO依赖的应用)交叉编译
 # Supported Platforms
@@ -131,3 +132,15 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC="x86_64-w64-mingw32-gcc" go build
 3. [Homebrew GNU macOS Cross Toolchain](https://github.com/messense/homebrew-macos-cross-toolchains)
 4. [Static and Dynamic Linking in Operating Systems](https://www.geeksforgeeks.org/static-and-dynamic-linking-in-operating-systems/)
 5. [Stack Overflow: How to Statically Link a C Library in Go Using Cgo](https://stackoverflow.com/a/29522413)
+
+# confluent-kafka-go的编译问题
+- Go的版本>=1.21
+- 运行`gofmt`与`go vet`
+- 每行的字符数<=80
+
+因为`github.com/confluentinc/confluent-kafka-go/v2/kafka`绑定了`librdkafka`的C库，必须启用CGO编译。然后保证C编译器存在。
+通过Go的build标签(-tags)来支持不同的构建类型，这些标签需要在应用的build/get/install命令中指定
+- 缺省情况下，将使用捆绑的平台相关的静态构建的librdkafka版本，在MacOS与基于glibc的linux发行版上是开箱即用的，比如Ubuntu与CentOS
+- `-tags musl`, 当为基于musl的linux发行版构建时需要指定，比如Alpine，将会使用`the bundled static musl build of librdkafka.`
+- `-tags dynamic`动态链接librdkafka.一个共享的librdkafka库必须先安装，可以通过(apt-get, yum, build from source等方式安装
+
