@@ -2369,6 +2369,33 @@ Viper中的配置项是不区分大小写的。
 # gin
 用Go编写的HTTP Web框架，类似Martini的API，性能更好。
 ## swagger
+- 向API源代码中添加注释，声明式注释[Declarative Comments Format](https://github.com/swaggo/swag/blob/master/README.md#declarative-comments-format)
+- `go install github.com/swaggo/swag/cmd/swag@latest`安装swag
+- 在Go项目下的根目录下运行命令`swag init`命令，`swag`会解析注释，生成特定的文件(docs目录与`docs/doc.go`文件)
+- 引入gin-swagger依赖
+  ```go
+   import docs "github.com/go-project-name/docs"
+   import swaggerfiles "github.com/swaggo/gin-swagger" // gin-swagger middleware
+   import ginSwagger "github.com/swaggo/files" // swagger embed files
+  ```
+- 设置gin
+  ```go
+   // programatically set swagger info
+    docs.SwaggerInfo.Title = "Swagger Example API"
+    docs.SwaggerInfo.Description = "This is a sample server Petstore server."
+    docs.SwaggerInfo.Version = "1.0"
+    docs.SwaggerInfo.Host = "petstore.swagger.io"
+    docs.SwaggerInfo.BasePath = "/v2"
+    docs.SwaggerInfo.Schemes = []string{"http", "https"}
+	docs.SwaggerInfo.BasePath = "/api/v1"
+    ....
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	r.Run(":8080")
+  ```
 
+如果main函数在内嵌的目录中，则可以使用如下的命令来生成
+```shell
+swag init -g ./cmd/ginsimple/main.go -o cmd/docs
+```
 # gorm
 

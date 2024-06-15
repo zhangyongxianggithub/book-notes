@@ -1,0 +1,9 @@
+FROM --platform=linux/arm64/v8 alpine:3.20
+LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
+RUN apk update --no-cache && apk add --no-cache bash tzdata inetutils-telnet tini build-base
+ENV TZ Asia/Shanghai
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+ENTRYPOINT ["tini", "-v", "-g", "--"]
+# GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-musl-gcc  CXX=aarch64-linux-musl-g++ go build -ldflags="-extldflags=-static" -o output/bin/retrieval-server cmd/retrieval-server/main.go
+# GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-musl-gcc  CXX=aarch64-linux-musl-g++ go build -o output/bin/index-server icode.baidu.com/baidu/coding-suggestion/embedding-index/cmd/index-server
