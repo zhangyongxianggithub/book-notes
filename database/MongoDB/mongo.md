@@ -91,4 +91,150 @@ var mydoc = {
 - 自动递增的数字
 - UUID，通常存储为`BinData`类型
 - `BinData`类型的索引键要使存储高效，有2个要求
-  - 
+  - 值的范围为0-7或者128-135
+  - 字节数组的长度为0,1,2,3,4,5,6,7,8,10,12,14,16,20,24,32
+- 使用驱动程序的BSON UUID工具生成UUID
+
+## 文档结构的其他用途
+除了作为数据记录外，文档结构还用于查询过滤器、更新规范文档与索引规范文档。
+1. 查询过滤器文档: 指定条件，选择哪些记录进行读取、更新和删除操作，使用`<field>:<value>`表达式指定相等条件和查询运算符表达式
+   ```json
+    {
+    <field1>: <value1>,
+    <field2>: { <operator>: <value> },
+    ...
+    }
+   ```
+2. 更新规范文档: 更新规范文档使用更新操作符来指定在更新操作期间要对特定字段执行的数据修改
+   ```json
+    {
+    <operator1>: { <field1>: <value1>, ... },
+    <operator2>: { <field2>: <value2>, ... },
+    ...
+    }
+   ```
+3. 索引规范文档: 索引规范文档定义待索引的字段和索引类型
+   ```json
+    { <field1>: <type1>, <field2>: <type2>, ...  }
+   ```
+[MongoDB 应用程序现代化指南](https://www.mongodb.com/modernize?tck=docs_server)包含
+- 使用MongoDB进行数据建模的方法
+- 从RDBMS数据模型迁移到MongoDB的最佳实践和注意事项
+- 饮用MongoDB模式及其RDBMS等效模式
+
+# MongoDB查询API
+Query API是用于与数据进行交互的机制。查询数据的2种方式:
+- [增删改查操作](https://www.mongodb.com/zh-cn/docs/manual/crud/#std-label-crud)
+- [聚合管道](https://www.mongodb.com/zh-cn/docs/manual/core/aggregation-pipeline/#std-label-aggregation-pipeline)
+
+使用查询API执行:
+- 即席查询，使用GUI或者MongoDB驱动程序探索MongoDB数据
+- 数据转换，使用[聚合管道](https://www.mongodb.com/zh-cn/docs/manual/core/aggregation-pipeline/#std-label-aggregation-pipeline)重塑数据并执行计算
+- 文档联接支持，使用`$lookup`和`$unionWith`组合来自不同集合的数据
+- 图形与地理空间查询，使用`$geoWithin`与`$geoNear`等操作符分析地理空间数据，使用`$graphLookup`分析图形数据
+- 全文搜索，使用`$search`阶段对数据执行高效文本搜索
+- 索引，为您的数据架构使用正确的[索引类型](https://www.mongodb.com/zh-cn/docs/manual/indexes/#std-label-indexes)，提高查询性能
+- 按需物化视图，使用`$out`和`$merge`创建常见查询的物化视图
+- 时间序列分析，使用时间序列集合查询和聚合带时间戳的数据
+
+# BSON类型
+BSON是一种二进制序列化格式，用于在MongoDB中存储文档和进行远程过程调用。BSON支持整数与字符串作为标识符
+|类型|数值|别名|注意|
+|:---:|:---:|:---:|:---:|
+|双精度|1|double||
+|字符串|2|string||
+|对象|3|object||
+|阵列|4|array||
+|二进制数据|5|binData||
+|未定义|6|undefined|已弃用|
+|ObjectId|7|objectId||
+|布尔|8|bool||
+|Date|9|date||
+|null|10|null||
+|正则表达式|11|regex||
+|数据库指针|12|dbPointer|弃用|
+|JavaScript|13|javascript||
+|符号|14|symbol|弃用|
+|32位整数|16|int||
+|时间戳|17|timestamp||
+|64位整数|18|long||
+|Decimal128|19|decimal||
+|最小键值|-1|minKey||
+|Max key|127|maxKey||
+
+- `$type`操作符支持使用这些值按BSON类型查询字段，`$type`还支持number别名，整数、十进制等
+- `$type`聚合操作符返回其参数的BSON类型
+- `$isNumber`聚合操作符的参数是BSON整数、十进制数、双精度或者长整型，则返回true
+
+确定某一个字段的类型，参阅[类型检查](https://www.mongodb.com/zh-cn/docs/mongodb-shell/reference/data-types/#std-label-check-types-in-shell)
+## 二进制数据
+BSON二进制`binData`是字节数组，`binData`值有一个子类型，表示符合解释二进制数据，子类型如下:
+- 0-通用二进制子类型
+- 1-函数数据
+- 2-二进制旧版
+- 3-UUID旧版
+- 4-UUID
+- 5-MD5
+- 6-加密的BSON值
+- 7-压缩时间序列数据
+- 128-自定义数据
+
+## ObjectId
+对象标识符，很小，可能是唯一的，生成速度快且是有序的，长度是12个字节
+- 4字节的时间戳，表示创建时间，自UNIX纪元依赖的秒数时间
+- 5字节随机值，对于进程唯一
+- 3字节的递增计数器
+
+对于时间戳与计数器值是大端字节序，其他BSON值是小端字节序。使用整数数值创建对象标识符，则整数替换时间戳。`_id`字段使用ObjectId带来以下好处
+- 可以访问方法`ObjectId.getTimestamp()`获取创建时间
+- 排序
+
+`ObjectId`随着时间的推移而增加，但是不一定是单调的，因为仅有1秒的分辨率，可能由不同系统时钟的客户端生成。使用`ObjectId()`方法设置和检索ObjectId值。
+## 字符串
+UTF-8编码
+## 时间戳
+BSON有一种特殊的时间戳类型共MongoDB内部使用，与常规的日期类型无关。内部时间戳类型是一个64位值
+- 最高32位是time_t值，自UNIX纪元以来的秒数
+- 后32位是递增的ordinal，表示给定秒内的顺序
+
+在单个mongod服务中，时间戳值始终是唯一的。供内部使用。如果插入时，时间戳字段位空，MongoDB会自动插入当前时间戳值，但是`_id`字段除外。
+## Date
+一个64位整数，表示自UNIX纪元以来的毫秒数，有符号值，负值表示纪元以前的日期
+## MongoDB扩展JSON v2
+JSON只能直接表示BSON支持的类型的子集，为了保留类型信息，MongoDB在JSON格式中添加了以下扩展
+- 规范模式: 凸显类型保存的字符串格式，牺牲了可读性与互操作性
+- 宽松模式: 字符串格式，强调可读性与互操作性，牺牲了类型保护。
+
+以下驱动程序使用扩展JSON v2
+- C
+- Java
+- PHPC
+- C++
+- Python
+- GO
+- Perl
+- Scala
+
+MongoDB为扩展JSON提供了以下方法:
+- `serialize`: 序列化BSON对象并以扩展JSON格式返回数据
+  ```javascript
+  EJSON.serialize( db.<collection>.findOne() )
+  ```
+- `deserialize`: 将序列化文档转换为BSON对象
+  ```javascript
+  EJSON.deserialize( <serialized object> )
+  ```
+- `stringify`: 将反序列化对象中的元素和类型对转换为字符串
+  ```javascript
+  EJSON.stringify( <deserialized object> )
+  ```
+- `parse`: 将字符串转换为元素和类型对
+  ```javascript
+  EJSON.parse( <string> )
+  ```
+
+### MongoDB 数据库工具
+### BSON 数据类型和相关表示形式
+
+
+
