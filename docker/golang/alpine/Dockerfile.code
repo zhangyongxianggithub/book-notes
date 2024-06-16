@@ -1,0 +1,27 @@
+FROM iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20-go AS builder
+WORKDIR /workspace
+COPY ./ /workspace
+ENV GO111MODULE=on GONOPROXY=*.baidu.com* GOPROXY=http://goproxy.baidu-int.com CC=gcc CXX=g++
+COPY .ssh /root/.ssh
+RUN chmod 300 /root/.ssh/id_rsa
+RUN go mod tidy
+RUN go build -tags musl -ldflags='-extldflags=-static' -o /home/work/bin/index-server icode.baidu.com/baidu/coding-suggestion/embedding-index/cmd/index-server
+RUN go build -tags musl -ldflags='-extldflags=-static' -o /home/work/bin/retrieval-server icode.baidu.com/baidu/coding-suggestion/embedding-index/cmd/retrieval-server
+
+FROM iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20 AS index
+WORKDIR /home/work
+COPY cmd/index-server/conf /home/work/index-server-conf/
+COPY --from=builder /home/work/bin/index-server /home/work/bin/
+RUN mkdir -p /home/work/log
+ENV ServerName index-server
+CMD ["./bin/index-server -conf /home/work/index-server-conf -profile default 2>>/home/work/log/error.log"]
+
+FROM iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20 AS retrieval
+WORKDIR /home/work
+COPY cmd/retrieval-server/conf /home/work/retrieval-server-conf/
+COPY --from=builder /home/work/bin/retrieval-server /home/work/bin/
+RUN mkdir -p /home/work/log
+ENV ServerName retrieval-server
+CMD ["./bin/retrieval-server -conf /home/work/retrieval-server-conf -profile default 2>>/home/work/log/error.log"]
+
+# docker build --target index -t iregistry.baidu-int.com/comate/code-search-index:arm64-20240614 -f Dockerfile-arm64 ./

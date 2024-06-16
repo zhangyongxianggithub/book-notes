@@ -1,0 +1,9 @@
+FROM --platform=linux/arm64/v8 alpine:3.20
+LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
+RUN apk update --no-cache && apk add --no-cache bash tzdata inetutils-telnet curl build-base go musl-dev git openssl openssh
+ENV TZ Asia/Shanghai
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+ENTRYPOINT ["tini", "-v", "-g", "--"]
+
+# docker build --platform=linux/arm64/v8 -t iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20-gcc -f Dockerfile_arm64_gcc .
