@@ -6,7 +6,7 @@ RUN echo 'Asia/Shanghai' > /etc/timezone
 RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 ENTRYPOINT ["tini", "-v", "-g", "--"]
 
-# docker build --platform=linux/arm64/v8 -t iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20 -f Dockerfile_arm64 .
+# docker build --platform=linux/arm64/v8 -t iregistry.baidu-int.com/gbi-enterprise/alpine:arm64-v8-3.20 -f Dockerfile.arm64 .
 # GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-musl-gcc  CXX=aarch64-linux-musl-g++ go build -ldflags="-extldflags=-static" -o output/bin/retrieval-server cmd/retrieval-server/main.go
 # GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-musl-gcc  CXX=aarch64-linux-musl-g++ go build -tags musl -ldflags='-extldflags=-static' -o output/bin/index-server icode.baidu.com/baidu/coding-suggestion/embedding-index/cmd/index-server
 # GOOS=linux GOARCH=arm64 CGO_ENABLED=1 CC=aarch64-linux-gnu-gcc  CXX=aarch64-linux-gnu-g++ go build -ldflags="-linkmode external -extldflags -static" -o output/bin/index-server icode.baidu.com/baidu/coding-suggestion/embedding-index/cmd/index-server
