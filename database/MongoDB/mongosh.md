@@ -11,4 +11,3 @@
         $or: [ { "awards.wins": { $gte: 5 } }, { genres: "Drama" } ]
     } )
   ```
-- 
