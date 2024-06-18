@@ -8,6 +8,7 @@ LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
 # RUN yum update -y && yum groupinstall -y "Development Tools" && yum install -y epel-release openssl-devel bzip2-devel libffi-devel
 RUN yum update -y && yum install -y epel-release gcc openssl-devel bzip2-devel libffi-devel make
 COPY --from=builder /Python-3.9.6 /Python-3.9.6
+# docker commit的方式可以是使用下面的命令
 # RUN cd Python-3.9.6 && ./configure --enable-optimizations && make altinstall && cd ..
 RUN cd Python-3.9.6 && ./configure && make altinstall && cd ..
 RUN rm -rf /Python-3.9.6
