@@ -1,0 +1,18 @@
+ARG ARCH=amd64
+FROM  --platform=linux/${ARCH} centos:7
+LABEL org.opencontainers.image.authors="zhangyongxiang@baidu.com"
+ENV TZ Asia/Shanghai
+RUN localedef -c -i zh_CN -f UTF-8 zh_CN.UTF-8
+ENV LC_ALL zh_CN.utf-8
+ENV LANG zh_CN.UTF-8
+ENV LANGUAGE zh_CN:zh
+RUN echo 'LANG=zh_CN.UTF-8' > /etc/locale.conf
+RUN echo 'Asia/Shanghai' > /etc/timezone
+RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+COPY tini /usr/bin/
+RUN chmod a+x /usr/bin/tini
+RUN yum update && yum install -y epel-release python-pip gcc openssl-devel bzip2-devel libffi-devel zlib-devel wget
+RUN wget https://www.python.org/ftp/python/3.9.6/Python-3.9.6.tgz
+RUN tar -xvf Python-3.9.6.tgz
+RUN ./configure --enable-optimizations && make && make install
+ENTRYPOINT ["tini", "-v", "-g", "--"]
