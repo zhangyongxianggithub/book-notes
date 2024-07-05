@@ -1,1 +1,1 @@
-MinIO Client简称为mc
+MinIO Client简称为mc，
