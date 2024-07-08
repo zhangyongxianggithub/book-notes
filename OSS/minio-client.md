@@ -1,5 +1,4 @@
-MinIO Client简称为mc
-通常来说，`mc`的版本使用MinIO Server的后一个版本比较好，偏离太多或者使用之前的版本可能不兼容。
+MinIO Client简称为mc，类似UNIX环境的命令`ls`、`cat`、`cp`、`mirror`与`diff`等，支持文件系统与兼容S3协议的云存储服务。`mc`命令兼容AWS S3 API，在MinIO与AWS S3上都经过了测试并符合预期的行为。`mc`可能不兼容其他的S3服务实现，虽然你可以使用，但是使用的风险你需要自己承担。 语法形式: `mc [GLOBALFLAGS] COMMAND --help`.
 ## 快速开始
 - 安装mc,不同的环境不一样，自己安装就好
 - 为一个S3存储服务设置别名，使用`mc alias set`命令添加s3服务到mc配置中`mc alias set ALIAS HOSTNAME ACCESS_KEY SECRET_KEY`。使用别名表示一个S3服务，`mc`命令通常都需要一个`ALIAS`来标识执行命令的S3服务
@@ -21,3 +20,10 @@ MinIO Client简称为mc
 |mc get|下载文件到本地文件系统|
 |mc head|显示对象的前`n`行|
 |mc ls|列出bucket或者对象|
+
+# mc admin
+`mc admin`用于管理MinIO服务，不能管别的，语法`mc admin [FLAGS] COMMAND [ARGUMENTS]`, 简要命令参考
+|**Command**|**Description**|
+|:---|:---|
+|mc admin bucket remote|`mc admin bucket remote`命令管理ARN资源|
+通常来说，`mc`的版本使用MinIO Server的后一个版本比较好，偏离太多或者使用之前的版本可能不兼容。
