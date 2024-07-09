@@ -79,4 +79,5 @@ mc把证书存储在下面的路径中
 |**Command**|**Description**|
 |:---|:---|
 |mc admin bucket remote|`mc admin bucket remote`命令管理ARN资源|
+
 通常来说，`mc`的版本使用MinIO Server的后一个版本比较好，偏离太多或者使用之前的版本可能不兼容。
