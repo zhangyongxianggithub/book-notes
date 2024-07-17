@@ -181,10 +181,91 @@ protoc --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     routeguide/route_guide.proto
 ```
+生成2类文件
+- *.pb.go: 包含消息体代码
+- *.grpc.pb.go: 包含客户端存根接口与服务端接口，这2个接口都是PB文件中的接口定义
 创建服务器，分为2个步骤
 - 实现接口
 - 运行一个gRPC服务器来监听客户端的请求并分发到正确的接口实现
+  ```go
+  // 指定用来监听客户端请求的端口
+  lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+  if err != nil {
+    log.Fatalf("failed to listen: %v", err)
+  }
+  var opts []grpc.ServerOption
+  ...
+  // 创建一个gRPC服务器实例
+  grpcServer := grpc.NewServer(opts...)
+  // 注册服务实现到gRPC服务器
+  pb.RegisterRouteGuideServer(grpcServer, newServer())
+  // 调用服务器的Serve()方法来等待请求，直到进程被Kill或者调用了stop()方法
+  grpcServer.Serve(lis)
+  ```
 
+接下来创建Client，首先创建一个stub，然后再首先创建一个gRPC channel来与服务端通信，通过把服务地址与端口号传递给`grpc.NewClient`来创建，如下:
+```go
+var opts []grpc.DialOption
+...
+conn, err := grpc.NewClient(*serverAddr, opts...)
+if err != nil {
+  ...
+}
+defer conn.Close()
+```
+可以通过`DialOptions`来设置认证，然后创建stub来执行RPCs
+```go
+client := pb.NewRouteGuideClient(conn)
+```
+接下来就是调用RPC方法，RPC调用使用阻塞/同步的方式调用，等待返回一个响应或者一个错误。
+### ALTS认证
+ALTS=Application Layer Transport Security, 应用层传输安全。ALTS是一个Google开发的认证与加密系统，用来保护RPC通信，类似TLS但是更多的是满足Google本身产品的安全需求。有系列特点:
+- 创建带有ALTS作为传输安全协议的gRPC服务端与客户端
+- ALTS的连接是端到端隐私保护的
+- 应用可以访问认证信息，比如认证的服务账户
+- 客户端授权与服务端授权支持
+- 只需很少的代码即可支持ALTS
+
+gRPC客户杜u安可以使用ALTS证书来连接到服务端，如下所示:
+```go
+import (
+  "google.golang.org/grpc"
+  "google.golang.org/grpc/credentials/alts"
+)
+
+altsTC := alts.NewClientCreds(alts.DefaultClientOptions())
+conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(altsTC))
+```
+gRPC服务端开启ALTS传输安全协议
+```go
+import (
+  "google.golang.org/grpc"
+  "google.golang.org/grpc/credentials/alts"
+)
+
+altsTC := alts.NewServerCreds(alts.DefaultServerOptions())
+server := grpc.NewServer(grpc.Creds(altsTC))
+```
+gRPC通过ALTS（Application Layer Transport Security）提供了内置的服务器授权支持。使用ALTS的gRPC客户端可以在建立连接之前设置期望的服务器服务账号。然后，在握手结束时，服务器授权会确保服务器身份与客户端指定的其中一个服务账号匹配。否则，连接将失败。
+```go
+import (
+  "google.golang.org/grpc"
+  "google.golang.org/grpc/credentials/alts"
+)
+
+clientOpts := alts.DefaultClientOptions()
+clientOpts.TargetServiceAccounts = []string{expectedServerSA}
+altsTC := alts.NewClientCreds(clientOpts)
+conn, err := grpc.NewClient(serverAddr, grpc.WithTransportCredentials(altsTC))
+```
+在成功建立连接后，对等信息（例如，客户端的服务账号）将存储在`AltsContext`中。gRPC提供了一个用于客户端授权检查的实用程序库。假设服务器知道预期的客户端身份（例如，foo@iam.gserviceaccount.com），它可以运行以下示例代码来授权传入的RPC调用。
+```go
+import (
+  "google.golang.org/grpc"
+  "google.golang.org/grpc/credentials/alts"
+)
+err := alts.ClientAuthorizationCheck(ctx, []string{"foo@iam.gserviceaccount.com"})
+```
 
 
 
