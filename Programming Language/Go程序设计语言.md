@@ -1082,29 +1082,26 @@ func containsAll(x, y []string) bool {
 ## 一些建议
 不要上来就创建一系列接口，每个接口只有一个具体类型，这是不必要的抽象，使用导出机制来限制类型的方法/字段的可访问性，如果有多个具体类型需要按统一的方式处理才需要接口。接口抽象掉实现细节。接口设计的原则是仅要求你需要的。不是所有东西都必须是一个对象。
 # goroutine和通道
-并发编程表现为程序由若干个自主的活动单元组成，主要使用并发来隐藏I/O操作的延迟，充分利用现代的多核计算机。有2种并发编程的风格:
+并发程序由若干个自主活动单元组成，使用并发来隐藏I/O操作的延迟，提升CPU与IO的同时工作能力。2种并发编程的风格:
 - goroutine和channel，支持通信顺序进程(Communicating Sequential Process,CSP),是一个并发的模式，在不同的执行体(goroutine)之间传递值，但是变量本身局限于单一的执行体;
-- 共享内存多线程的传统模型，与在其他主流语言中的线程类似.
+- 共享内存，与在其他主流语言中的线程类似
 ## goroutine
-每一个并发执行的活动称为goroutine。goroutine类似于线程。程序启动时主goroutine调用main函数。使用go创建新的goroutine。就是在普通的函数或者方法调用前加上go关键字前缀。go语句使函数在一个新创建的goroutine中执行，go语句本身立刻返回:
+Go中并发执行的活动称为goroutine，类似于线程。程序启动时主goroutine调用main函数。使用`go`关键字创建新的goroutine。就是在普通的函数或者方法调用前加上`go`关键字前缀。go语句使函数在一个新创建的goroutine中执行，go语句本身立刻返回:
 ```go
 f()//阻塞调用
 go f() // 异步调用
 ```
 ```go
 package main
-
 import (
 	"fmt"
 	"time"
 )
-
 func main() {
 	go spinner(100 * time.Millisecond)
 	const n = 55
 	fibN := fib(n)
 	fmt.Printf("\rGibonacci(%d) = %d\n", n, fibN)
-
 }
 func spinner(deley time.Duration) int {
 	for {
@@ -1126,14 +1123,6 @@ main方法执行结束，goroutine退出，没有办法终止goroutine。
 以每秒钟一次的频率向客户端发送当前时间:
 ```go
 package main
-
-import (
-	"io"
-	"log"
-	"net"
-	"time"
-)
-
 func main() {
 	listener, err := net.Listen("tcp", "localhost:8080")
 	if err != nil {
@@ -1146,9 +1135,7 @@ func main() {
 			continue
 		}
 		handleConn(conn) // 一次处理一个连接
-
 	}
-
 }
 func handleConn(c net.Conn) {
 	defer c.Close()
@@ -1181,19 +1168,21 @@ func handleConn1(c net.Conn) {
 }
 ```
 ## 通道
-通道是goroutine之间的通信机制。一个通道是一个具有特定类型的管道，叫做通道的元素类型，比如`chan int`。
+通道用于goroutine通信。通道是一个具有特定类型的管道，叫做通道的元素类型，比如`chan int`。
 ```go
 ch := make(chan int) //ch的类型是chan int
 ```
-通道是引用类型。可以比较。2个主要的通信操作:
+通道是引用类型，可以比较。2个主要的通信操作:
 - 发送send
 - 接收receive
 - 关闭close，设置一个标志位标识值发送完毕，在关闭的通道上进行接收，将获取所有已经发送的值，直到通道为空，接收操作会立即完成，最后获取一个通道元素类型对应的零值
+  
 ```go
 ch <- x// 发送语句
 x = <- ch // 赋值语句中的接收表达式
 <-ch  // 接收语句，丢弃结果
 ```
+
 - 无缓冲通道: `make(chan int) make(chan int, 0)`
 - 缓冲通道: `make(chan int, 3)// 容量为3的缓冲通道`
 1. 无缓冲通道
