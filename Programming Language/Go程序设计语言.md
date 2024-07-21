@@ -1091,6 +1091,7 @@ Go中并发执行的活动称为goroutine，类似于线程。程序启动时主
 f()//阻塞调用
 go f() // 异步调用
 ```
+这个例子是显示与计算2个逻辑并发的例子
 ```go
 package main
 import (
@@ -1098,6 +1099,7 @@ import (
 	"time"
 )
 func main() {
+	// 这里是显示正在运行的标志
 	go spinner(100 * time.Millisecond)
 	const n = 55
 	fibN := fib(n)
@@ -1118,12 +1120,13 @@ func fib(x int) int {
 	return fib(x-1) + fib(x-2)
 }
 ```
-main方法执行结束，goroutine退出，没有办法终止goroutine。
+main方法执行结束，主goroutine退出所有goroutine结束，没有编程API终止goroutine，但是可以与goroutine通信
 ## 示例: 并发时钟服务器
 以每秒钟一次的频率向客户端发送当前时间:
 ```go
 package main
 func main() {
+	//创建一个net.Listener对象，
 	listener, err := net.Listen("tcp", "localhost:8080")
 	if err != nil {
 		log.Fatal(err)
@@ -1148,10 +1151,10 @@ func handleConn(c net.Conn) {
 	}
 }
 ```
-此时服务器是顺序的，一次只能处理一个请求。支持并发，只需要`go handleConn(conn)`。现在可接收多个客户端并发执行。
+`time.Time.Format`方法提供格式化日期/时间，使用`nc`、`netcat`、`telnet`或者go`net.Dial`程序连接服务器。`killall`用于kill指定名字的进程。
+此时服务器是顺序的，一次只能处理一个请求。支持并发，只需要`go handleConn(conn)`，现在可接收多个客户端并发执行。
 ## 示例: 并发回声服务器
 ```go
-
 func echo(c net.Conn, shout string, delay time.Duration) {
 	fmt.Fprintln(c, "\t", strings.ToUpper(shout))
 	time.Sleep(delay)
@@ -1167,26 +1170,37 @@ func handleConn1(c net.Conn) {
 	c.Close()
 }
 ```
+升级后的客户端程序
+```go
+func main(){
+	conn, err := net.Dial("tcp", "localhost:8000")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+	go mustCopy(os.Stdout, conn)
+	mustCopy(conn, os.Stdin)
+}
+```
 ## 通道
-通道用于goroutine通信。通道是一个具有特定类型的管道，叫做通道的元素类型，比如`chan int`。
+通道用于goroutine通信。通道是一个具有特定类型的管道，叫做通道的元素类型，比如`chan int`。make创建通道。
 ```go
 ch := make(chan int) //ch的类型是chan int
 ```
-通道是引用类型，可以比较。2个主要的通信操作:
+通道是引用类型，可以比较(是否引用相同)。3个主要的通信操作:
 - 发送send
 - 接收receive
-- 关闭close，设置一个标志位标识值发送完毕，在关闭的通道上进行接收，将获取所有已经发送的值，直到通道为空，接收操作会立即完成，最后获取一个通道元素类型对应的零值
-  
+- 关闭close，设置一个标志位(flag成员)表示通道的所有值发送完毕，此时发送会panic，在关闭的通道上进行接收，将获取所有已经发送的值，直到通道为空。此时再次执行接收操作会立即完成并获取一个通道元素类型对应的零值，这种操作是没有意义的。内置函数`close()`关闭通道。
 ```go
 ch <- x// 发送语句
 x = <- ch // 赋值语句中的接收表达式
 <-ch  // 接收语句，丢弃结果
 ```
-
-- 无缓冲通道: `make(chan int) make(chan int, 0)`
+- 无缓冲通道: `make(chan int)`或`make(chan int, 0)`
 - 缓冲通道: `make(chan int, 3)// 容量为3的缓冲通道`
+  
 1. 无缓冲通道
-   类似于1个容量的生产者消费者，如果没有被接收，再次发送将会阻塞，如果没有值，则接收会阻塞，直到值存在。无缓冲通道的通信使发送与接收的goroutine同步化。称为同步通道。下面的例子:
+   通道的发送者与接受者是同步的，发送操作会阻塞直到存在接收者，接收会阻塞直到有发送操作。使发送与接收的goroutine同步化，称为同步通道。下面的例子是让tcp的客户端等待返回的输出后再推出而不是主goroutine输入完就退出:
    ```go
 	func main() {
 		conn, err := net.Dial("tcp", "localhost:8080")
@@ -1209,7 +1223,7 @@ x = <- ch // 赋值语句中的接收表达式
 		}
 	}
    ```
-   当通道的通信本身以及通信发生的时间很重要时，消息叫做事件。 
+   当通道的通信本身以及通信发生的时间很重要时，消息叫做事件，单纯是为了同步。通常使用`struct{}`类型或者bool/int类型也可以可以
 2. 管道
    通道可以用来连接goroutine。这个叫管道。一个2个管道的例子:
    ```go
