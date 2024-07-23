@@ -1,9 +1,9 @@
-在这篇文章中，我们将会探索Go中的结构化日志记录包`log/slog`，具有高性能、结构化于分级日志记录的特性。`log/slog`软件包源于Jonathan Amsterdam在GitHub上发起的一次讨论。经过讨论之后，又提出了一个描述包设计细节的提案。最终，该软件包在Go v1.21版本中正式发布，并被放置在log/slog包中。
+在这篇文章中，我们将会探索Go中的结构化日志记录包`log/slog`，具有高性能、结构化与分级日志记录的特性。`log/slog`软件包源于Jonathan Amsterdam在GitHub上发起的一次讨论。经过讨论之后，又提出了一个描述包设计细节的提案。最终，该软件包在Go v1.21版本中正式发布，并被放置在log/slog包中。
 # Getting started with Slog
 首先探索其设计与架构，你需要熟悉3个主要类型
 - `Logger`: 日志记录的前端，提供了分级的日志记录方法，比如`Inof()`或者`Error`等，用来记录感兴趣的事件
 - `Record`: 由`Logger`创建的日志对象的表示形式
-- `Handler`: 一个借口，定义了格式化与日志记录目的地，有2个内置的实现`TextHandler`与`JSONHandler`，分别输出`key=value`与JSON形式
+- `Handler`: 一个接口，定义了格式化与日志记录目的地，有2个内置的实现`TextHandler`与`JSONHandler`，分别输出`key=value`与JSON形式
 
 与大多数的Go日志记录库类似，`slog`包也暴露了一个默认的`Logger`，可以通过包级别的方法访问，这个logger与`log.Printf()`产生的日志输出是类似的，只是包含日志级别。只需要`slog.New()`方法就可以创建一个新的`Logger`对象，它接受一个`Handler`接口的实现。如果使用`TextHandler`，那么每个`Record`会被格式化为[Logfmt standard](https://betterstack.com/community/guides/logging/logfmt/)，所有的`Logger`默认记录`INFO`级别的日志，但是你可以改变。
 ```go
@@ -47,7 +47,7 @@ logger.Info(
   "user_agent", "Googlebot/2.1 (+http://www.google.com/bot.html)",
 )
 ```
-所有的方法第一个参数是一个log message，后面是任意的key/value对，但是如果最后一个值没有提供value化，会造成错误的未预期的输出，此时可以使用下面的形式
+所有的方法第一个参数是一个log message，后面是任意的key/value对，但是如果最后一个值没有提供value，会造成错误的未预期的输出，此时可以使用下面的形式
 ```go
 logger.Info(
   "incoming request",
@@ -105,7 +105,7 @@ logger.LogAttrs(
 }
 ```
 # Creating and using child loggers
-在一个特定的范围内服用一些相同的属性是常用的，而且不需要重复的书写这些信息。子logger就是解决这个问题的，因为子logger会创建一个新的继承父logger的日志记录上下文。创建子logger的方法`Logger.With()`，接受一个或者多个key/value对，返回包含指定属性的心的`Logger`，考虑下面的代码片段，添加进程ID与Go版本到每个日志记录，并把他们存储在`program_info`属性中
+在一个特定的范围内复用一些相同的属性是常用的，而且不需要重复的书写这些信息。子logger就是解决这个问题的，因为子logger会创建一个新的继承父logger的日志记录上下文。创建子logger的方法`Logger.With()`，接受一个或者多个key/value对，返回包含指定属性的新的`Logger`，考虑下面的代码片段，添加进程ID与Go版本到每个日志记录，并把他们存储在`program_info`属性中
 ```go
 func main() {
     handler := slog.NewJSONHandler(os.Stdout, nil)

@@ -53,3 +53,19 @@ $(shell command)的方式获得shell命令执行的结果
 规则中的命令就是操作系统shell中的命令，必须以tab开头，或者命令紧跟在规则的分号后面。make命令的默认shell是/bin/sh。
 1. make会显示要执行的命令，使用@字符放到命令前，则不会显示要执行的命令，-n参数显示命令，但是不执行，-s参数禁止命令的显示
 2. 依赖目标比当前的目标新时，规则的目标要被执行，如果在前面命令的基础上执行，则2个命令写在一行，用分号分隔，否则认为是2个全新的命令。make一般是使用环境变量SHELL中所定义的系统Shell来执行命令，默认情况下使用UNIX的标准Shell——/bin/sh来执行命令
+
+# 使用变量
+变量类似C中的宏，表示一个文本字串，Makefile执行的时候会自动展开。变量是大小写敏感的。命名方式需要注意。变量声明有初始值，使用时用$var, $(var), ${var} $$表示单纯的字符$
+```makefile
+objects = program.o foo.o utils.o
+program : $(objects)
+    cc -o program $(objects)
+$(objects) : defs.h
+```
+可以使用变量来定义变量，=的方式定义的变量可以使用后面定义的变量，:=的方式定义的变量只能使用前面已经声明的变量。
+```makefile
+nullstring :=
+space := $(nullstring) # end of the line
+```
+nullstring是一个Empty变量，其中什么也没有，而我们的space的值是一个空格。先用一个Empty变量来标明变量的值开始了，而后面采用`#`注释符来表示变量定义的终止，这样可以定义出其值是一个空格的变量。注释符`#`的这种特性值得注意，如果定义一个变量`dir := /foo/bar    # directory to put the frobs in`，`?=`表示变量如何没定义过则定义，否则啥都不干。
+环境变量会在make运行时载入，如果Makefile中存在同名环境变量或者命令行定义过则覆盖系统的环境变量，当make嵌套调用时，上层Makefile中通过命令行设置的变量会以系统环境变量的方式传递到下层的Makefile中，文件中的变量，如果要向下层Makefile传递需要使用export关键字来声明
