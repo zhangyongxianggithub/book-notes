@@ -673,7 +673,25 @@ AVL(Adelson-Velskii and Landies)带有平衡条件的二叉查找树。平衡的
 ## 伸展树
 伸展树基于的事实: 对于二叉查找树来说，每次操作最坏情形时间$O(N)$并不坏，只要相对不常发生就行，连续的最坏情况访问很罕见。伸展树的意思就是当一个节点被访问后，就要经过一些列的AVL旋转变成平衡的。
 ## 再探树的遍历
-
+# 第7章 排序
+## 插入排序
+最简单的算法，$N-1$趟排序组成，位置$0$到$p-1$已经处于有序的状态，那么第$p$个元素向有序的数组中插入并移动元素，具体代码如下:
+```java
+    public static <T extends Comparable<? super T>> void insertionSort(
+            final T[] arr) {
+        if (arr != null && arr.length > 0) {
+            for (int i = 1; i < arr.length; i++) {
+                int j = i - 1;
+                final T value = arr[i];
+                while (j >= 0 && arr[j].compareTo(value) > 0) {
+                    arr[j + 1] = arr[j];
+                    j--;
+                }
+                arr[j + 1] = value;
+            }
+        }
+    }
+```
 # 第10章 算法设计技巧
 本章讨论用于求解问题的5种通常类型的算法，对于很对问题，这些方法中至少有一种是可以解决问题的。
 ## 贪婪算法
