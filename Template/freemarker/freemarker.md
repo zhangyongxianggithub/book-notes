@@ -399,7 +399,7 @@ cfg.setSharedVariable("company", "Foo Inc.");
 |xml_escape|freemarker.template.utility.XmlEscape|
 ### 配置设置
 Settings(配置设置)是影响FreeMarker行为的已被命名的值。配置设置有很多，例如: locale, number_format, default_encoding, template_exception_handler。可以参考[Configuration.setSetting(...)的Java API文档](http://freemarker.org/docs/api/freemarker/template/Configuration.html#setSetting-java.lang.String-java.lang.String-)来查看配置设置的完整列表。配置设置存储在`Configuration`实例中，可以在Template实例中被覆盖。比如，在配置中给locale设置为en_US，那么使用该配置的所有模版中的locale都适用en_US，除非在模版中locale被明确的设置成其他不同的值(参见[localization](file:///Users/zhangyongxiang/Downloads/FreeMarker_2.3.23_Manual_zh_CN/ref_directive_include.html#ref_directive_include_localized))。因此，在Configuration中的值充当默认值，这些值在每个模板中也可以被覆盖。在Configuration或Template实例中的值也可以在单独调用Templat.process方法后被覆盖。对于每个调用了`freemarker.core.Environment`对象的值在内部创建时就持有模板执行的运行时环境，也包括了那个级别被覆盖了的设置信息。在模板执行时，那里存储的值也可以被改变。所以模板本身也可以设置配置信息，比如在输出中途来变换locale设置。配置信息可以被想象成3层(Configuration\Template\Environment)，最高层包含特定的值，它为设置信息提供最有效的值。比如:
-![设置](settings.png)
+![设置](pic/settings.png)
 配置信息的有效值是: A=1, B=2, C=3, D=1, E=2。F=null。如何准确设置配置信息:
 - Configuration层: 原则上设置配置信息时使用`Configuration`对象的setter方法，例如:
   ```java
