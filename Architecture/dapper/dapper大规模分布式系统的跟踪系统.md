@@ -15,16 +15,16 @@ dapper为了收集分布式系统的行为信息，需要监控横跨不同应�
 # 文献的总结
 其他的分布式追踪系统还停留在理论上，dapper都在生产环境上运行来了几十年了，有一些独特的收获；adpper包含了很多的新的贡献，并且基本是完全的应用级透明。
 # dapper的分布式追踪
-![dapper分布式系统](dapper/dapper分布式系统.png)
+![dapper分布式系统](pic/dapper分布式系统.png)
 最简单使用的分布式跟踪的实现，服务器每次发送与接收动作都收集跟踪标识符与时间戳。
 requestId记录与发起者关联：
 - 黑盒：统计回归的技术推断链路
 - 基于标注的方案：需要一个全局的ID，需要代码植入。
 ## 跟踪树与span
 树节点是架构的基本单元，每个节点是对span的引用。
-![span调用树](dapper/span调用.png)
+![span调用树](pic/span调用.png)
 dapper记录了span的名称、span的id与parent id。单独的span的细节图：
-![单独的span的细节图](dapper/单独的span的细节图.png)
+![单独的span的细节图](pic/单独的span的细节图.png)
 ## 植入点
 侵入性比较低，主要是因为：
 - dapper把span的信息存储在ThreadLocal中；
