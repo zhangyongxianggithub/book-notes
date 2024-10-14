@@ -464,7 +464,7 @@ for (i = 0; i < objArr.length; i++) {
 }
 ```
 ## 运行参数和API列表介绍
-![QLExpressRunner](EL/qlexpress/qlexpress.jpeg)
+![QLExpressRunner](pic/qlexpress.jpeg)
 ### 属性开关
 - `private boolean isPrecise = false;`: 是否需要高精度计算,不丢失精度
 - `private boolean isShortCircuit = true;`: 是否使用逻辑短路
