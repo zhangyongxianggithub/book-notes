@@ -854,7 +854,7 @@ Filer有一个连接到Master的持久客户端，以获取所有卷的位置更
 对于读文件来说:
 - Filer lookup metadata from Filer Store, which can be Cassandra/Mysql/Postgres/Redis/LevelDB/etcd/Sqlite;
 - Filer read from volume servers and pass along to the read request;
-![文件读](seaweedfs/FilerRead.png)
+![文件读](pic/FilerRead.png)
 对于写文件来说:
 - Client stream files to Filer
 - Filer uploads data to Weed Volume Servers, and break the large files into chunks.
