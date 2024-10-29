@@ -20,3 +20,5 @@ Spring AI提供了很多用于开发AI应用的抽象，这些抽象有很多实
 
 这些特性集可以让你实现一些常用的功能，比如`Q&A over your documentation`或者`Chat with your documentation`。
 # AI Concepts
+这一章节描述Spring AI使用的核心概念，建议仔细阅读理解这些概念背后Spring AI是如何实现的。
+## Models
