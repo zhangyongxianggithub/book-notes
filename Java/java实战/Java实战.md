@@ -261,7 +261,41 @@ Future是一个一次性对象，只能从头到尾执行一次。反应式编�
    响应式系统的resilience就是将失败隔离在组件内部，避免穿到整个系统早成整个系统挂掉。就是容错的意思，可以降级并隔离失效组件来恢复系统。失效信息可以传递给管理组件。隔离后管理组件可以安全的管理失效组件。对与resilience来说，隔离与接口是关键的，对于elasticity来说，位置透明很重要。位置透明性允许系统复制或者扩展应用。
 
 ## Reactive streams and the Flow API
-反应式编程是利用反应式流的技术，以异步方式处理潜在无边界数据流的标准技术，基于发布-订阅模型，
+反应式编程是利用反应式流的技术，以异步方式处理潜在无边界数据流的标准技术，基于发布-订阅模型，处理时按照先后次序进行，带有不可阻塞的背压，背压式发布-订阅模式下的一种常见的流量控制机制。目的是避免流中的事件处理的消费者由于处理速度较慢，被一个或者多个快速的生产者压垮，需要一种方式来向上游生产者反馈以减缓生产速度，或者告诉生产者它在接收更多数据之前，在给定的时间内能够接收和处理多少事件。
+Java9的反应式编程的类(`java.util.concurrent.Flow`)，无法实例化，包含了4个嵌套的接口:
+- 发布者(Publisher)
+  ```java
+    @FunctionalInterface
+    public static interface Publisher<T> {
+        public void subscribe(Subscriber<? super T> subscriber);
+    }
+  ```
+- 订阅者(Subscriber)
+  ```java
+    public static interface Subscriber<T> {
+        public void onSubscribe(Subscription subscription);
+
+        public void onNext(T item);
+
+        public void onError(Throwable throwable);
+
+        public void onComplete();
+    }
+  ```
+- 订阅(Subscription)
+  ```java
+    public static interface Subscription {
+
+        public void request(long n);
+
+        public void cancel();
+    }
+  ```
+- 处理者(Processor)
+  ```java
+  ```
+
+
 
 
    
