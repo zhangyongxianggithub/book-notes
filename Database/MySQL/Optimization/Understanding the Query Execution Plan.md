@@ -1,14 +1,14 @@
-## 8.8 理解查询执行计划
+## 10.8 理解查询执行计划
 依据表、列、索引的定义以及where子句的查询条件，MySQL优化器使用了多种技术手段来提升SQL查询中的查找性能，
 大表查询可以不需要读取所有的行，或者多表的联合(join)也不需要对所有的行进行比较，MySQL的优化器的所有优化措施在MySQl中称为查询执行计划；
 也叫做EXPLAIN计划，你需要做的就是通过EXPLAIN了解查询是否得到了良好的优化，并且学习SQL语法并使用索引技术来优化查询。
 ### 8.8.1 使用EXPLAIN优化查询
 EXPLAIN提供了关于MySQL如何执行SQL语句的过程信息：
 - EXPLAIN可以工作在SELECT、DELETE、INSERT、REPLACE、UPDATE语句上；
-- 当使用EXPLAIN查询SQL语句的计划时，会给出MySQL是如何处理该SQL语句，比如语句中的表是如何连接的，以什么顺序连接的等，想要知道更多的信息，看8.8.2 EXPLAIN输出格式；
-- 当EXPLAIN与FOR CONNECTION connection_id使用时，他会给出在连接中执行的SQL语句的执行计划，更多的信息可以看8.8.4 获取一个有名字的连接的查询计划信息；
-- EXPLAIN会给SELECT语句产生更多的计划信息，使用SHOW WARNINGS可以展示这些信息，更多的信息看8.8.3 扩展的EXPLAIN输出；
-- 对于分区表，EXPLAIN也是有效的，可以看23.3.5节 获取分区信息；
+- 当使用EXPLAIN查询SQL语句的计划时，会给出MySQL是如何处理该SQL语句，比如语句中的表是如何连接的，以什么顺序连接的等，想要知道更多的信息，看[10.8.2 EXPLAIN输出格式](https://dev.mysql.com/doc/refman/8.4/en/explain-output.html)；
+- 当EXPLAIN与FOR CONNECTION connection_id使用时，他会给出在连接中执行的SQL语句的执行计划，更多的信息可以看[10.8.4 获取一个有名字的连接的查询计划信息](https://dev.mysql.com/doc/refman/8.4/en/explain-for-connection.html)；
+- EXPLAIN会给SELECT语句产生更多的计划信息，使用SHOW WARNINGS可以展示这些信息，更多的信息看[10.8.3 扩展的EXPLAIN输出](https://dev.mysql.com/doc/refman/8.4/en/explain-extended.html)；
+- 对于分区表，EXPLAIN也是有效的，可以看[26.3.5节 获取分区信息](https://dev.mysql.com/doc/refman/8.4/en/partitioning-info.html)；
 - FORMAT选项可以指定EXPLAIN的输出格式，TRADITIONAL是表格式的输出格式也是缺省的输出格式，指定为JSON时会输出JSON格式；
 
 在EXPLAIN的帮助下，你就知道你应该加哪些索引，也能知道连表时的顺序是否合理；为了让优化器在SELECT语句中以表出现的顺序作为连接的顺序，使用SELECT STRAIGHT_JOIN;
