@@ -625,7 +625,7 @@ public interface Api {
 
 # JDK 11 HttpClient
 ## Overview
-在这个指南中，我们会探索Java11的标准化Http Client API，新的API实现了HTTP/2协议与WebSocket协议。它的目标是为了替换java早期开发的历史遗留的`HttpUrlConnection`类。一直到最近，Java还是只内置`HttpUrlConnection`客户端。这个客户端需要了解HTTP底层细节，特性并不丰富而且用户不友好。因此，一些第三方库北广泛使用，比如[Apache HttpClient](https://hc.apache.org/httpcomponents-client-ga/)、[Jetty](https://eclipse.dev/jetty/documentation/jetty-9/index.html#http-client-api)、[RestTemplate](https://www.baeldung.com/rest-template)
+在这个指南中，我们会探索Java11的标准化Http Client API，新的API实现了HTTP/2协议与WebSocket协议。它的目标是为了替换java早期开发的历史遗留的`HttpUrlConnection`类。一直到最近，Java还是只内置`HttpUrlConnection`客户端。这个客户端需要了解HTTP底层细节，特性并不丰富而且用户不友好。因此，一些第三方库被广泛使用，比如[Apache HttpClient](https://hc.apache.org/httpcomponents-client-ga/)、[Jetty](https://eclipse.dev/jetty/documentation/jetty-9/index.html#http-client-api)、[RestTemplate](https://www.baeldung.com/rest-template)
 3个延伸文档
 - [Posting with Java HttpClient](https://www.baeldung.com/java-httpclient-post)
 - [Java HttpClient With SSL](https://www.baeldung.com/java-httpclient-ssl)
@@ -820,7 +820,7 @@ HttpResponse<String> response = HttpClient.newBuilder()
 `Authenticator`类提供了大量的getXXX方法，可以用来得到对应的值，
 ### Send Requests – Sync vs Async
 - `send(…)`同步的，也就是直到响应返回前阻塞执行
-- `sendAsync(…) `异步的，不等待响应，非阻塞的
+- `sendAsync(…)`异步的，不等待响应，非阻塞的
 
 ```java
 HttpResponse<String> response = HttpClient.newBuilder()
@@ -847,7 +847,7 @@ List<CompletableFuture<String>> futures = targets.stream()
   .collect(Collectors.toList());
 ```
 ### Setting Executor for Asynchronous Calls
-可以为异步调用设置`Executor`，可以限制用于处理请求得分线程数量。
+可以为异步调用设置`Executor`，可以限制用于处理请求的线程数量。
 ```java
 ExecutorService executorService = Executors.newFixedThreadPool(2);
 
@@ -861,9 +861,9 @@ CompletableFuture<HttpResponse<String>> response2 = HttpClient.newBuilder()
   .build()
   .sendAsync(request, HttpResponse.BodyHandlers.ofString());
 ```
-默认情况下，HttpClient使用`java.util.concurrent.Executors.newCachedThreadPool().`作为使用的executor。
+默认情况下，HttpClient使用`java.util.concurrent.Executors.newCachedThreadPool()`作为使用的executor。
 ### Defining a CookieHandler
-可以为连接设置一个CookieHandler。使用`cookieHandler(CookieHandler cookieHandler) `来定义客户端相关的`CookieHandler`。`CookieManager`是其实现类，这个实现类将cookies的存储与cookie的接受与拒绝策略分开。我们在下面的例子中定义，不接受任何cookies
+可以为连接设置一个CookieHandler。使用`cookieHandler(CookieHandler cookieHandler)`来定义客户端相关的`CookieHandler`。`CookieManager`是其实现类，这个实现类将cookies的存储与cookie的接受与拒绝策略分开。我们在下面的例子中定义，不接受任何cookies
 ```java
 HttpClient.newBuilder()
   .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_NONE))
