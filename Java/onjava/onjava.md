@@ -240,5 +240,5 @@ public class IfaceExtractorProcessor extends AbstractProcessor {
     }
 }
 ```
-
+最流行的单元测试工具是Junit，Junit4引入了注解，使编写单元测试变得更简单。
 
