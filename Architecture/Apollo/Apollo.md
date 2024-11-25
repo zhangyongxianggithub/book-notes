@@ -11,4 +11,43 @@
 - 客户端配置信息监控
 - 提供java/.net的客户端，支持Spring占位符、注解与Spring Boot的`ConfigurationProperties`的方式使用，需要Spring 3.1.1+
 - 提供API
-- 部署简单外部依赖少，只依赖MySQL，
+- 部署简单外部依赖少，只依赖MySQL
+
+# 系统设计
+下面是基础模型
+- 用户在配置中心对配置进行修改并发布
+- 配置中心通知Apollo客户端有配置中心
+- Apollo客户端从配置中心拉取最新的配置，更新本地配置并通知到应用
+
+![Apollo基础模型](pic/basic-architecture.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
