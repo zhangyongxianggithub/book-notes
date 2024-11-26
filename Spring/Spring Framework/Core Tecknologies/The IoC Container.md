@@ -1,3 +1,4 @@
+# 基于Java的容器配置
 # 容器扩展点
 通常来说，应用开发者不需要创建现有的`ApplicationContext`实现类的子类，Spring不想要开发者自己实现`ApplicationContext`接口的实现类的子类，因为Spring IoC容器可以通过插件的方式扩展，插件是一些特殊集成接口的实现类。下面的章节描述了这些插件集成接口。
 ## 通过BeanPostProcessor定制化Bean
