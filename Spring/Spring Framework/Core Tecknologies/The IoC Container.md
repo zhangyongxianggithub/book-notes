@@ -1,4 +1,29 @@
 # 基于Java的容器配置
+1.1.12.1 @Bean&@Configuration
+@Bean说明方法生成一个Spring管理的Bean对象，@Configuration修饰类，表明这个类的主要目的是作为Bean定义的源文件管理，更多的，@Configuration类让内部的Bean依赖关系通过调用方法的形式得到实现。
+当@Bean方法不是在@Configuation类里面声明时，他们会作为一个简化模式处理；根据包含类的类型不同，@Bean得到的处理也是不同的，在@Configuration类里面得到的处理，@Component里面得到的处理少些，在普通的类里面定义的@Bean得到的处理最少；不像在@Configuration类中，lite模式的@Bean不能声明内部bean依赖；反而，他们可能会操作包含类的内部的状态，或者他们声明的参数；这样的@Bean方法不应该调用其他的@Bean方法；每一个这样的方法只是一个产生特定Bean引用的工厂；没有任何的特别的运行时语义；比较好的地方时，在运行时不会使用CGLIB的方式子类化，所以类的类型可以不是final的，在多数的场景下，@Bean方法都是生命在@Configuration注解修饰的类中，确保Bean是full模式的，还可以参与到容器的生命周期的管理中；这阻止了@Bean方法可能会被后续的重复调用；帮助减少了一些隐藏BUG的出现。
+1.1.12.2 使用AnnotationConfigApplicationContext初始化容器
+AnnotationConfigApplicationContext能处理@Configuration、@Component、与JSR330注解修改的类。
+
+可以调用register()方法的方式配置；
+
+在输入的class类中@Configuration类加上@ComponentScan注解，可以开启组件扫描。也可以直接调用scan方法。
+AnnotationConfigApplicationContext在web下的变体是AnnotationConfigWebApplicationContext；可以使用这个实现配置ContextLoaderListener、与servlet的参数。
+1.1.12.3 @Bean注解的使用
+@Bean为ApplicationContext声明一个Bean；常常使用在@Configuration类与@Component类中；@Bean修饰的方法可以有任意个数的参数；@Bean定义的类指出生命周期回调接口，支持@PostConstruct与@preDestry；支持实现了了InitializingBean、DisposableBean、Lifecycle接口的回调处理、支持任何的*Aware接口的处理。也支持指定的生命周期回调。也可以使用@Scope装饰；通过@Bean的name属性改变bean的名字，如果name是一个数组，那么都是bean的别名；使用@Description描述Bean的用途。
+1.1.12.4 使用@Configuration注解
+@Configuration是一个类级别上的注解，用来表示这个对象是bean定义的源。直接使用方法调用的方式表示Bean的依赖关系，这种调用表示依赖的行为仅限于@Bean方法是在Configuration里面定义的，定义在别的种类的文件中是没有这种表示的。
+Lookup方法注入：主要用于单例Bean依赖多例bean的情况，需要在单例Bean里面设置一个获取单例Bean对象的抽象方法，
+
+然后创建单例Bean
+
+1.1.12.5 配置组合
+@Import注解导入其他的@Configuration类配置；Bean如果依赖其他@Configuration类里面的bean的话，直接在bean定义的方法上加入其依赖的参数就可以，Spring会自动注入对应类型的Bean；
+
+需要注意的是通过@Bean方式定义的BeanPostProcessor与BeanFactoryPostProcessor。他们通常都是定义为的静态方法@Bean；并不会出发所在的@Configuration类的实例化；另外@Configuration类上不能使用@Autowired与@Value注解，因为@Configuration类的初始化是非常早的。依赖的Bean或者value可能还没有初始化。使用@Lazy与@DependsOn注解指定初始化顺序。
+有时候想根据系统的状态动态的开启或者关闭@Configuration类，或者某个独立的@Bean方法；一个常见的方式就是使用@Profile注解来动态的激活某些Bean；@Profile注解是通过@Conditional注解实现的，@Conditional注解命令，在一个@bean被注册前，需要使用指定的Condition接口的实现判断下，是否需要注册。Condition接口提供了matches(…)方法，返回true/false，下面的代码是@Profile的实现。
+
+在@Configuration类上使用@ImportResource注解导入XML配置。在XML配置一个@Configuration类的Bean，就导入了注解配置的bean或者使用<context:component-scan/>开启组件扫描。
 # 容器扩展点
 通常来说，应用开发者不需要创建现有的`ApplicationContext`实现类的子类，Spring不想要开发者自己实现`ApplicationContext`接口的实现类的子类，因为Spring IoC容器可以通过插件的方式扩展，插件是一些特殊集成接口的实现类。下面的章节描述了这些插件集成接口。
 ## 通过BeanPostProcessor定制化Bean
