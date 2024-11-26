@@ -36,6 +36,18 @@
 - 为了简化部署，我们实际上会把Config Service、Eureka和Meta Server三个逻辑角色部署在同一个JVM进程中
   ![jvm](pic/config-eureka-meta.png)
 
+为什么用eureka作为注册中心?
+- 功能完整，netflix出的
+- 方便集成Spring Cloud与Spring Boot，可以与其他服务集成在一个容器中启动
+- 开源
+## Config Service
+- 提供配置获取接口
+- 提供配置更新推送接口(Http long polling)
+  - 服务端使用[Spring DeferedResult](http://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/web/context/request/async/DeferredResult.html)实现异步化，大大增加长连接的数量
+  - 默认10000连接，4c8g可以支持10000个连接，也就是支持10000个进程或者应用
+- 接口服务对象为Apollo客户端
+![]
+
 
 
 
