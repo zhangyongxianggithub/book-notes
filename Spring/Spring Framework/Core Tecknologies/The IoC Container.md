@@ -1,7 +1,23 @@
 # 基于Java的容器配置
-1.1.12.1 @Bean&@Configuration
-@Bean说明方法生成一个Spring管理的Bean对象，@Configuration修饰类，表明这个类的主要目的是作为Bean定义的源文件管理，更多的，@Configuration类让内部的Bean依赖关系通过调用方法的形式得到实现。
-当@Bean方法不是在@Configuation类里面声明时，他们会作为一个简化模式处理；根据包含类的类型不同，@Bean得到的处理也是不同的，在@Configuration类里面得到的处理，@Component里面得到的处理少些，在普通的类里面定义的@Bean得到的处理最少；不像在@Configuration类中，lite模式的@Bean不能声明内部bean依赖；反而，他们可能会操作包含类的内部的状态，或者他们声明的参数；这样的@Bean方法不应该调用其他的@Bean方法；每一个这样的方法只是一个产生特定Bean引用的工厂；没有任何的特别的运行时语义；比较好的地方时，在运行时不会使用CGLIB的方式子类化，所以类的类型可以不是final的，在多数的场景下，@Bean方法都是生命在@Configuration注解修饰的类中，确保Bean是full模式的，还可以参与到容器的生命周期的管理中；这阻止了@Bean方法可能会被后续的重复调用；帮助减少了一些隐藏BUG的出现。
+如何在源代码中使用注解来配置Spring容器
+## 基本概念: @Bean与@Configuration
+Spring Java配置支持中的核心是`@Configuration`注解的类与`@Bean`注解的方法。`@Bean`说明方法生成一个Spring IoC容器管理的Bean对象，如果你熟悉XML配置中的\<beans/>元素，那么`@Bean`注解与\<bean/>元素的角色与作用是一样的，你可以与在任何`@Component`注解的类中使用`@Bean`标注的方法，大多数情况下，它们用于`@Configuration`修饰的Bean中，`@Configuration`注解修饰类时表明这个类的主要目的是作为Bean的定义源，更多的，在`@Configuration`类内部，Bean依赖关系通过调用其他的`@Bean`方法的形式定义。最简单的定义如下:
+```java
+@Configuration
+public class AppConfig {
+	@Bean
+	public MyServiceImpl myService() {
+		return new MyServiceImpl();
+	}
+}
+```
+等价于下面的XML配置
+```xml
+<beans>
+	<bean id="myService" class="com.acme.services.MyServiceImpl"/>
+</beans>
+```
+在`@Configuration`类内部的`@Bean`方法间的本地调用与非本地调用的区别: 在通常的场景下，`@Bean`方法声明在`@Configuration`类的内部，这回确保配置类得到Spring IoC容器的完整处理，此时内部的方法调用会重定向到容器内部的生命周期管理，这会防止一个`@bean`方法被意外的使用regular的java方法调用的方式被调用。这一帮助减少一些隐晦的BUG。当`@Bean`方法不是在`@Configuation`类里面声明时或者使用了`@Configuration(proxyBeanMethods=false)`的方式定义，他们会被一种简单处理模式处理，在这样的场景下，`@Bean`方法实际上就是一个没有任何特殊运行时处理(也就是没有为它生成CGLib子类)的通用工厂方法机制，对此类方法的自定义Java调用不会被容器拦截，因此其行为就像常规方法调用一样，每次都会创建一个新的实例而不是复用已有的单例；因此，没有运行时代理的类上的`@Bean`方法根本不用于声明bean之间的依赖关系。相反，它们应该对包含方法的组件的字段进行操作，并且（可选）对工厂方法可能声明的参数进行操作，这些参数可能是接收的自动装配的Bean。因此，这样的`@Bean`方法永远不需要调用其他`@Bean`方法；每个这样的调用都可以通过工厂方法参数来表达。这里的积极副作用是，运行时不需要应用任何CGLIB 类化，从而减少了开销和占用空间。`@Bean`与`@Configuration`注解还会在后面的章节做深入讨论。根据包含类的类型不同，`@Bean`得到的处理也是不同的，在`@Configuration`类里面得到的处理最完全，`@Component`里面得到的处理少些，在普通的类里面定义的`@Bean`得到的处理最少；不像在`@Configuration`类中，简单处理模式的`@Bean`不能声明内部bean依赖；反而，他们可能会操作包含类的内部的状态，或者他们声明的参数；这样的`@Bean`方法不应该调用其他的`@Bean`方法；每一个这样的方法只是一个产生特定Bean引用的工厂；没有任何的特别的运行时语义；比较好的地方是，在运行时不会使用CGLIB的方式子类化，所以类的类型可以是final的，在多数的场景下，`@Bean`方法都是定义在`@Configuration`注解修饰的类中，确保Bean是被完整处理的，还可以参与到容器的生命周期的管理中；这阻止了`@Bean`方法可能会被后续的重复调用；帮助减少了一些隐藏BUG的出现。
 1.1.12.2 使用AnnotationConfigApplicationContext初始化容器
 AnnotationConfigApplicationContext能处理@Configuration、@Component、与JSR330注解修改的类。
 
