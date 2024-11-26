@@ -46,7 +46,10 @@
   - 服务端使用[Spring DeferedResult](http://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/web/context/request/async/DeferredResult.html)实现异步化，大大增加长连接的数量
   - 默认10000连接，4c8g可以支持10000个连接，也就是支持10000个进程或者应用
 - 接口服务对象为Apollo客户端
-![]
+![Config Service的设计](pic/config-service-design.png)
+## Admin Service
+- 提供配置管理接口
+- 
 
 
 
