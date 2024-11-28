@@ -265,14 +265,113 @@ public class AppConfig {
 	}
 }
 ```
-## 使用@Configuration注解
-`@Configuration`是一个类级别上的注解，用来表示这个对象是bean定义源。直接使用方法调用的方式表示Bean的依赖关系，这种调用表示依赖的行为仅限于@Bean方法是在Configuration里面定义的，定义在别的种类的文件中是没有这种表示的。
-Lookup方法注入：主要用于单例Bean依赖多例bean的情况，需要在单例Bean里面设置一个获取单例Bean对象的抽象方法，
+## 使用`@Configuration`注解
+`@Configuration`注解是一个类级别的注解，表示对象是bean定义的定义源。`@Configuration`注解类通过`@Bean`注解方法来声明bean，对`@Bean`注解修饰方法的调用定义了bean之间的依赖关系。下面是一个例子:
+```java
+@Configuration
+public class AppConfig {
+	@Bean
+	public BeanOne beanOne() {
+		return new BeanOne(beanTwo());
+	}
+	@Bean
+	public BeanTwo beanTwo() {
+		return new BeanTwo();
+	}
+}
+```
+在前面的例子中，`beanOne`依赖`beanTwo`，如前所述，lookup method injection是一项你很少用到的高级功能，用在单例bean依赖多例bean的场景，下面是一个例子:
+```java
+public abstract class CommandManager {
+	public Object process(Object commandState) {
+		// grab a new instance of the appropriate Command interface
+		Command command = createCommand();
+		// set the state on the (hopefully brand new) Command instance
+		command.setState(commandState);
+		return command.execute();
+	}
 
-然后创建单例Bean
+	// okay... but where is the implementation of this method?
+	protected abstract Command createCommand();
+}
+```
+通过使用Java配置，你可以创建`CommandManager`的子类，其中抽象方法`createCommand()`被重写，可以查找新的`Command`对象。下面的例子
+```java
+@Bean
+@Scope("prototype")
+public AsyncCommand asyncCommand() {
+	AsyncCommand command = new AsyncCommand();
+	// inject dependencies here as required
+	return command;
+}
 
-## 配置组合
-@Import注解导入其他的@Configuration类配置；Bean如果依赖其他@Configuration类里面的bean的话，直接在bean定义的方法上加入其依赖的参数就可以，Spring会自动注入对应类型的Bean；
+@Bean
+public CommandManager commandManager() {
+	// return new anonymous implementation of CommandManager with createCommand()
+	// overridden to return a new prototype Command object
+	return new CommandManager() {
+		protected Command createCommand() {
+			return asyncCommand();
+		}
+	}
+}
+```
+考虑下面的例子，展示了`@Bean`注解方法被调用了2次:
+```java
+@Configuration
+public class AppConfig {
+
+	@Bean
+	public ClientService clientService1() {
+		ClientServiceImpl clientService = new ClientServiceImpl();
+		clientService.setClientDao(clientDao());
+		return clientService;
+	}
+
+	@Bean
+	public ClientService clientService2() {
+		ClientServiceImpl clientService = new ClientServiceImpl();
+		clientService.setClientDao(clientDao());
+		return clientService;
+	}
+
+	@Bean
+	public ClientDao clientDao() {
+		return new ClientDaoImpl();
+	}
+}
+```
+`clientDao()`方法被调用了2次，这个方法创建一个`ClientDaoImpl`类型的实例并返回，你可能希望每个service有一个自己的clientDao，这肯定会有问题: 在Spring中，实例化的bean默认是单例作用域的。这就是魔力所在，所有`@Configuration`类在启动时都使用`CGLIB`进行子类化。在子类中，子方法在调用父方法并创建新实例前会先检查容器中是否有任何缓存的bean。这个行为根据bean的scope的不同行为会不同，不需要将CGLIB添加到您的类路径，因为CGLIB类已重新打包在`org.springframework.cglib`包下，并直接包含在spring-core JAR中。由于CGLIB在启动时动态添加功能，因此存在一些限制。特别是，配置类不能是final的。但是，配置类上允许使用任何构造函数，包括使用`@Autowired`或单个非默认构造函数声明进行默认注入。如果您希望避免任何CGLIB施加的限制，请考虑在非`@Configuration`类上声明您的`@Bean`方法（例如，在普通的`@Component`类上），或者使用 `@Configuration(proxyBeanMethods = false)`注解修饰您的配置类。这样就不会拦截`@Bean`方法之间的跨方法调用，因此您必须完全依赖构造函数或方法级别的依赖注入。
+## 基于Java的配置组合
+Spring的基于Java的配置特性，你可以组合注解配置，降低配置的复杂性。Spring XML配置中的`<import/>`元素是帮助模块化配置的，`@Import`起到了同样的作用，它可以从其他的配置类中加载`@Bean`定义，如下面的例子所示:
+```java
+@Configuration
+public class ConfigA {
+	@Bean
+	public A a() {
+		return new A();
+	}
+}
+@Configuration
+@Import(ConfigA.class)
+public class ConfigB {
+	@Bean
+	public B b() {
+		return new B();
+	}
+}
+```
+现在相比与在初始化容器的时候指定2个配置类，只需要指定一个类就可以了
+```java
+public static void main(String[] args) {
+	ApplicationContext ctx = new AnnotationConfigApplicationContext(ConfigB.class);
+	// now both beans A and B will be available...
+	A a = ctx.getBean(A.class);
+	B b = ctx.getBean(B.class);
+}
+```
+这种方式简化了容器初始化，从Spring Framework 4.2开始，`@Import`还支持引用常规组件类，类似于`AnnotationConfigApplicationContext.register`方法。如果您想通过使用一些配置类作为入口点来明确定义所有组件来避免组件扫描，这种方式就很有用。前面的例子很简单，
+Bean如果依赖其他@Configuration类里面的bean的话，直接在bean定义的方法上加入其依赖的参数就可以，Spring会自动注入对应类型的Bean；
 
 需要注意的是通过@Bean方式定义的BeanPostProcessor与BeanFactoryPostProcessor。他们通常都是定义为的静态方法@Bean；并不会出发所在的@Configuration类的实例化；另外@Configuration类上不能使用@Autowired与@Value注解，因为@Configuration类的初始化是非常早的。依赖的Bean或者value可能还没有初始化。使用@Lazy与@DependsOn注解指定初始化顺序。
 有时候想根据系统的状态动态的开启或者关闭@Configuration类，或者某个独立的@Bean方法；一个常见的方式就是使用@Profile注解来动态的激活某些Bean；@Profile注解是通过@Conditional注解实现的，@Conditional注解命令，在一个@bean被注册前，需要使用指定的Condition接口的实现判断下，是否需要注册。Condition接口提供了matches(…)方法，返回true/false，下面的代码是@Profile的实现。
