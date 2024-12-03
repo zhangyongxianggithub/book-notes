@@ -254,3 +254,111 @@ public class ExampleAdvice2 {}
 public class ExampleAdvice3 {}
 ```
 前面例子中年的选择器在运行时检测，这会影响性能。可以参考[@ControllerAdvice](https://docs.spring.io/spring-framework/docs/6.0.4/javadoc-api/org/springframework/web/bind/annotation/ControllerAdvice.html)获得更多的细节。
+## Multipart
+启用`MultipartResolver`就可以处理内容类型为`multipart/form-data`的POST请求，解析后，可以通过普通的请求参数的形式访问请求的内容，下面的例子访问表单中的一个字段与一个上传的文件
+```java
+@Controller
+public class FileUploadController {
+
+	@PostMapping("/form")
+	public String handleFormUpload(@RequestParam("name") String name,
+			@RequestParam("file") MultipartFile file) {
+
+		if (!file.isEmpty()) {
+			byte[] bytes = file.getBytes();
+			// store the bytes somewhere
+			return "redirect:uploadSuccess";
+		}
+		return "redirect:uploadFailure";
+	}
+}
+```
+将参数声明为`List<MultipartFile>`类型支持获取多个文件。当`@RequestParam`注解修饰`Map<String, MultipartFile>`或者`MultiValueMap<String, MultipartFile>`时，不需要在注解中指定参数名称，map中的key被参数名称填充，值被文件或者多个文件填充。你可以使用`jakarta.servlet.http.Part`类型表示`MultipartFile`，你可以把表单内容绑定到对象，比如下面的例子
+```java
+class MyForm {
+	private String name;
+	private MultipartFile file;
+}
+@Controller
+public class FileUploadController {
+
+	@PostMapping("/form")
+	public String handleFormUpload(MyForm form, BindingResult errors) {
+		if (!form.getFile().isEmpty()) {
+			byte[] bytes = form.getFile().getBytes();
+			// store the bytes somewhere
+			return "redirect:uploadSuccess";
+		}
+		return "redirect:uploadFailure";
+	}
+}
+```
+也可以通过非浏览器提交表单类型的请求，特别是在Restful场景中，下面是一个例子
+```
+POST /someUrl
+Content-Type: multipart/mixed
+
+--edt7Tfrdusa7r3lNQc79vXuhIIMlatb7PQg7Vp
+Content-Disposition: form-data; name="meta-data"
+Content-Type: application/json; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+{
+	"name": "value"
+}
+--edt7Tfrdusa7r3lNQc79vXuhIIMlatb7PQg7Vp
+Content-Disposition: form-data; name="file-data"; filename="file.properties"
+Content-Type: text/xml
+Content-Transfer-Encoding: 8bit
+... File Data ...
+```
+你可能想通过`@RequestParam("meta-data")`的方式数据，但是这样只能获取为`String`，如果想要像`@RequestBody`那样反序列化，使用`@RequestPart`注解修饰表单的字段部分就会自动使用`HttpMessageConverter`转换
+```java
+@PostMapping("/")
+public String handle(@RequestPart("meta-data") MetaData metadata,
+		@RequestPart("file-data") MultipartFile file) {
+}
+```
+`@RequestPart`注解可以与`jakarta.validation.Valid`或者`@Validated`注解一起使用，都会应用Bean校验，默认情况下，校验错误会抛出`MethodArgumentNotValidException`异常，然后Spring MVC返回400错误，你可以自己处理校验错误，通过参数`Errors`或者`BindingResult`来处理，下面的例子
+```java
+@PostMapping("/")
+public String handle(@Valid @RequestPart("meta-data") MetaData metadata, Errors errors) {
+}
+```
+如果因为参数通过`@Constraint`注解修饰开启了方法校验，那么会抛出`HandlerMethodValidationException`异常，更多的参考[Validation](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-validation.html)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
