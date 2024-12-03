@@ -49,7 +49,26 @@
 ![Config Service的设计](pic/config-service-design.png)
 ## Admin Service
 - 提供配置管理接口
-- 
+- 提供配置修改、发布、检索等接口
+- 接口服务对象为Portal
+## Meta Server
+- Portal通过域名访问Meta Server获取Admin Service服务列表
+- Client通过域名访问Meta Server获取Config Service服务列表
+- Meta Server从Eureka获取Config Service和Admin Service的服务信息，相当于是一个Eureka Client
+- 增设一个Meta Server的角色主要是为了封装服务发现的细节，对Portal和Client而言，永远通过一个Http接口获取Admin Service和Config Service的服务信息，而不需要关心背后实际的服务注册和发现组件
+- Meta Server只是一个逻辑角色，在部署时和Config Service是在一个JVM进程中的，所以IP、端口和Config Service一致
+## Eureka
+- 基于Eureka和Spring Cloud Netflix提供服务注册和发现
+- Config Service和Admin Service会向Eureka注册服务，并保持心跳
+- 为了简单起见，目前Eureka在部署时和Config Service是在一个JVM进程中的（通过Spring Cloud Netflix）
+## Portal
+- 提供Web界面供用户管理配置
+- 通过Meta Server获取Admin Service服务列表（IP+Port），通过IP+Port访问服务
+- 在Portal侧做load balance、错误重试
+## Client
+- Apollo提供的客户端程序，为应用提供配置获取、实时更新等功能
+- 通过Meta Server获取Config Service服务列表（IP+Port），通过IP+Port访问服务
+- 在Client侧做load balance、错误重试
 
 
 
