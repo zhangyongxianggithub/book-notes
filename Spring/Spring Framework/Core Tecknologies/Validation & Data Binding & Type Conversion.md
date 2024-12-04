@@ -74,7 +74,7 @@ public class MyConstraintValidator implements ConstraintValidator {
 	// ...
 }
 ```
-## Spring -driven Method Validation
+## Spring-driven Method Validation
 你可以整合Bean Validation方法校验特性到Spring上下文中，只需要定义一个`MethodValidationPostProcessor`的bean。
 ```java
 @Configuration

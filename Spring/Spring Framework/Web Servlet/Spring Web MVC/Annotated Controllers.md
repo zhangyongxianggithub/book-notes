@@ -115,6 +115,33 @@ public Account handle() {
 }
 ```
 `@ResponseBody`也可以放到类上，被所有的方法继承。效果等于`@RestController`，它是一个`@Controller`与`@ResponseBody`注解组合在一起的元注解。`@ResponseBody`注解支持响应式类型，可以参考[Asynchronous Requests](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html)与[Reactive Types](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-reactive-types)。你可以使用[MVC Config](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-config.html)的[Message Converters](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-config/message-converters.html)可选项来自定义类型转换。你还可以配置`@ResponseBody`的JSON序列化器，参考[Jackson JSON](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/jackson.html)获取更多的细节。
+
+# Validation
+Spring MVC内置支持为控制器方法做校验，主要就是使用的[Java Bean Validation](https://docs.spring.io/spring-framework/reference/core/validation/beanvalidation.html)，校验可以应用在2个级别
+- `@ModelAttribute`, `@RequestBody`,与`@RequestPart`参数解析器会单独校验方法参数，如果方法参数使用了`@Valid`或者`@Validate`注解，如果参数后面没有跟随`Errors`或者`BindingResult`参数，那么会抛出`MethodArgumentNotValidException`异常
+- 当直接在方法参数或者方法上上声明`@Constraint`注解或者其子注解，必须应用方法验证，并且该方法将取代上面的验证，因为方法验证涵盖方法参数约束验证和通过`@Valid`进行的嵌套约束验证。在这种情况下引发的异常是`HandlerMethodValidationException`。
+
+应用必须处理`MethodArgumentNotValidException`与`HandlerMethodValidationException`2种异常，`@Valid`不是约束注释，用于开启对象内的嵌套约束检查。因此，`@Valid` 本身不会导致方法验证。另一方面，`@NotNull`是一个约束注解，将其添加到`@Valid`修饰的参数会导致方法验证。具体来说，对于可空性，您还可以使用`@RequestBody`或 `@ModelAttribute`的`required`标志。方法校验可以与`Errors`或者`BindindResult`方法参数组合使用，然而，只有方法参数后紧跟着的参数是`Errors`，校验错误才能被收集然后控制器方法得到调用，否则会抛出`HandlerMethodValidationException`异常。方法验证可以与`Errors`或`BindingResult`方法参数结合使用。但是，只有当所有验证错误都发生在方法参数上且紧接着出现`Errors`时，才会调用控制器方法。如果任何其他方法参数上存在验证错误，则会引发`HandlerMethodValidationException`。您可以通过`WebMvc`配置全局Validator，也可以通过`@Controller`或`@ControllerAdvice`中的`@InitBinder`方法配置本地Validator。您还可以使用多个Validator。如果控制器具有类级 `@Validated`，则方法验证通过AOP代理执行。为了利用Spring Framework 6.1中添加的Spring MVC内置方法验证支持，您需要从控制器中删除类级`@Validated`注释。[错误响应](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html)部分提供了有关如何处理`MethodArgumentNotValidException`和`HandlerMethodValidationException`的更多详细信息，以及如何通过`MessageSource`和特定于语言环境和语言的资源包自定义它们的呈现。为了进一步自定义方法校验错误的处理方式，您可以扩展`ResponseEntityExceptionHandler`或在控制器或`@ControllerAdvice`中使用`@ExceptionHandler`方法，并直接处理`HandlerMethodValidationException`。异常包含一个`ParameterValidationResults`列表，该列表按方法参数对验证错误进行分组。您可以迭代这些结果，也可以按控制器方法参数类型为访问者提供回调方法:
+```java
+HandlerMethodValidationException ex = ... ;
+ex.visitResults(new HandlerMethodValidationException.Visitor() {
+	@Override
+	public void requestHeader(RequestHeader requestHeader, ParameterValidationResult result) {
+			// ...
+	}
+	@Override
+	public void requestParam(@Nullable RequestParam requestParam, ParameterValidationResult result) {
+			// ...
+	}
+	@Override
+	public void modelAttribute(@Nullable ModelAttribute modelAttribute, ParameterErrors errors) {
+	// ...
+	@Override
+	public void other(ParameterValidationResult result) {
+			// ...
+	}
+});
+```
 # 异常处理
 `@Controller/@ControllerAdvice`类可以使用`@ExceptionHandler`方法来处理controller方法抛出的异常。正如下面的例子所示:
 ```java
