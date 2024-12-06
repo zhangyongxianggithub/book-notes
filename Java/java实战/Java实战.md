@@ -341,7 +341,7 @@ static DoubleUnaryOperator curriedConverter(final double f,final double b) {
     return x -> x * f + b;
 }
 ```
-这样产生的函数只需要接受一个参数。这个就是柯里化
+这样产生的函数只需要接受一个参数。这个就是柯里化。
 
 
 

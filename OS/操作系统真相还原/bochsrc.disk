@@ -1,0 +1,20 @@
+# Bochs配置文件
+# 使用内存32m
+megs: 32
+
+# 设置机器的BIOS与VGA BIOS
+romimage: file=/opt/homebrew/Cellar/bochs/2.8/share/bochs/BIOS-bochs-latest
+vgaromimage: file=/opt/homebrew/Cellar/bochs/2.8/share/bochs/VGABIOS-lgpl-latest
+
+# 从硬盘启动
+boot: disk
+# 日志文件的输出
+log: bochs.out
+# 关闭鼠标
+mouse: enabled=0
+keyboard_mapping: enabled=1,map=/opt/homebrew/Cellar/bochs/2.8/share/bochs/keymaps/x11-pc-us.map
+
+ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
+
+gdbstub: enabled=1, port=1234, text_base=0, data_base=0, bss_base=0
+
