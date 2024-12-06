@@ -324,6 +324,24 @@ Java9的反应式编程的类(`java.util.concurrent.Flow`)，无法实例化，�
 ```java
 ```
 尽量使用Stream代替迭代操作。
+- 减少共享的可变数据结构能够帮助降低维护与调试程序的代价
+- 函数式编程支持无副作用的方法和声明式编程
+# 第19章 函数式编程的技巧
+函数式编程还意味着一等函数，就是函数就是值，通过方法引用或者lambda表达式的形式指定函数值。
+**高阶函数**: 接受至少一个函数作为参数，返回的结果是一个函数，所有的函数尽量没有副作用
+**柯里化**: 减少函数参数的一种办法，就是不断的基于一些参数创建一些函数，那么函数接受剩余的参数，典型的温度转换程序
+```java
+static double converter(double x, double f, double b) {
+    return x * f + b;
+}
+```
+柯里化之后
+```java
+static DoubleUnaryOperator curriedConverter(final double f,final double b) {
+    return x -> x * f + b;
+}
+```
+这样产生的函数只需要接受一个参数。这个就是柯里化
 
 
 
