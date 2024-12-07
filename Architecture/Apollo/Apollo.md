@@ -70,7 +70,7 @@
 - 通过Meta Server获取Config Service服务列表（IP+Port），通过IP+Port访问服务
 - 在Client侧做load balance、错误重试
 ## E-R图
-![ER图](./apollo-erd.png)
+![ER图](./pic/apollo-erd.png)
 - APP: App信息
 - AppNamespace: App下的Namespace的元信息
 - Cluster: 集群信息
@@ -80,6 +80,19 @@
 - Commit: Namespace下的配置更改记录
 - Audit: 审计信息，记录用户在何时使用何种方式操作了哪个实体
 ### 权限相关的ER图
+![权限相关的E-R图](./pic/apollo-erd-role-permission.png)
+- User: Apollo portal用户
+- UserRole: 用户与角色的关系
+- Role: 角色
+- RolePermission: 角色和权限的关系
+- Permission: 权限，具体的实体资源和操作
+- Consumer: 第三方应用
+- Consumer: 第三方应用的token
+- ConsumerRole: 第三方应用和角色的关系
+- ConsumerAudit: 第三方应用访问审计
+## 服务端设计
+### 配置发布后的实时推送设计
+配置发布后实时推送到客户端的设计与实现
 
 
 
