@@ -108,6 +108,14 @@ Admin Service通知Config Service配置变更，为了避免引入消息队列�
   - NotificationControllerV2不会立即返回结果，而是通过Spring DeferredResult把请求挂起
   - 如果在60秒内没有该客户端关心的配置发布，那么会返回Http状态码304给客户端
 如果有该客户端关心的配置发布，NotificationControllerV2会调用DeferredResult的setResult方法，传入有配置变化的namespace信息，同时该请求会立即返回。客户端从返回的结果中获取到配置变化的namespace后，会立即请求Config Service获取该namespace的最新配置。
+## 客户端设计
+![客户端设计](./pic/client-architecture.png)
+- 客户端和服务端保持了一个长连接，第一时间获取配置更新的推送，通过Http Long Polling实现
+- 客户端定时从配置中心拉取应用的最新配置
+  - fallback机制，防止推送机制失效导致配置不更新
+  - 拉取时会上报本地的版本，与服务端版本一致则返回304-Not Modified
+  - 定时频率为5分钟一次，也可以通过在运行时制定系统属性`apollo.refreshInterval`来覆盖，单位为分钟
+- 
 
 
 
