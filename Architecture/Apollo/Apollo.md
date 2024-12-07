@@ -70,6 +70,17 @@
 - 通过Meta Server获取Config Service服务列表（IP+Port），通过IP+Port访问服务
 - 在Client侧做load balance、错误重试
 ## E-R图
+![ER图](./apollo-erd.png)
+- APP: App信息
+- AppNamespace: App下的Namespace的元信息
+- Cluster: 集群信息
+- Namespace: 集群下的namespace
+- Item: Namepace的配置，每个item都是key,value组合
+- Release: Namespace发布的配置，每个发布包含发布时该Namespace的所有配置
+- Commit: Namespace下的配置更改记录
+- Audit: 审计信息，记录用户在何时使用何种方式操作了哪个实体
+### 权限相关的ER图
+
 
 
 
