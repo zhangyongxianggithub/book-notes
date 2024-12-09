@@ -115,7 +115,19 @@ Admin Service通知Config Service配置变更，为了避免引入消息队列�
   - fallback机制，防止推送机制失效导致配置不更新
   - 拉取时会上报本地的版本，与服务端版本一致则返回304-Not Modified
   - 定时频率为5分钟一次，也可以通过在运行时制定系统属性`apollo.refreshInterval`来覆盖，单位为分钟
-- 
+- 客户端从Apollo配置中心服务端获取到应用的最新配置后，会保存在内存中
+- 客户端会把从服务端获取到的配置在本地文件系统缓存一份
+  - 在遇到服务不可用或者网络不通的时候，依然能从本队恢复配置
+- 应用程序可以从Apollo客户端获取最新的配置、订阅配置更新通知
+### 和Spring集成的原理
+Apollo除了支持API方式获取配置，也支持和Spring/Spring Boot集成。集成原理简述如下:
+Spring从3.1版本开始增加了`ConfigurableEnvironment`和`PropertySource`:
+- Spring的`ApplicationContext`会包含一个`Environment`(实现`ConfigurableEnvironment`接口)，`ConfigurableEnvironment`自身包含了很多个`PropertySource`
+- `PropertySource`: 属性源，多个key-value的属性配置
+
+运行时的结构如下图:
+
+
 
 
 
