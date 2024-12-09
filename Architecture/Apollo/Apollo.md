@@ -126,7 +126,7 @@ Spring从3.1版本开始增加了`ConfigurableEnvironment`和`PropertySource`:
 - `PropertySource`: 属性源，多个key-value的属性配置
 
 运行时的结构如下图:
-[属性源图形](./pic/environment.png)
+![属性源图形](./pic/environment.png)
 `PropertySource`之间是有优先级顺序的，如果一个key在多个属性源中都存在，那么在前面的属性源优先。在应用的启动阶段，Apollo从远端获取配置，组装成属性源插入到第一个就可以了。
 # 配置中心介绍
 
