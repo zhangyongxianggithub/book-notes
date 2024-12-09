@@ -129,6 +129,101 @@ Spring从3.1版本开始增加了`ConfigurableEnvironment`和`PropertySource`:
 ![属性源图形](./pic/environment.png)
 `PropertySource`之间是有优先级顺序的，如果一个key在多个属性源中都存在，那么在前面的属性源优先。在应用的启动阶段，Apollo从远端获取配置，组装成属性源插入到第一个就可以了。
 # 配置中心介绍
+## Apollo是什么?
+程序配置太多了，实时生效、灰度发布、分环境、分集群、权限与审核等。Apollo解决这些问题。支持4个维度的配置
+- 应用
+- 环境
+- 集群
+- 命名空间
+
+配置的特点:
+- 配置是独立于程序的只读变量，配置是独立于程序的，同一份程序在不同的配置下会有不同的行为，程序不应该去改变配置
+- 配置伴随应用的整个生命周期
+- 配置可以有多种加载方式，hard code、配置文件、环境变量、启动参数、基于数据库等
+- 配置需要治理
+  - 权限控制
+  - 不同环境、集群配置管理
+
+Apollo的强大能力
+- 统一管理不同环境、不同集群的配置，通过命名空间可以共享配置
+- 配饰修改实时生效
+- 版本发布管理
+- 灰度发布
+- 配置项的全局搜索
+- 权限管理、发布审核、操作审计
+- 客户端配置信息监控
+- 提供Java、.net原生客户端，支持Spring Placeholder、Annotation与Spring Boot的`ConfigurationProperties`
+- 提供了Http接口
+- 提供了开放平台API
+- 部署简单
+
+## 客户端获取配置
+```java
+Config config = ConfigService.getAppConfig();
+Integer defaultRequestTimeout = 200;
+Integer requestTimeout = config.getIntProperty("requestTimeout", defaultRequestTimeout);
+```
+## 客户端监听配置变化
+```java
+Config config = ConfigService.getAppConfig();
+config.addChangeListener(new ConfigChangeListener() {
+  @Override
+  public void onChange(ConfigChangeEvent changeEvent) {
+    for (String key : changeEvent.changedKeys()) {
+      ConfigChange change = changeEvent.getChange(key);
+      System.out.println(String.format(
+        "Found change - key: %s, oldValue: %s, newValue: %s, changeType: %s",
+        change.getPropertyName(), change.getOldValue(),
+        change.getNewValue(), change.getChangeType()));
+     }
+  }
+});
+```
+## Spring集成
+```java
+@Configuration
+@EnableApolloConfig
+public class AppConfig {}
+
+@Component
+public class SomeBean {
+    //timeout的值会自动更新
+    @Value("${request.timeout:200}")
+    private int timeout;
+}
+```
+## Apollo核心概念
+- application，应用，实际使用配置的应用，Apollo客户端需要知道当前应用是谁来获取应用的配置，应用有唯一的标识，appId，应用是与代码绑定的，需要在代码中配置
+- environment，环境，配置对应的环境，Apollo客户端需要知道当前应用处于哪个环境，可以去获取应用的配置，环境与代码无关，环境默认读取机器上的配置`server.properties`中的env属性，也支持运行时通过系统属性等指定
+- cluster，集群，一个应用下不同实例的分组，不同的cluster可以有不同的配置值，环境默认读取机器上的配置`server.properties`中的idc属性，也支持运行时通过系统属性等指定
+- namespace，命名空间，一个应用不同配置的分组，类似文件，不同类型的配置放在不同的文件中，应用可以直接读取到公共组件的配置namespace，也可以通过继承公共组件的配置namespace来对公共组件的配置做调整
+### 配置获取规则
+使用下面的语句获取配置时就是获取应用自身的配置
+```java
+Config config = ConfigService.getAppConfig();
+```
+- 查找运行时cluster的配置，通过`apollo.cluster`指定
+- 没有找到，则查找数据中心cluster的配置
+- 没有找到则返回默认cluster的配置
+
+如果应用部署在A数据中心，但是用户没有在Apollo创建cluster，那么获取的配置就是默认(default)cluster的。应用部署在A数据中心，同时在运行时指定了SomeCluster，但是没有在Apollo创建cluster，那么获取的配置就是A数据中心cluster的配置，如果A数据中心cluster没有配置的话，那么获取的配置就是默认cluster（default）的。
+# 核心概念Namespace
+Namespace是配置项的集合，类似一个配置文件的概念。Apollo在创建项目的时候，都会创建一个`application`的Namespace，`application`是给应用自身使用的，等同于Spring Boot的application.yml配置文件，客户端获取`application` Namespace的代码如下:
+```java
+Config config = ConfigService.getAppConfig();
+```
+获取非`applicaiton`的Namespace的代码如下:
+```java
+Config config = ConfigService.getConfig(namespaceName);
+```
+配置文件有多种格式，比如`properties`、xml、yml、yaml、json等，非properties格式的namespace，在客户端使用时需要调用`ConfigService.getConfigFile(String namespace, ConfigFileFormat configFileFormat)`来获取，如果使用Http接口直接调用时，对应的namespace参数需要传入namespace的名字加上后缀名，如datasources.json。Namespace的获取权限分类:
+- private(私有的): 应用专属的
+- public(公共的): 任何应用都可以获取到
+
+Namespace的类型
+- 私有类型: private权限
+- 公共类型: public权限
+- 关联类型(继承类型): private权限，继承与公共类型的Namespace，覆盖公共Namespace的某些配置
 
 
 
