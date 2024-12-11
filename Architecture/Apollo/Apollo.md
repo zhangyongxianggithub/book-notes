@@ -225,6 +225,9 @@ Namespace的类型
 - 公共类型: public权限
 - 关联类型(继承类型): private权限，继承与公共类型的Namespace，覆盖公共Namespace的某些配置
 
+# 分布式部署
+
+
 
 
 
