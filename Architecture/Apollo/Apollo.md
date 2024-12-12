@@ -226,7 +226,19 @@ Namespace的类型
 - 关联类型(继承类型): private权限，继承于公共类型的Namespace，覆盖公共Namespace的某些配置
 
 # 分布式部署
+条件
+- linux
+- java1.8+
+- mysql
 
+需要先确定部署的环境与部署方式
+- DEV, 开发环境
+- FAT，测试环境
+- UAT，集成环境
+- PRO，生产环境
+
+添加自定义的环境名称的方式[Portal如何增加环境](https://www.apolloconfig.com/#/zh/faq/common-issues-in-deployment-and-development-phase?id=_4-portal%e5%a6%82%e4%bd%95%e5%a2%9e%e5%8a%a0%e7%8e%af%e5%a2%83%ef%bc%9f)，可以通过参数指定注册的IP或者网卡等，也可以跳过服务发现，直接连接Config Service，参考[跳过Apollo Meta Server服务发现](https://www.apolloconfig.com/#/zh/client/java-sdk-user-guide?id=_1222-%e8%b7%b3%e8%bf%87apollo-meta-server%e6%9c%8d%e5%8a%a1%e5%8f%91%e7%8e%b0)。网络拓扑如下图:
+![apollo网络拓扑]()
 
 
 
