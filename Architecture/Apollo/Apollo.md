@@ -237,8 +237,76 @@ Namespace的类型
 - UAT，集成环境
 - PRO，生产环境
 
-添加自定义的环境名称的方式[Portal如何增加环境](https://www.apolloconfig.com/#/zh/faq/common-issues-in-deployment-and-development-phase?id=_4-portal%e5%a6%82%e4%bd%95%e5%a2%9e%e5%8a%a0%e7%8e%af%e5%a2%83%ef%bc%9f)，可以通过参数指定注册的IP或者网卡等，也可以跳过服务发现，直接连接Config Service，参考[跳过Apollo Meta Server服务发现](https://www.apolloconfig.com/#/zh/client/java-sdk-user-guide?id=_1222-%e8%b7%b3%e8%bf%87apollo-meta-server%e6%9c%8d%e5%8a%a1%e5%8f%91%e7%8e%b0)。网络拓扑如下图:
-![apollo网络拓扑]()
+## 添加自定义的环境名称的方式与Portal如何增加环境
+1.6.0版本增加了自定义环境的功能，不修改代码增加环境
+- portaldb增加环境，参考[3.1调整ApolloPortalDB配置](https://www.apolloconfig.com/#/zh/deployment/distributed-deployment-guide?id=_31-%e8%b0%83%e6%95%b4apolloportaldb%e9%85%8d%e7%bd%ae)
+- 为apollo-portal添加新增环境对应的meta server地址，具体参考[2.2.1.1.2.4 配置apollo-portal的meta service信息](https://www.apolloconfig.com/#/zh/deployment/distributed-deployment-guide?id=_221124-%e9%85%8d%e7%bd%aeapollo-portal%e7%9a%84meta-service%e4%bf%a1%e6%81%af),apollo-client在新的环境下使用时也需要做好相应的配置，参考[1.2.2Apollo Meta Server](https://www.apolloconfig.com/#/zh/client/java-sdk-user-guide?id=_122-apollo-meta-server)
+
+一套Portal可以管理多个环境，每个环境都需要独立部署一套Config Service、Admin Service、ApolloConfigDB。
+
+可以通过参数指定注册的IP或者网卡等，也可以跳过服务发现，直接连接Config Service，参考[跳过Apollo Meta Server服务发现](https://www.apolloconfig.com/#/zh/client/java-sdk-user-guide?id=_1222-%e8%b7%b3%e8%bf%87apollo-meta-server%e6%9c%8d%e5%8a%a1%e5%8f%91%e7%8e%b0)。网络拓扑如下图:
+![apollo网络拓扑](./pic/apollo-cluster-deploy.png)
+## 部署步骤
+- 创建数据库[ApolloPortalDB](https://github.com/apolloconfig/apollo/blob/master/scripts/sql/profiles/mysql-default/apolloportaldb.sql)和[ApolloConfigDB](https://github.com/apolloconfig/apollo/blob/master/scripts/sql/profiles/mysql-default/apolloconfigdb.sql)
+  如果需要迁移，需要迁移的表:
+  - App, 导入全部的App, `insert into 新环境的ApolloConfigDB.App select * from 其它环境的ApolloConfigDB.App where IsDeleted = 0;`
+  - AppNamespace, 导入全部的AppNamespace, 如：`insert into 新环境的ApolloConfigDB.AppNamespace select * from 其它环境的ApolloConfigDB.AppNamespace where IsDeleted = 0;`
+  - Cluster, 导入默认的default集群, 如：`insert into 新环境的ApolloConfigDB.Cluster select * from 其它环境的ApolloConfigDB.Cluster where Name = 'default' and IsDeleted = 0;`
+  - Namespace, 导入默认的default集群中的namespace, 如：`insert into 新环境的ApolloConfigDB.Namespace select * from 其它环境的ApolloConfigDB.Namespace where ClusterName = 'default' and IsDeleted = 0;`
+- 很多配置在数据库中，需要调整可以参考[三、服务端配置说明。](https://www.apolloconfig.com/#/zh/deployment/distributed-deployment-guide?id=%e4%b8%89%e3%80%81%e6%9c%8d%e5%8a%a1%e7%ab%af%e9%85%8d%e7%bd%ae%e8%af%b4%e6%98%8e)
+- 下载3个安装包或者通过源代码构建安装包
+- 修改3个包的数据库连接信息与端口日志等信息
+- Portal不同的环境访问不同的meta service，对于1.6.0以上的版本，可以通过`ApolloPortalDB.ServerConfig`的配置项来配置地址。
+- 配置`apollo-env.properties`文件中的地址信息
+- 除了`apollo-env.properties`的配置方式，可以在运行时指定, 通过JVM系统属性的方式比如`-D{env}_meta=http://xxxxx`也可以通过操作系统的环境变量
+- 部署apollo-configservice，直接有启动脚本
+- 部署apollo-adminservice，直接有启动脚本
+- 部署apollo-portal，直接有启动脚本
+## 使用其他服务注册中心替换内置eureka
+- nacos
+- consul
+- zk
+- database
+## 服务端配置说明
+一些配置可以在数据库中配置或者通过-D参数或者application.properties文件等配置，这些配置高于数据库的配置
+### ApolloPortalDB的配置
+配置项统一存储在ApolloPortalDB.ServerConfig表中，也可以通过管理员工具 - 系统参数页面进行配置，无特殊说明则修改完一分钟实时生效。
+- apollo.portal.envs, 环境列表，大小写不敏感，修改完需要重启生效
+- apollo.portal.meta.servers, 各环境Meta Service列表，这个方式的优先级高于其他方式设置的Meta-Service地址，需要重启生效
+- organizations - 部门列表
+- superAdmin - Portal超级管理员
+- wiki.address
+- consumer.token.salt - consumer token salt
+- admin.createPrivateNamespace.switch, 是否允许项目管理员创建private namespace
+- emergencyPublish.supported.envs, 允许紧急发布的环境，就是可以一个人既可以修改也能发布
+- configView.memberOnly.envs, 只对项目成员显示配置信息的环境列表
+- role.create-application.enabled - 是否开启创建项目权限控制
+- role.manage-app-master.enabled - 是否开启项目管理员分配权限控制
+- admin-service.access.tokens - 设置apollo-portal访问各环境apollo-adminservice所需的access token
+- searchByItem.switch - 控制台搜索框是否支持按配置项搜索
+- apollo.portal.search.perEnvMaxResults - 设置管理员工具-value的全局搜索功能单次单独环境最大搜索结果的数量适用于2.4.0及以上版本
+### ApolloConfigDB配置
+配置项统一存储在ApolloConfigDB.ServerConfig表中，需要注意每个环境的ApolloConfigDB.ServerConfig都需要单独配置，修改完一分钟实时生效。
+- eureka.service.url - Eureka服务Url，这里需要填写本环境中全部的eureka服务地址，因为eureka需要互相复制注册信息
+- namespace.lock.switch - 一次发布只能有一个人修改开关，用于发布审核
+- config-service.cache.enabled - 是否开启配置缓存
+- config-service.cache.key.ignore-case - 是否忽略配置缓存key的大小写
+- config-service.cache.stats.enabled - 是否开启缓存metric统计功能
+- item.key.length.limit - 配置项 key 最大长度限制
+- item.value.length.limit - 配置项 value 最大长度限制
+- appid.value.length.limit.override - appId 维度的配置项 value 最大长度限制
+- namespace.value.length.limit.override - namespace 的配置项 value 最大长度限制
+- admin-service.access.control.enabled - 配置apollo-adminservice是否开启访问控制
+- admin-service.access.tokens - 配置允许访问apollo-adminservice的access token列表
+- apollo.access-key.auth-time-diff-tolerance - 配置服务端AccessKey校验容忍的时间偏差
+- apollo.eureka.server.security.enabled - 配置是否开启eureka server的登录认证
+- apollo.eureka.server.security.username - 配置eureka server的登录用户名
+- apollo.eureka.server.security.password - 配置eureka server的登录密码
+- apollo.release-history.retention.size - 配置发布历史的保留数量
+- apollo.release-history.retention.size.override - 细粒度配置发布历史的保留数量
+# 客户端指南
+## Java客户端使用指南
+
 
 
 
