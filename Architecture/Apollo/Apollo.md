@@ -306,8 +306,143 @@ Namespace的类型
 - apollo.release-history.retention.size.override - 细粒度配置发布历史的保留数量
 # 客户端指南
 ## Java客户端使用指南
+要求
+- Java1.8+
+- Guava20.0+
+- 依赖appId/ Apollo Meta Server信息。
 
+配置
+- appId: 系统属性`-Dapp.id=YOUR-APP-ID`，环境变量`APP_ID=YOUR-APP-ID`，配置文件`application.properties`，`classpath:/META-INF/app.properties`配置
+- meta server: 系统属性`-Dapollo.meta=http://config-service-url`，配置文件`application.properties`中指定`apollo.meta=http://config-service-url`，环境变量`APOLLO_META`,`server.properties`配置文件中指定，`classpath:/META-INF/app.properties`配置文件中指定，Java系统属性`-Ddev_meta=http://config-service-url`此方式需要先指定env，通过环境变量`DEV_META=http://config-service-url`，通过`classpath:apollo-env.properties`
+- 可以通过`MetaServerProvider`的SPI机制实现自定义寻址逻辑
 
+可以跳过Meta SErver的服务发现，直接使用Config Service
+- 如果config service部署在公有云上，注册到meta是内网地址，本地环境无法直接连接
+- config service部署在Docker上，使用的是Docker的内网地址，本地环境无法连接
+- config service部署在K8s上，希望使用k8s自带的服务发现能力
+
+方式:
+- 通过Java系统属性`-Dapollo.config-service=http://config-service-url:port`
+- 通过环境变量`APOLLO_CONFIG_SERVICE`
+- 通过`server.properties`配置文件`apollo.config-service=http://config-service-url:port`，对于linux/mac来说，默认位置在`/opt/settings/server.properties`
+
+Apollo客户端会缓存配置文件到本地文件系统，默认位于/opt/data/{appId}/config-cache目录下面，格式为`{appId}+{cluster}+{namespace}.properties`，这个路径可以改
+- 系统属性`-Dapollo.cache-dir=/opt/data/some-cache-dir`
+- 通过`application.properties`配置文件`apollo.cacheDir=/opt/data/some-cache-dir`
+- 通过操作系统环境变量`APOLLO_CACHE_DIR`
+- 通过`server.properties`文件中的`apollo.cache-dir=/opt/data/some-cache-dir`配置
+### 可选设置
+- environment: 可以通过系统属性`-Denv=YOUR-ENVIRONMENT`、环境变量、`server.properties`配置文件指定
+- Cluster: Java系统属性`-Dapollo.cluster=SomeCluster`、`application.properties`配置文件、Java系统属性`-Didc=xxx`，环境变量`IDC`、`server.properties`配置文件
+- 设置内存中的配置项是否保持和页面上的顺序一致，对于属性顺序有关系的场景有帮助，通过Java系统属性`-Dapollo.property.order.enable=true`、通过`application.properties`配置文件、通过`classpath:/META-INF/app.properties`配置文件
+- 配置访问密钥, `-Dapollo.access-key.secret=1cf998c4e2ad4704b45a98a509d15719`、`application.properties`配置文件中指定、操作系统环境变量、`classpath:/META-INF/app.properties`配置文件
+- 自定义server.properties路径`-Dapollo.path.server.properties=/some-dir/some-file.properties`、环境变量APOLLO_PATH_SERVER_PROPERTIES
+- 开启propertyNames缓存，在大量配置场景下可以显著改善启动速度，`-Dapollo.property.names.cache.enable=true`、环境变量`APOLLO_PROPERTY_NAMES_CACHE_ENABLE=true`、`application.properties`配置文件、`classpath:/META-INF/app.properties`文件
+- ApolloLabel用于灰度，`-Dapollo.label=YOUR-APOLLO-LABEL`、环境变量、`application.properties`文件、`classpath:/META-INF/app.properties`文件
+- 覆盖系统属性，`-Dapollo.override-system-properties=true`、`application.properties`配置文件、`classpath:/META-INF/app.properties`配置文件
+-  ConfigMap缓存设置
+
+### 依赖
+添加依赖
+```xml
+        <dependency>
+            <groupId>com.ctrip.framework.apollo</groupId>
+            <artifactId>apollo-client</artifactId>
+            <version>2.3.0</version>
+        </dependency>
+```
+### 客户端用法
+支持API与Spring2种方式
+- API方式灵活，功能完备，配置值实时更新，支持所有环境
+- Spring方式
+  - Placeholder用法，支持自动更新
+    - 代码中直接使用，如：`@Value("${someKeyFromApollo:someDefaultValue}")`
+    - 配置文件中使用替换placeholder，如：`spring.datasource.url: ${someKeyFromApollo:someDefaultValue}`
+    - 直接托管spring的配置`spring.datasource.url=jdbc:mysql://localhost:3306/somedb?characterEncoding=utf8`
+  - Spring Boot的`@ConfigurationProperties`方式
+- Spring与API方式结合
+  ```java
+  @ApolloConfig
+  private Config config; //inject config for namespace application
+  ```
+
+参考使用案例[apollo-use-cases](https://github.com/ctripcorp/apollo-use-cases)
+#### API使用方式
+- 获取默认namespace的配置(application)
+  ```java
+  Config config = ConfigService.getAppConfig(); //config instance is singleton for each namespace and is never null
+  String someKey = "someKeyFromDefaultNamespace";
+  String someDefaultValue = "someDefaultValueForTheKey";
+  String value = config.getProperty(someKey, someDefaultValue);
+  ```
+  配置值从内存中获取，不需要应用作缓存
+- 监听配置变化事件
+  ```java
+  Config config = ConfigService.getAppConfig(); //config instance is singleton for each namespace and is never null
+  config.addChangeListener(new ConfigChangeListener() {
+      @Override
+      public void onChange(ConfigChangeEvent changeEvent) {
+          System.out.println("Changes for namespace " + changeEvent.getNamespace());
+          for (String key : changeEvent.changedKeys()) {
+              ConfigChange change = changeEvent.getChange(key);
+              System.out.println(String.format("Found change - key: %s, oldValue: %s, newValue: %s, changeType: %s", change.getPropertyName(), change.getOldValue(), change.getNewValue(), change.getChangeType()));
+          }
+      }
+  });
+  ```
+- 获取公共Namespace的配置
+  ```java
+  String somePublicNamespace = "CAT";
+  Config config = ConfigService.getConfig(somePublicNamespace); //config instance is singleton for each namespace and is never null
+  String someKey = "someKeyFromPublicNamespace";
+  String someDefaultValue = "someDefaultValueForTheKey";
+  String value = config.getProperty(someKey, someDefaultValue);
+  ```
+- 获取yaml/yml格式的namespace的配置
+  ```java
+  Config config = ConfigService.getConfig("application.yml");
+  String someKey = "someKeyFromYmlNamespace";
+  String someDefaultValue = "someDefaultValueForTheKey";
+  String value = config.getProperty(someKey, someDefaultValue);
+  ```
+- 获取其他格式的Namespace
+  ```java
+  String someNamespace = "test";
+  ConfigFile configFile = ConfigService.getConfigFile("test", ConfigFileFormat.XML);
+  String content = configFile.getContent();
+  ```
+- 读取多APP对应的Namespace的配置
+  ```java
+  String someAppId = "Animal";
+  String somePublicNamespace = "CAT";
+  Config config = ConfigService.getConfig(someAppId, somePublicNamespace);
+  String someKey = "someKeyFromPublicNamespace";
+  String someDefaultValue = "someDefaultValueForTheKey";
+  String value = config.getProperty(someKey, someDefaultValue);
+  ```
+#### Spring整合方式
+非properties、非yaml/yml格式（如xml，json等）的namespace暂不支持和Spring整合。
+- 基于Java的配置（推荐）
+  ```java
+  //这个是最简单的配置形式，一般应用用这种形式就可以了，用来指示Apollo注入application namespace的配置到Spring环境中
+  @Configuration
+  @EnableApolloConfig
+  public class AppConfig {
+    @Bean
+    public TestJavaConfigBean javaConfigBean() {
+      return new TestJavaConfigBean();
+    }
+  }
+  ```
+- Spring Boot集成方式（推荐）
+  注入application默认空间` apollo.bootstrap.enabled = true`,
+  ```properties
+   apollo.bootstrap.enabled = true
+  # will inject 'application', 'FX.apollo' and 'application.yml' namespaces in bootstrap phase
+  apollo.bootstrap.namespaces = application,FX.apollo,application.yml
+  ```
+- 对于 Spring Boot 2.4 以上版本还支持通过 Config Data Loader 模式来加载配置
+- 
 
 
 
