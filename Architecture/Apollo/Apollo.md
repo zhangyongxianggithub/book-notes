@@ -422,7 +422,7 @@ Apollo客户端会缓存配置文件到本地文件系统，默认位于/opt/dat
   ```
 #### Spring整合方式
 非properties、非yaml/yml格式（如xml，json等）的namespace暂不支持和Spring整合。
-- 基于Java的配置（推荐）
+- 基于Java的配置（推荐）,`@EnableApolloConfig`与`@Configuration`一起使用，不然不会生效。
   ```java
   //这个是最简单的配置形式，一般应用用这种形式就可以了，用来指示Apollo注入application namespace的配置到Spring环境中
   @Configuration
@@ -434,16 +434,134 @@ Apollo客户端会缓存配置文件到本地文件系统，默认位于/opt/dat
     }
   }
   ```
+  注入多个namespace的配置到Spring中
+  ```java
+  @Configuration
+  @EnableApolloConfig
+  public class SomeAppConfig {
+    @Bean
+    public TestJavaConfigBean javaConfigBean() {
+      return new TestJavaConfigBean();
+    }
+  }
+     
+  //这个是稍微复杂一些的配置形式，指示Apollo注入FX.apollo和application.yml namespace的配置到Spring环境中
+  @Configuration
+  @EnableApolloConfig({"FX.apollo", "application.yml"})
+  public class AnotherAppConfig {}
+  ```
+  注入多个namespace，并且指定顺序
+  ```java
+  //这个是最复杂的配置形式，指示Apollo注入FX.apollo和application.yml namespace的配置到Spring环境中，并且顺序在application前面
+  @Configuration
+  @EnableApolloConfig(order = 2)
+  public class SomeAppConfig {
+    @Bean
+    public TestJavaConfigBean javaConfigBean() {
+      return new TestJavaConfigBean();
+    }
+  }
+  @Configuration
+  @EnableApolloConfig(value = {"FX.apollo", "application.yml"}, order = 1)
+  public class AnotherAppConfig {}
+  ```
+  
 - Spring Boot集成方式（推荐）
-  注入application默认空间` apollo.bootstrap.enabled = true`,
+  除了上面的2种方式，Spring Boot还支持另一种注入方式，通过在`application.properties`或者`bootstrap.properties`中配置，能在更早的阶段注入。
+  注入application默认空间
+  ```apollo.bootstrap.enabled = true```
+  注入多个namespace的配置实例
   ```properties
    apollo.bootstrap.enabled = true
   # will inject 'application', 'FX.apollo' and 'application.yml' namespaces in bootstrap phase
   apollo.bootstrap.namespaces = application,FX.apollo,application.yml
   ```
+  将Apollo配置加载提到初始化日志系统之前
+  ```properties
+  # will inject 'application' namespace in bootstrap phase
+  apollo.bootstrap.enabled = true
+  # put apollo initialization before logging system initialization
+  apollo.bootstrap.eagerLoad.enabled=true
+  ```
+  
 - 对于 Spring Boot 2.4 以上版本还支持通过 Config Data Loader 模式来加载配置
-- 
-
+- Apollo支持Spring Placeholder的使用，如果要关闭placeholder的运行时自动更新更新,设置系统属性`-Dapollo.autoUpdateInjectedSpringProperties=false`或者在`META-INF/app.properties`中指定该属性
+- Apollo支持`@ConfigurationProperties`注入值，但是如果需要自动更新需要通过`EnvironmentChangeEvent`或者`RefreshScope`来实现
+- Apollo还提供了`@ApolloConfig`注解来自动注入Config对象
+- Apollo还提供了`@ApolloConfigChangeListener`来自动注册ConfigChangeListener
+- 还提供了`@ApolloJsonValue`用来把配置的json字符串自动注入为对象
+  ```java
+  public class TestApolloAnnotationBean {
+    @ApolloConfig
+    private Config config; //inject config for namespace application
+    @ApolloConfig("application")
+    private Config anotherConfig; //inject config for namespace application
+    @ApolloConfig("FX.apollo")
+    private Config yetAnotherConfig; //inject config for namespace FX.apollo
+    @ApolloConfig("application.yml")
+    private Config ymlConfig; //inject config for namespace application.yml
+   
+    /**
+     * ApolloJsonValue annotated on fields example, the default value is specified as empty list - []
+     * <br />
+     * jsonBeanProperty=[{"someString":"hello","someInt":100},{"someString":"world!","someInt":200}]
+     */
+    @ApolloJsonValue("${jsonBeanProperty:[]}")
+    private List<JsonBean> anotherJsonBeans;
+  
+    @Value("${batch:100}")
+    private int batch;
+    
+    //config change listener for namespace application
+    @ApolloConfigChangeListener
+    private void someOnChange(ConfigChangeEvent changeEvent) {
+      //update injected value of batch if it is changed in Apollo
+      if (changeEvent.isChanged("batch")) {
+        batch = config.getIntProperty("batch", 100);
+      }
+    }
+   
+    //config change listener for namespace application
+    @ApolloConfigChangeListener("application")
+    private void anotherOnChange(ConfigChangeEvent changeEvent) {
+      //do something
+    }
+   
+    //config change listener for namespaces application, FX.apollo and application.yml
+    @ApolloConfigChangeListener({"application", "FX.apollo", "application.yml"})
+    private void yetAnotherOnChange(ConfigChangeEvent changeEvent) {
+      //do something
+    }
+  
+    //example of getting config from Apollo directly
+    //this will always return the latest value of timeout
+    public int getTimeout() {
+      return config.getIntProperty("timeout", 200);
+    }
+  
+    //example of getting config from injected value
+    //the program needs to update the injected value when batch is changed in Apollo using @ApolloConfigChangeListener shown above
+    public int getBatch() {
+      return this.batch;
+    }
+  
+    private static class JsonBean{
+      private String someString;
+      private int someInt;
+    }
+  }
+  ```
+### 本地开发模式
+当开发环境无法连接时用，在本地模式下，Apollo只会从本地文件读取配置信息，不会从apollo服务器读取配置，本地开发模式使用env=Local开启。需要在本地准备好配置文件，目录位于`/opt/data/{appId}/config-cache`，文件名格式类似`{appId}+{cluster}+{namespace}.properties`
+### 测试模式
+用于支持单元测试，添加依赖
+```xml
+<dependency>
+    <groupId>com.ctrip.framework.apollo</groupId>
+    <artifactId>apollo-mockserver</artifactId>
+    <version>1.7.0</version>
+</dependency>
+```
 
 
 
