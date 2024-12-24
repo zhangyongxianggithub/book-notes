@@ -1,0 +1,1 @@
+参考文档的这个部分包含了Spring Framework的所有核心技术点。最重要的技术就是Spring的IoC(Inversion of Control)，接下来是对AOP编程的全面的介绍。Spring框架有自己的AOP框架，容易理解能解决80%企业编程场景中的AOP问题。还介绍了Spring与AspectJ的集成(就功能而言，目前是 Java企业领域中最丰富的AOP实现，当然也是最成熟的AOP实现)。AOT处理可用于编译优化您的应用程序。它通常用于使用GraalVM进行本机镜像部署。

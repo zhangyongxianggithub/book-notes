@@ -21,6 +21,15 @@ Spring框架也支持依赖注入(JSR 330)与通用注解规范(JSR 250)，开�
 # Getting Started
 如果你是新手，最好先从创建Spring Boot应用开始，它可以快速的创建一个生产级别的Spring应用，你可以使用[start.spring.io](https://start.spring.io/)来创建一个简单项目，按照[Getting Started guides](https://spring.io/guides)中的[ Getting Started Building a RESTful Web Service](https://spring.io/guides/gs/rest-service/)步骤来创建一个应用，这些指南不仅容易理解，而且都是以任务为中心，大部分都是基于Spring Boot。它们还涵盖了Spring产品组合中的其他项目，您在解决特定问题时可能需要使用这些项目。
 
+参考文档被分成了以下几个部分：
+- **Core**：IoC容器、事件、资源、i18n、验证、数据绑定、类型转换、Spring表达式、aop等内容；
+- **Testing**：Mock对象、测试框架、Spring MVC的测试方式、web测试客户端；
+- **Data Access**：事务、持久层支持、jdbc、对象关系映射、XML处理；
+- **Web Servlet**：Spring MVC、WebSocket、SockJS、STOMP消息；
+- **Web Reactive**：Spring WebFlux、WebClient、WebSocket；
+- **Integration**：远程调用、JMS、JCA、JMX、Email、Tasks、任务调度、缓存；
+- **Languages**：Kotlin、Groovy、动态语言。
+
 
 
 
