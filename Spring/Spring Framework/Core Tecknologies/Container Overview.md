@@ -74,23 +74,69 @@ ApplicationContext context = new ClassPathXmlApplicationContext("services.xml", 
 ```
 在前面的例子中，服务层包含`PetStoreServiceImpl`对象与2个dao层对象，其中`<property>`元素的`name`属性引用Bean中的属性名字，`ref`属性应用其他bean定义的名字，`ref`对`id`的引用表示了对象间的依赖关系。
 ## Composing XML-based Configuration Metadata
+将bean definitions分布到多个XML文件中很有用。通常，每个XML配置文件表示架构中的一个逻辑层或者模块。你可以使用`ClassPathXmlApplicationContext`构造函数从XML片段中加载bean definitions。构造函数接受多个`Resource`位置，另外也可以使用多个`<import/>`元素加载其他文件的bean定义。下面是一个例子:
+```xml
+<beans>
+	<import resource="services.xml"/>
+	<import resource="resources/messageSource.xml"/>
+	<import resource="/resources/themeSource.xml"/>
+	<bean id="bean1" class="..."/>
+	<bean id="bean2" class="..."/>
+</beans>
+```
+在前面的章节中，从3个文件中加载bean definitions: `services.xml`、`messageSource.xml`、`themeSource.xml`。所有的位置路径都是`<import>`元素所在文件的相对路径，所以`services.xml`必须与导入其的文件在相同的目录下或者相同的classpath位置下。`messageSource.xml`与`themeSource.xml`必须在导入文件的`resources`目录下，所以前置的`/`会被忽略，也就是不支持绝对路径。但是，考虑到这些路径是相对的，最好不要使用斜线。根据Spring Schema，导入的文件内容(包括顶级`<beans/>`元素)必须是有效的XML bean定义。可以使用相对`../`路径引用父目录，但不建议这样做。这样做会访问当前应用之外的文件。特别是，不建议在`classpath:URL`中使用这种形式(例如`classpath:../services.xml`)，否则运行时解析过程会选择最近的的classpath root目录，然后查看其父目录。classpath配置更改可能会导致选择到不同的、不正确的目录。你可以使用完全限定的资源位置而不是相对路径。例如，`file:C:/config/services.xml`或`classpath:/config/services.xml`。但是，应用程序的配置将耦合到特定的绝对位置。通常最好为此类绝对位置保留间接路径，例如，通过在运行时根据JVM系统属性解析的`${…​}`占位符设置。命名空间本身提供了导入指令。
+## The Groovy Bean Definition DSL
+外部配置元数据也可以使用Spring Groovy Bean Definition DSL描述。来自Grails框架，通常，配置写在一个`.groovy`文件中
+```groovy
+beans {
+	dataSource(BasicDataSource) {
+		driverClassName = "org.hsqldb.jdbcDriver"
+		url = "jdbc:hsqldb:mem:grailsDB"
+		username = "sa"
+		password = ""
+		settings = [mynew:"setting"]
+	}
+	sessionFactory(SessionFactory) {
+		dataSource = dataSource
+	}
+	myService(MyService) {
+		nestedBean = { AnotherBean bean ->
+			dataSource = dataSource
+		}
+	}
+}
+```
+等价于XML配置方式甚至支持Spring XML配置空间。也可以通过一个`importBeans`指令导入XML配置
+
+# 使用容器
+`ApplicationContext`就是一个高级工厂接口，可以维护Bean的注册与他们的依赖，通过使用`T getBean(String name, Class<T> requiredType)`方法，可以检索所有的Bean。你可以通过`ApplicationContext`读取bean definitions病访问它们，如下所示:
+```java
+// create and configure beans
+ApplicationContext context = new ClassPathXmlApplicationContext("services.xml", "daos.xml");
+
+// retrieve configured instance
+PetStoreService service = context.getBean("petStore", PetStoreService.class);
+
+// use configured instance
+List<String> userList = service.getUsernameList();
+```
+使用Groovy配置的初始化过程也是类似的，只是实现类不同
+```java
+ApplicationContext context = new GenericGroovyApplicationContext("services.groovy", "daos.groovy");
+```
+ApplicationContext有一个最灵活的实现者就是GenericApplicationContext，它内部组合了一个元数据reader delegates，可以读取任意格式的元数据格式文件，比如XML的或者Groovy的。。比如读取XML配置的`XmlBeanDefinitionReader`
+```java
+GenericApplicationContext context = new GenericApplicationContext();
+new XmlBeanDefinitionReader(context).loadBeanDefinitions("services.xml", "daos.xml");
+context.refresh();
+```
+也可以使用`GroovyBeanDefinitionReader`读取Groovy文件，如下面的例子所示
+```java
+GenericApplicationContext context = new GenericApplicationContext();
+new GroovyBeanDefinitionReader(context).loadBeanDefinitions("services.groovy", "daos.groovy");
+context.refresh();
+```
+你可以在同一个`ApplicationContext`混合使用这些reader，这样可以从不同的配置元数据源中读取配置信息。然后可以使用`getBean()`方法获取bean实例，`ApplicationContext`接口也有其他的变体方法来检索bean实例，通常不建议应用代码使用getBean方法，那会产生对对Spring API的依赖关系。
 
 
 
-1.1.2.2 实例化容器
-提供给ApplicationContext的位置路径或者多个位置路径是资源的位置，这告诉容器从浙西传递的外部资源中加载配置元数据，比如本地文件系统，Java CLASSPATH等等。
-
-在你了解了Spring IoC容器的内容之后，你可能想要了解更多关于Resource抽象的内容(在Resources章节中有详细的说明)，Resource提供了方便的机制从标注的URI位置中读取输入流的内容，尤其是，Resource路径用来构造ApplicationContext。将配置元数据分解到多个XML文件中很有用，一个文件表示一个模块或者一个代码层；你可以通过构造函数的方式传递多个XML来从多个地方加载配置元数据，也可以使用<import>元素来从其他文件中加载配置元数据，如下面的例子所示:
-
-在前面的示例中，外部配置元数据从三个文件加载：services.xml、messageSource.xml 和 themeSource.xml。 所有位置路径都相对于当前的元数据文件，因此 services.xml 必须与当前元数据文件位于同一目录或类路径位置，而 messageSource.xml 和 themeSource.xml 必须位于该位置子目录下，如您所见，前置斜杠会被忽略。但是，鉴于这些路径是相对的，最好不要使用斜线。 被导入文件的内容，必须是包括<beans/>元素的有效的XML bean定义文件
-<import>导入其他的配置文件信息。需要注意的是<import>标签中的文件路径是相对路径；不推荐使用../的相对路径形式，这样做可能会创建一个对应用程序外部文件的依赖，特别是使用classpath资源协议时，运行时处理过程会选选择第一个碰到的classpath，然后在它的父目录里面寻找文件，当classpath发生变更时，路径可能会变化。绝对路径可定时可以的。但是不推荐使用绝对路径的方式，这种方式将应用与特定路径耦合起来，通常是建议使用一种间接的绝对路径方式，比如通过${}占位符的方式指定路径。也可以使用Groovy的配置方式。
-配置元数据可以用Spring的Groovy Bean Definition DSL的方式描述，配置的格式如下:
-
-
-1.1.2.3 使用容器
-ApplicationContext就是一个高级的工厂接口，可以管理Bean的注册与他们的依赖，通过使用T getBean(String name, Class<T> requiredType)方法，可以检索所有的Bean。
-
-ApplicationContext有一个最灵活的实现者就是GenericApplicationContext，它内部组合了一个元数据reader delegates，可以读取任意格式的元数据格式文件，比如XML的或者Groovy的。
-
-
-通常不建议应用代码嗲用getBean方法，那会产生对对Spring API的依赖关系。
