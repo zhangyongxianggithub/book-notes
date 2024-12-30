@@ -1,28 +1,33 @@
-Spring IoC 容器通过配置元数据生成所有的bean后，容器会存储每个bean的定义，使用BeanDefinition对象表示，BeanDefinition包含以下的元数据：
-bean的实现类class全限定名
-Bean行为配置元素，表示bean在容器内的行为描述，比如scope、声明周期回调方法等；
-Bean的依赖信息，这些依赖应用也叫做协作者或者依赖
-新创建对象时需要设置的其他配置信息，比如一个管理连接池的Bean中使用的pool的大小、连接数等信息。
-元数据会被翻译成组成BeanDefinition的属性，下面的表格描述了这些属性
-Property	Explained in
-Class	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-class
-Name	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-beanname
-Scope	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-scopes
-Constructor arguments	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-collaborators
-Properties	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-collaborators
-Autowiring mode	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-autowire
-Lazy initiallization mode	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-lazy-init
-Initialization method	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-lifecycle-initializingbean
-Destruction method 	https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#beans-factory-lifecycle-disposablebean
+Spring IoC容器管理一个或者多个Bean。Spring IoC容器通过配置元数据生成所有的bean后，容器会存储每个bean的定义，使用`BeanDefinition`对象表示，`BeanDefinition`包含以下的元数据：
+- Bean的实现类class全限定类名，也就是Classpath下的路径名
+- Bean行为配置元素，表示bean在容器内的状态，比如scope、生命周期回调方法等；
+- Bean的依赖信息也就是对其他Bean的引用，这些引用也叫做协作者或者依赖
+- 新创建对象时需要设置的其他配置设置，比如一个管理连接池的Bean中使用的pool的大小、连接数等信息
 
-除了管理通过配置元数据的方式生成bean外，容器外已经存在对象也可以向容器注册，通过BeanFactory的getBeanFactory()方法获取DefaultListableBeanFactory实现，然后通过DefaultListableBeanFactory的registerSingleton(…)或者registerBeanDefinition(..)方法。需要尽早注册 Bean 元数据和手动提供的单例实例，以便容器在自动装配和其他自省步骤中正确推理它们。虽然在某种程度上支持覆盖现有元数据和现有单例实例，但官方不支持在运行时注册新 bean（同时对工厂进行实时访问），并可能导致并发访问异常、bean容器中的状态不一致。
-1.1.3.1 命名Bean
-每个Bean都有一个或者多个标识符，这些标识符在容器内必须唯一，用于映射bean，通常bean只有一个标识符，如果需要多个，其他的标识符就是别名，XML配置元数据方式使用id或者name设置Bean的标识符，通常id是bean的唯一的标识符存在，id必须在容器内唯一，如果bean需要别名，那么使用name定义，name可以有多个，通过逗号、冒号或者其他空白字符分隔；如果不明确指定id或者name，那么容器会为Bean生成一个唯一的name，当使用ref引用bean的时候，必须提供一个name，通常使用内部bean或者自动注入时不用明确的指定bean的名字，<alias>标签直接为某个bean指定别名。在Spring 3.1以前，id属性被定义为一个xsd:ID类型，所以包含的字符有限制，3.1版本后，定义为xsd:string类型，没有字符限制，id名字的唯一性是由容器保证的而不是XML解析器。
-Spring自动生成bean的名字的方式将类名转换成首字母小写的驼峰名字。当在classpath中进行组件扫描时，Spring会为未命名的组件生成bean的名字。
-在 bean 定义本身中，您可以为 bean 提供多个名称，方法是使用由id属性指定的最多一个名称和name属性中任意数量的其他名称的组合。这些名称都是是同一个 bean 的等效别名，并且在某些情况下很有用，例如让应用程序中的每个组件通过使用特定的别名名称来引用同一个公共依赖项。
-但是，在定义Bean时指定bean的所有别名还不完整。有时需要为在别处定义的 bean 引入别名，这在大型系统中很常见，其中配置在每个子系统之间进行拆分，每个子系统都有自己的一组对象定义。 在基于 XML 的配置元数据中，您可以使用 <alias/> 元素来完成此操作。 以下示例显示了如何执行此操作：
+这些元数据会被翻译成组成`BeanDefinition`的一组属性，下面的表格描述了这些属性
+|**Property**|**Explained in**|
+|:---|:---|
+|Class|[Instantiating Beans](https://docs.spring.io/spring-framework/reference/core/beans/definition.html#beans-factory-class)|
+|Name|[Naming Beans](https://docs.spring.io/spring-framework/reference/core/beans/definition.html#beans-beanname)|
+|Scope|[Bean Scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)|
+|Constructor arguments|[Dependency Injection](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html)|
+|Properties|[Dependency Injection](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html)|
+|Autowiring mode|[Autowiring Collaborators](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-autowire.html)|
+|Lazy initiallization mode|[Lazy-initialized Beans](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-lazy-init.html)|
+|Initialization method|[Initialization Callbacks](https://docs.spring.io/spring-framework/reference/core/beans/factory-nature.html#beans-factory-lifecycle-initializingbean)|
+|Destruction method|[Destruction Callbacks](https://docs.spring.io/spring-framework/reference/core/beans/factory-nature.html#beans-factory-lifecycle-disposablebean)|
 
-1.1.3.2 实例化Bean
+除了管理通过配置元数据的方式生成bean外，容器外创建的对象也可以向容器注册，通过`ApplicationContext`的`getBeanFactory()`方法获取`BeanFactory`，返回的是`DefaultListableBeanFactory`实现，然后通过`DefaultListableBeanFactory`的`registerSingleton(…)`或者`registerBeanDefinition(..)`方法注册。但是大多数情况，应用只需要常规的配置元数据的方式定义的bean就可以了。需要尽早注册Bean元数据和手动提供的单例实例，以便容器在自动装配和其他自省步骤中正确引用它们。虽然在某种程度上支持覆盖现有元数据和现有单例实例，但官方不支持在运行时注册新bean，这可能导致并发访问异常、bean容器中的状态不一致等
+# Overriding Beans
+Bean覆盖发生在Bean使用已经存在的标识符注册的场景。Bean覆盖可能在未来的版本中废弃。想要禁用Bean覆盖，可以在`ApplicationContext` refresh之前设置它的`allowBeanDefinitionOverriding=false`，此时如果遇到bean覆盖会抛出异常。默认情况下，容器会在覆盖发生时打印`INFO`级别的日志，你可以据此调整你的配置。如果你使用Java配置，`@Bean`方法默认会覆盖扫描到的同样类型的Bean对象，这也就意味着容器会调用`@Bean`工厂方法而不是预先生命的bean class的构造函数。在测试场景使用覆盖bean是很方便的。
+# 命名Bean
+每个Bean都有一个或者多个标识符，这些标识符在容器内必须唯一，用于映射bean，通常bean只有一个标识符，如果需要多个，其他的标识符就是别名，XML配置元数据方式使用`id`或者`name`设置Bean的标识符，在Spring 3.1以前，id属性被定义为一个`xsd:ID`类型，所以包含的字符有限制，3.1版本后，定义为`xsd:string`类型，没有字符限制，id名字的唯一性是由容器保证的而不是XML解析器。如果bean需要别名，那么使用`name`属性指定，别名可以有多个，通过逗号、冒号或者其他空白字符分隔；如果不明确指定id或者name，那么容器会为Bean生成一个唯一的名字，当使用名字引用bean的时候，必须提供一个名字，通常使用[内部bean](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-properties-detailed.html#beans-inner-beans)或者[自动注入](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-autowire.html)时不用明确的指定bean的名字。Bean的命名约定使用标准的Java规范，也就是驼峰格式。当使用组件扫描时，Spring为未命名组件生成Bean的名字，只是将类名的首字母小写，如果连续的首字母都是大写，则保留原始格式。
+## Aliasing a Bean outside the Bean Definition
+在一个Bean定义本身中，你可以提供多个名字，有时候在Bean定义的地方定义所有名字还不够，可能某时候想要在别的地方定义别名，这在大型系统中很常见，配置通常会分散在不同的子系统中。每个子系统都有自己的Bean对象集合。在XML配置元数据中，你可以使用`<alias/>`实现这个功能。比如下面:
+```xml
+<alias name="fromName" alias="toName"/>
+```
+# 实例化Bean
 Bean本质上是定义是创建对象实例的配方，当向容器请求某个名字的Bean时，容器会寻找配方并根据配方的定义，生成或者返回一个实例对象。
 <bean>标签里面的class属性就是BeanDrfinition里面的Class属性，指定了生成实例的类型，通常class是必须要要指定的，除非使用工厂方法或者Bean Defintion继承，你会在2种情况下使用到BeanDefinition的Class属性：
 用于指定Bean类型，用于容器通过反射的方式调用构造函数生成实例，等价与new；
