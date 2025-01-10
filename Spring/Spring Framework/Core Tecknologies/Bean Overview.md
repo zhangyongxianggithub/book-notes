@@ -28,24 +28,91 @@ Bean覆盖发生在Bean使用已经存在的标识符注册的场景。Bean覆�
 <alias name="fromName" alias="toName"/>
 ```
 # 实例化Bean
-Bean本质上是定义是创建对象实例的配方，当向容器请求某个名字的Bean时，容器会寻找配方并根据配方的定义，生成或者返回一个实例对象。
-<bean>标签里面的class属性就是BeanDrfinition里面的Class属性，指定了生成实例的类型，通常class是必须要要指定的，除非使用工厂方法或者Bean Defintion继承，你会在2种情况下使用到BeanDefinition的Class属性：
-用于指定Bean类型，用于容器通过反射的方式调用构造函数生成实例，等价与new；
-用于指定包含一个static工厂方法的类型，这个工厂方法被调用来创建对象实例，在一些情况下，容器会调用静态工厂方法来生成实例。工厂方法返回的对象的类型可以是工厂类本身或者是其他类。
-如果想为嵌套类配置Bean，需要使用嵌套类的源名或者二进制名字，Class里面如果是静态嵌套类的话要使用$符号指定路径，例如，如果您在 com.example包中有一个名为SomeThing的类，并且此SomeThing类有一个名为OtherThing的静态嵌套类，则它们可以用美元符号 ($) 或点 (.) 分隔。所以 bean定义中class属性的值是com.example.SomeThing$OtherThing 或 com.example.SomeThing.OtherThing。
-(1)Instantiation with a Constructor
-传统的使用构造方法生成Bean的方式不限任何类型，不需要任何特定的操作，只需要提供构造器即可；当您通过构造方法创建bean时，所有普通类都可以被Spring使用并兼容。也就是说，正在开发的类不需要实现任何特定的接口或以特定的方式进行编码。只需指定bean类就足够了。但是，根据您用于该特定bean的IoC类型，您可能需要一个默认（空）构造函数。
-Spring IoC容器几乎可以管理您希望它管理的任何类。 它不仅限于管理真正的 JavaBean。大多数 Spring 用户更喜欢只有默认（无参数）构造函数以及根据容器中的属性建模的适当的setter和getter的实际JavaBeans。您还可以在容器中拥有更多奇特的非bean样式类。例如，如果您需要使用绝对不符合 JavaBean规范的遗留连接池，那么Spring也可以管理它。
-(2)使用静态工厂方法实例化
-当使用静态工厂方法的方式定义Bean时，class制定了包含静态工厂方法的class类型，factory-method属性指定工厂方法名，调用这个方法可以返回对象，下面的例子描述了通过工厂方法的方式创建bean，定义没有指定返回对象的类型，那么返回的对象的类型就是工厂方法所在的class类型。
+Bean Definition本质上是是创建对象的配方，当向容器请求某个名字的Bean时，容器会寻找配方并根据配方中的配置元数据生成或者返回一个实例对象。如果你使用XML配置方式，`<bean>`标签里面的class属性就是要被实例化的对象类型，也是`BeanDrfinition`里面的`Class`属性，通常class是必须要要指定的，除非使用[实例工厂方法](https://docs.spring.io/spring-framework/reference/core/beans/definition.html#beans-factory-class-instance-factory-method)或者[Bean Defintion继承](https://docs.spring.io/spring-framework/reference/core/beans/child-bean-definitions.html)，你会在2种情况下使用到`BeanDefinition`的`Class`属性：
+- 指定Bean的class类型，用于容器直接通过反射的方式调用构造函数生成实例的场景，等价于`new`操作符
+- 指定包含一个`static`工厂方法class类型，这个工厂方法被调用来创建对象实例，在一些情况下，容器会调用静态工厂方法来生成实例。工厂方法返回的对象类型可以是工厂类本身或者是其他类型
 
-类代码如下：
+如果想为嵌套类配置Bean，需要使用嵌套类的源名或者二进制名字。比如如果你在`com.example`包下有一个`SomeThing`类，这个类有一个静态的嵌套类`OtherThing`，嵌套类会使用`$`或者`.`分割，所以bean定义中的class属性会是`com.example.SomeThing$OtherThing`或者`com.example.SomeThing.OtherThing`。
+## Instantiation with a Constructor
+传统的使用构造方法生成Bean的方式不限任何类型，不需要任何特定的操作，只需要提供构造器即可；当您通过构造方法创建bean时，所有普通类都可以被Spring使用并兼容。也就是说，正在开发的类不需要实现任何特定的接口或以特定的方式进行编码。只需指定bean类就足够了。但是，根据使用的IoC类型，您可能需要一个默认(空)构造函数。Spring IoC容器几乎可以管理您希望它管理的任何类。它不仅限于管理真正的`JavaBean`。大多数Spring用户更喜欢只有默认(无参数)构造函数的`JavaBean`s, 这些`JavaBean`具有合适的`setter`和`getter`，其中的属性来自容器中的属性。您还可以在容器中管理更多奇特的非bean样式的类实例。例如，如果您需要使用绝对不符合JavaBean规范的传统连接池，那么Spring也可以管理它。使用XML配置元数据的方式
+```xml
+<bean id="exampleBean" class="examples.ExampleBean"/>
+<bean name="anotherExample" class="examples.ExampleBeanTwo"/>
+```
+更多的关于提供参数给构造函数以及在对象创建后设置属性的机制，参考[Injecting Dependencies](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html)，如果只有有参数的构造函数，容器会在重载的构造函数中选择一个合适的构造函数，也就是说为了避免混淆，构造函数需要尽可能比较明确。
+## 使用静态工厂方法实例化
+当使用静态工厂方法的方式创建Bean时，class属性是一个包含静态工厂方法的类，factory-method属性指定工厂方法名，调用这个方法可以返回对象，后续与通过构造函数方式创建的对象处理过程相同。这种使用方式适用于处理遗留历史代码。下面的例子描述了通过工厂方法的方式创建bean，定义没有指定返回对象的类型，那么返回的对象的类型就是工厂方法所在的class类型。在这个例子中`createInstance()`方法必须是静态的。
+```xml
+<bean id="clientService"
+	class="examples.ClientService"
+	factory-method="createInstance"/>
+```
+```java
+public class ClientService {
+	private static ClientService clientService = new ClientService();
+	private ClientService() {}
 
-(3)使用实例工厂方法实例化
-与静态你工厂方法实例化类似，实例工厂方法调用一个容器中已存在的bean的成员方法来创建新的bean，不要指定class属性，factory-bean属性指定工厂bean的名字，factory-method指定工厂方法：
+	public static ClientService createInstance() {
+		return clientService;
+	}
+}
+```
+关于为工厂方法提供参数以及设置对象的属性的细节，可以参考[Dependencies and Configuration in Detail](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-properties-detailed.html)。如果工厂方法有参数，容易会在重载的工厂方法中选择一个最合适的，最好不要让工厂方法的参数等产生混淆，那么就会选择失败。
+## 使用实例(对象)工厂方法实例化
+与静态工厂方法实例化方式类似，实例工厂方法调用一个容器中已存在的bean的成员方法来创建新的bean，不要指定class属性，`factory-bean`属性指定工厂bean的名字，`factory-method`指定工厂方法：
+```xml
+<!-- the factory bean, which contains a method called createClientServiceInstance() -->
+<bean id="serviceLocator" class="examples.DefaultServiceLocator">
+	<!-- inject any dependencies required by this locator bean -->
+</bean>
 
-类代码：
+<!-- the bean to be created via the factory bean -->
+<bean id="clientService"
+	factory-bean="serviceLocator"
+	factory-method="createClientServiceInstance"/>
+```
+类代码:
+```java
+public class DefaultServiceLocator {
 
-在Spring文档中，factory bean指的是Spring容器中的一个bean，这个bean可以通过成员方法或者静态工厂方法创建对象，FactoryBean指的是Spring FactoryBean接口的实现类。
-确定特定bean的运行时类型并非易事。bean元数据定义中的class属性只是一个初始类引用，可能是声明的工厂方法所在的类或是FactoryBean类，这2种情况都会生成任意类型的Bean，或者在使用实例工厂方法的情况下都没有设置class属性。此外，AOP代理可以用基于接口的代理方式包装一个bean实例，这会因此隐藏目标bean的真正的实际类型。
-查找特定bean的实际运行时类型的推荐方法是 BeanFactory.getType 。这将所有上述情况都考虑在内，并返回 BeanFactory.getBean 调用将为相同的 bean名称返回的对象类型
+	private static ClientService clientService = new ClientServiceImpl();
+
+	public ClientService createClientServiceInstance() {
+		return clientService;
+	}
+}
+```
+工厂类可以持有多个工厂方法，比如
+```xml
+<bean id="serviceLocator" class="examples.DefaultServiceLocator">
+	<!-- inject any dependencies required by this locator bean -->
+</bean>
+
+<bean id="clientService"
+	factory-bean="serviceLocator"
+	factory-method="createClientServiceInstance"/>
+
+<bean id="accountService"
+	factory-bean="serviceLocator"
+	factory-method="createAccountServiceInstance"/>
+```
+相应的类
+```java
+public class DefaultServiceLocator {
+
+	private static ClientService clientService = new ClientServiceImpl();
+
+	private static AccountService accountService = new AccountServiceImpl();
+
+	public ClientService createClientServiceInstance() {
+		return clientService;
+	}
+
+	public AccountService createAccountServiceInstance() {
+		return accountService;
+	}
+}
+```
+工厂Bean本身可以被容器管理病通过DI来配置。在Spring文档中，`factory bean`指的是Spring容器中的一个bean，这个bean可以通过成员方法或者静态工厂方法创建对象，`FactoryBean`指的是Spring的`FactoryBean`接口的实现类。
+## Determining a Bean's Runtime Type
+确定特定bean的运行时类型并非易事。bean元数据定义中的class属性只是一个初始类引用，可能是声明的工厂方法所在的类或是`FactoryBean`实现类(可能会生成一个不同类型的Bean)，这2种情况都会生成任意类型的Bean，或者在使用实例工厂方法的情况下也会生成任意类型的Bean。此外，AOP代理可以用基于接口的代理方式包装一个bean实例，这会因此隐藏目标bean的真正的实际类型，只会暴露其接口类型。查找特定bean的实际运行时类型的推荐方法是`BeanFactory.getType`。这个方法将所有上述情况都考虑在内，并返回使用相同的Bean名称调用`BeanFactory.getBean`返回的对象的类型
