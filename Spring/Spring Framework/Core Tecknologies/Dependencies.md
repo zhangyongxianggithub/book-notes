@@ -16,18 +16,92 @@ public class SimpleMovieLister {
 	// business logic that actually uses the injected MovieFinder is omitted...
 }
 ```
-这个类没什么特别的，就是个POJO。
+这个类没什么特别的，就是个POJO，不依赖容器相关的接口、类或者注解。
+### 构造函数参数解析
+构造函数参数匹配使用的是参数的类型。如果参数不存在可能的混淆，按照定义的参数顺序提供实例化需要参数。比如下面的类:
+```java
+package x.y;
+public class ThingOne {
+	public ThingOne(ThingTwo thingTwo, ThingThree thingThree) {
+		// ...
+	}
+}
+```
+假设`ThingTwo`与`ThingThree`没有继承关系，则没有可能的混淆。那么下面的配置可以正常运行，你不需要明确指出`<constructor-arg/>`元素中的构造函数参数位置索引与参数类型
+```xml
+<beans>
+	<bean id="beanOne" class="x.y.ThingOne">
+		<constructor-arg ref="beanTwo"/>
+		<constructor-arg ref="beanThree"/>
+	</bean>
 
-	基于构造器的依赖注入会首先解析参数的类型与顺序，如果使用的是XML的配置方式，如果类型通过配置不能明显表达，则需要指定，比如：
+	<bean id="beanTwo" class="x.y.ThingTwo"/>
 
-	或者：
-
-	还可以：
-
-	使用参数名字来配置构造器的方法，必须启用编译器的debug标志，因为字节码文件会丢失方法的参数名字信息，使用debug模式则不会，或者使用@ConstructorProperties注解指定参数名。
-2.基于setter方法的依赖注入：这种方法是通过容器调用bean的setter方法来完成的。ApplicationContext支持基于构造器的依赖注入与基于setter方法的依赖注入，也支持BeanDefinition的方式，这种方式需要与PropertyEditor实例一起使用；但是这种方式是一种编程式的，通常较少使用。
-	强制依赖使用构造器依赖方法注入，setter方法注入用于可选依赖的注入（@Required）；Spring团队更推荐构造器依赖注入。
-
+	<bean id="beanThree" class="x.y.ThingThree"/>
+</beans>
+```
+当引用另外一个Bean时，它的类型是已知的，因此匹配得以执行。当使用简单类型时，比如`<value>true</value>`，Spring不能决定值的类型，所以不能根据类型匹配。考虑系main的类
+```java
+package examples;
+public class ExampleBean {
+	// Number of years to calculate the Ultimate Answer
+	private final int years;
+	// The Answer to Life, the Universe, and Everything
+	private final String ultimateAnswer;
+	public ExampleBean(int years, String ultimateAnswer) {
+		this.years = years;
+		this.ultimateAnswer = ultimateAnswer;
+	}
+}
+```
+在这个场景下，你可以通过`type`属性指定构造函数参数的类型来执行类型匹配，比如
+```xml
+<bean id="exampleBean" class="examples.ExampleBean">
+	<constructor-arg type="int" value="7500000"/>
+	<constructor-arg type="java.lang.String" value="42"/>
+</bean>
+```
+也可以使用`index`属性明确指定构造函数参数位置索引比如:
+```xml
+<bean id="exampleBean" class="examples.ExampleBean">
+	<constructor-arg index="0" value="7500000"/>
+	<constructor-arg index="1" value="42"/>
+</bean>
+```
+指定位置索引可以解决多个同类型参数的混淆的问题。位置索引是0-based。也可以使用构造函数参数名来匹配
+```xml
+<bean id="exampleBean" class="examples.ExampleBean">
+	<constructor-arg name="years" value="7500000"/>
+	<constructor-arg name="ultimateAnswer" value="42"/>
+</bean>
+```
+使用参数名字的方式，编译时必须开启`-parameters`标志，因为字节码文件会丢失方法的参数名字信息，开启`-parameters`编译后则不会，Spring能从字节码中找到参数名。或者使用`@ConstructorProperties`注解指定参数名。
+```java
+package examples;
+public class ExampleBean {
+	// Fields omitted
+	@ConstructorProperties({"years", "ultimateAnswer"})
+	public ExampleBean(int years, String ultimateAnswer) {
+		this.years = years;
+		this.ultimateAnswer = ultimateAnswer;
+	}
+}
+```
+## 基于setter方法的依赖注入
+这种方法是通过容器调用bean的setter方法来完成的，此时bean通常是使用无参的构造函数或者无参的静态工厂方法实例化出来的。下面的类是一个纯setter依赖注入的例子
+```java
+public class SimpleMovieLister {
+	// the SimpleMovieLister has a dependency on the MovieFinder
+	private MovieFinder movieFinder;
+	// a setter method so that the Spring container can inject a MovieFinder
+	public void setMovieFinder(MovieFinder movieFinder) {
+		this.movieFinder = movieFinder;
+	}
+	// business logic that actually uses the injected MovieFinder is omitted...
+}
+```
+`ApplicationContext`支持基于构造函数的依赖注入与基于setter方法的依赖注入，也支持2者混合。你可以配置`BeanDefinition`形式的依赖，与`PropertyEditor`实例组合使用，将属性从一种格式转换为另一种格式。但是大多数的Spring用户不会直接使用到这些类，它是一种编程式的方式不是声明式的方式，通常较少使用。常用的做法是XML配置、注解组件(`@Component`)、Java配置中的`@Configuration`与`@Bean`。这些源配置内部被转换成了BeanDefinition的实例并用来加载整个Spring IoC容器实例。2种DI方式可以混合使用，最佳实践是，必要依赖使用构造函数注入，可选依赖使用setter方法注入或者配置方法。在setter方法上使用`@Autowired`注解也会让属性称为必须依赖，使用构造函数注入加入参数校验更好。Spring团队提倡使用构造函数注入，因为可以让你拥有不可变对象的应用组件并且确保所有的必要的依赖都不是null。更多的，构造函数注入组件的使用者不论何时拿到的都是一个完全初始化好的对象。另一方面，构造函数参数太多也不好，意味着类可能具有太多的职责应该重构并进行合适的关注点分离。Setter注入应该主要用于可选依赖(已经具有河流的默认值的依赖)注入，然而，可能在每个使用依赖的地方都要做non-null检测，setter注入的好处是对象可以重配置或者在后面某个时刻重新注入。所以特别适用于通过JMX MBeans的管理。使用对特定类最有意义的DI方式。有时，在处理您没有源代码的第三方类时，就必须使用某种单一的方式了。例如，如果第三方类不公开任何setter方法，则构造函数注入可能是唯一可用的DI形式。
+## 依赖解析过程
 	容器进行依赖解析的步骤如下：
 ApplicationContext被初始化；
 bean创建后，提供依赖；	
