@@ -1,7 +1,22 @@
 一个传统的企业级应用不可能只有一个对象或者按照Spring方法只有一个Bean，即便最简单的应用也会有大量的对象还有之间的交互协作来提供用户需要的功能。下一节将介绍如何从定义多个独立的bean定义转变为一个完整实现的应用程序，这个应用中的对象互相协作实现功能目标。
 # 依赖注入
-依赖注入有2种模式：基于构造器的依赖注入与基于Setter函数的依赖注入。
-1.基于构造器的依赖注入：容器调用class的对应参数的构造方法，每一个参数都代表一个依赖，这等同与调用相同参数的静态工厂方法，他们2个都会产生对象。如下图：
+依赖注入也叫做DI，就是定义了依赖的对象。有3种定义依赖的方式：构造函数参数、工厂方法参数与十六对象的成员属性。当创建Bean的时候容器注入需要的依赖。这个过程是Bean本身负责实例化依赖(直接通过依赖的构造函数或者Service Locator模式)的反转，也就是控制反转。使用DI思想编写的代码更整洁。解藕性更好。对象不需要自己寻找依赖，不需要知晓依赖的位置或者Class实现。因此，类更容易测试尤其是依赖是接口或者抽象类的情况。允许在单元测试中使用stub或者mock实现。
+## Constructor-based Dependency Injection
+容器调用class的对应参数的构造方法，每一个参数都代表一个依赖，这等同与调用相同参数的静态工厂方法，他们2个都会产生对象。下面的例子是一个使用构造函数注入的例子：
+```java
+public class SimpleMovieLister {
+
+	// the SimpleMovieLister has a dependency on a MovieFinder
+	private final MovieFinder movieFinder;
+
+	// a constructor so that the Spring container can inject a MovieFinder
+	public SimpleMovieLister(MovieFinder movieFinder) {
+		this.movieFinder = movieFinder;
+	}
+	// business logic that actually uses the injected MovieFinder is omitted...
+}
+```
+这个类没什么特别的，就是个POJO。
 
 	基于构造器的依赖注入会首先解析参数的类型与顺序，如果使用的是XML的配置方式，如果类型通过配置不能明显表达，则需要指定，比如：
 
