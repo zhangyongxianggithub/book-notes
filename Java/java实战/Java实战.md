@@ -343,6 +343,19 @@ static DoubleUnaryOperator curriedConverter(final double f,final double b) {
 ```
 这样产生的函数只需要接受一个参数。这个就是柯里化。
 函数式数据结构=不可变数据结构=持久化数据结构。函数式方法如果修改外部数据，则2次调用就可能产生不同的结果，这违背了引用透明性原则，破坏了参数到结果的简单的映射。函数式的解决办法是就禁止副作用的方法，如果要改变就返回copy之后的新结果，永远不改变全局的或者参数的数据结构。这样的函数式的数据结构就是持久化的。不会产生任何变更。
+```java
+public class MyMathUtils {
+    public static Stream<Integer> primes(final int n) {
+        return Stream.iterate(2, i -> i + 1).filter(MyMathUtils::isPrime)
+                .limit(n);
+    }
+    public static boolean isPrime(final int candidate) {
+        final int candidateRoot = (int) Math.sqrt(candidate);
+        return IntStream.rangeClosed(2, candidateRoot)
+                .noneMatch(i -> candidate % i == 0);
+    }
+}
+```
 
 
 
