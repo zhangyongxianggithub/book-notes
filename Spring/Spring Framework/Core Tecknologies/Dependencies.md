@@ -108,8 +108,83 @@ public class SimpleMovieLister {
 - 依赖是一个普通值的定义或者是对容器中其他Bean的引用
 - 普通值的依赖会呗转换成依赖本身的类型，默认情况下Spring把字符串格式的值转换成内置类型，比如int、long、String、boolean等
 
-Spring容器创建后会校验每个Bean的配置，直到Bean创建后才会设置Bean的属性。容器创建时，就会创建单例Bean或者设置为预初始化的Bean。Scope定义在[Bean Scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)。其他scope的bean都是第一次向容器请求的时候才初始化，一个Bean的初始化会造成很多Bean的实例化操作，形成一个依赖关系图；循环依赖：如果使用基于构造器的依赖注入方式，可能会造成循环依赖；开发者基本可以信任Spring会做出正确的事情，Spring会检测配置问题，并且总是尽可能在Bean创建足够晚的时间后才回去设置属性并解析依赖关系；这意味着，可能容器已经正确启动并初始化了所有的涉及的到的bean，但是可能有某个Bean的依赖出现问题，而产生后续的异常；
-1.1.4.2 依赖配置的细节
+Spring容器创建后会校验每个Bean的配置，直到Bean创建后才会设置Bean的属性。容器创建时，就会创建单例Bean或者设置为预初始化的Bean。Scope定义在[Bean Scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)。其他scope的bean都是第一次向容器请求的时候才初始化，一个Bean的初始化会造成很多Bean的实例化操作，形成一个依赖关系图。请注意，这些依赖项之间的解析不匹配可能会在稍后出现，即在第一次创建受影响的bean时。如果使用基于构造函数的依赖注入方式，可能会遇到循环依赖，此时Spring容器会抛出`BeanCurrentlyInCreationException`。一种可行的解决办法是编辑源代码并使用setter配置。开发者可以相信Spring会做出正确的决定，Spring会在容器加载阶段检测配置问题比如引用不存在的Bean或者循环依赖，也就是说，当创建对象失败或者创建对象的依赖失败时，Spring容器会在稍后抛出异常，比如，Bean因此缺少某些属性或者属性无效等抛出异常，这种配置问题的延迟性时`ApplicationContext`默认就预先实例化singleton Bean的原因。在实际需要这些bean之前，需要花费一些前期时间和内存来创建它们，因此您会在创建`ApplicationContext`时发现配置问题，而不是稍后发现。您仍然可以覆盖此默认行为，以便单例bean延迟初始化，而不是急切地预先实例化。如果不存在循环依赖，每个Bean在被注入前都会得到完整的配置，也就是说，如果A依赖B，那么B在A之前得到完整配置与实例化。
+## 依赖注入的例子
+下面的例子使用基于XML的配置元数据用于setter注入
+```xml
+<bean id="exampleBean" class="examples.ExampleBean">
+	<!-- setter injection using the nested ref element -->
+	<property name="beanOne">
+		<ref bean="anotherExampleBean"/>
+	</property>
+
+	<!-- setter injection using the neater ref attribute -->
+	<property name="beanTwo" ref="yetAnotherBean"/>
+	<property name="integerProperty" value="1"/>
+</bean>
+
+<bean id="anotherExampleBean" class="examples.AnotherBean"/>
+<bean id="yetAnotherBean" class="examples.YetAnotherBean"/>
+```
+下面是用到的类
+```java
+public class ExampleBean {
+
+	private AnotherBean beanOne;
+
+	private YetAnotherBean beanTwo;
+
+	private int i;
+
+	public void setBeanOne(AnotherBean beanOne) {
+		this.beanOne = beanOne;
+	}
+
+	public void setBeanTwo(YetAnotherBean beanTwo) {
+		this.beanTwo = beanTwo;
+	}
+
+	public void setIntegerProperty(int i) {
+		this.i = i;
+	}
+}
+```
+在前面的例子中使用构造函数注入
+```xml
+<bean id="exampleBean" class="examples.ExampleBean">
+	<!-- constructor injection using the nested ref element -->
+	<constructor-arg>
+		<ref bean="anotherExampleBean"/>
+	</constructor-arg>
+
+	<!-- constructor injection using the neater ref attribute -->
+	<constructor-arg ref="yetAnotherBean"/>
+
+	<constructor-arg type="int" value="1"/>
+</bean>
+
+<bean id="anotherExampleBean" class="examples.AnotherBean"/>
+<bean id="yetAnotherBean" class="examples.YetAnotherBean"/>
+```
+相应的类
+```java
+public class ExampleBean {
+
+	private AnotherBean beanOne;
+
+	private YetAnotherBean beanTwo;
+
+	private int i;
+
+	public ExampleBean(
+		AnotherBean anotherBean, YetAnotherBean yetAnotherBean, int i) {
+		this.beanOne = anotherBean;
+		this.beanTwo = yetAnotherBean;
+		this.i = i;
+	}
+}
+```
+# 依赖配置的细节
 1.<value>直接注入字符串，Spring的conversion服务会把字符串转换为property或者构造器参数的实际类型；
 
 还可以使用命名空间的方式配置依赖：

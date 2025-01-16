@@ -356,6 +356,84 @@ public class MyMathUtils {
     }
 }
 ```
+延迟计算就是先声明，只有用到的时候才计算，Stream就是类似的思想，只有终端操作时才实际计算。创建一个延迟列表
+```java
+public class MyLinkedList<T> implements MyList<T> {
+    
+    private final T head;
+    
+    private final MyList<T> tail;
+    
+    public MyLinkedList(final T head, final MyList<T> tail) {
+        this.head = head;
+        this.tail = tail;
+    }
+    
+    @Override
+    public T head() {
+        return head;
+    }
+    
+    @Override
+    public MyList<T> tail() {
+        return tail;
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return false;
+    }
+}
+class Empty<T> implements MyList<T> {
+    @Override
+    public T head() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public MyList<T> tail() {
+        throw new UnsupportedOperationException();
+    }
+}
+interface MyList<T> {
+    T head();
+
+    MyList<T> tail();
+
+    default boolean isEmpty() {
+        return true;
+    }
+}
+```
+使用延迟计算的思想改造节点，使其在运行时才计算下一个节点，使用`Supplier<T>`工厂方法。
+```java
+public class LazyList<T> implements MyList<T> {
+    
+    private T head;
+    
+    private Supplier<MyList<T>> tail;
+    
+    public LazyList(final T head, final Supplier<MyList<T>> tail) {
+        this.head = head;
+        this.tail = tail;
+    }
+    
+    @Override
+    public T head() {
+        return head;
+    }
+    
+    @Override
+    public MyList<T> tail() {
+        return tail.get();
+    }
+    
+    @Override
+    public boolean isEmpty() {
+        return false;
+    }
+}
+```
 
 
 
