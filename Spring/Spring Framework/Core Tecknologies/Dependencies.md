@@ -185,14 +185,70 @@ public class ExampleBean {
 }
 ```
 # 依赖配置的细节
-1.<value>直接注入字符串，Spring的conversion服务会把字符串转换为property或者构造器参数的实际类型；
+正如前面章节提到的，Bean的属性或者构造函数的参数可以引用其他bean或者是内连的简单值。Spring的XML配置元数据支持子元素`<property/>`与`<constructor-arg/>`，可以用于依赖注入。
+## 简单值注入
+简单值就是基本类型与其包装类型，还包括`String`等。其中的value属性指定了值的可读表示形式。字符串的[conversion service](https://docs.spring.io/spring-framework/reference/core/validation/convert.html#core-convert-ConversionService-API)用来将这些值从字符串转换为属性或者参数的实际类型。下面是一个例子
+```xml
+<bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	<!-- results in a setDriverClassName(String) call -->
+	<property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+	<property name="url" value="jdbc:mysql://localhost:3306/mydb"/>
+	<property name="username" value="root"/>
+	<property name="password" value="misterkaoli"/>
+</bean>
+```
+还可以使用命名空间[p-namespace](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-properties-detailed.html#beans-p-namespace)的方式配置依赖：
+```xml
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+	https://www.springframework.org/schema/beans/spring-beans.xsd">
 
-还可以使用命名空间的方式配置依赖：
+	<bean id="myDataSource" class="org.apache.commons.dbcp.BasicDataSource"
+		destroy-method="close"
+		p:driverClassName="com.mysql.jdbc.Driver"
+		p:url="jdbc:mysql://localhost:3306/mydb"
+		p:username="root"
+		p:password="misterkaoli"/>
+</beans>
+```
+这种方式更简洁，但是这种方式只有在运行时才能发现编写错误而不是设计时，建议使用IDE的自动补全与检查机制。如果配置的依赖是`java.util.Properties`类型的，可以直接使用以下方式配置：
+```xml
+<bean id="mappings"
+	class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
 
-如果配置的依赖是java.util.Properties类型的，可以直接使用以下方式配置：
+	<!-- typed as a java.util.Properties -->
+	<property name="properties">
+		<value>
+			jdbc.driver.className=com.mysql.jdbc.Driver
+			jdbc.url=jdbc:mysql://localhost:3306/mydb
+		</value>
+	</property>
+</bean>
+```
+Spring容器使用JavaBeans `PropertyEditor`机制把`<value>`元素里面的文本转换为`java.util.Properties`，这个方式很便捷，是少数的几个Spring团队使用内嵌的`<value/>`而不是value属性的地方之一。
+### idref元素
+idref
+引用bean可以使用`<idRef>`元素，并且这个元素比传统的设值注入的方式多了错误检测功能，可以用在`<constructor-arg/>`与`<property/>`元素中.
+```xml
+<bean id="theTargetBean" class="..."/>
 
-引用bean可以使用<idRef>标签，并且这个标签比传统的设值注入的方式多了错误检测功能。
-2.引用其他Bean
+<bean id="theClientBean" class="...">
+	<property name="targetName">
+		<idref bean="theTargetBean"/>
+	</property>
+</bean>
+```
+完全等价于下面的定义片段
+```xml
+<bean id="theTargetBean" class="..." />
+<bean id="theClientBean" class="...">
+	<property name="targetName" ref="theTargetBean"/>
+</bean>
+```
+第一种形式比第二种更好，因为idref可以让容器在开发阶段就检测引用的Bean的存在性。第二种形式，没有校验，书写错误只能在运行阶段发现。如果`client`是一个prototype bean，那么发现错误的时间可能会更晚。
+## 引用其他Bean(协作者)
 ref元素表达的意思是bean的属性有依赖容器中的其他的Bean，需要注意的是parent属性表达的是依赖的bean再上级容器中;
 3.内部Bean，在属性内创建匿名的Bean，不需要指定id或者name;
 4.集合，List、Set、Map、Properties；merge=true，合并父子Bean中的属性；
