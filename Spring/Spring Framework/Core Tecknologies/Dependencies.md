@@ -249,8 +249,40 @@ idref
 ```
 第一种形式比第二种更好，因为idref可以让容器在开发阶段就检测引用的Bean的存在性。第二种形式，没有校验，书写错误只能在运行阶段发现。如果`client`是一个prototype bean，那么发现错误的时间可能会更晚。
 ## 引用其他Bean(协作者)
-ref元素表达的意思是bean的属性有依赖容器中的其他的Bean，需要注意的是parent属性表达的是依赖的bean再上级容器中;
-3.内部Bean，在属性内创建匿名的Bean，不需要指定id或者name;
+ref元素是`<constructor-arg/>`与`<property/>`元素的最终元素，设置的值引用容器管理的其他Bean。引用的bean是要设置属性的bean的依赖，在设置属性之前会根据需要进行初始化。所有引用最终都是对另一个对象的引用。范围和验证取决于您是否通过 bean或parent属性指定另一个对象的ID或名称。通过`<ref/>`元素的bean属性指定目标Bean，可以是同一个容器内的任意Bean，也可以是parent容器的。bean属性的值可以是目标Bean的id或者名字。下面是一个例子
+```xml
+<ref bean="someBean"/>
+```
+通过parent属性指定目标bean会引用parent容器上的一个Bean，parent属性值可以是目标bean的id或者名字。下面是一个例子
+```xml
+<!-- in the parent context -->
+<bean id="accountService" class="com.something.SimpleAccountService">
+	<!-- insert dependencies as required here -->
+</bean>
+<!-- in the child (descendant) context, bean name is the same as the parent bean -->
+<bean id="accountService"
+	class="org.springframework.aop.framework.ProxyFactoryBean">
+	<property name="target">
+		<ref parent="accountService"/> <!-- notice how we refer to the parent bean -->
+	</property>
+	<!-- insert other configuration and dependencies as required here -->
+</bean>
+```
+## 内部Bean
+`<property/>`与`<constructor-arg/>`元素中的`<bean/>`定义了一个内部bean，如下面的例子所示:
+```xml
+<bean id="outer" class="...">
+	<!-- instead of using a reference to a target bean, simply define the target bean inline -->
+	<property name="target">
+		<bean class="com.example.Person"> <!-- this is the inner bean -->
+			<property name="name" value="Fiona Apple"/>
+			<property name="age" value="25"/>
+		</bean>
+	</property>
+</bean>
+```
+一个内部Bean定义不需要定义ID或者名字，即便指定了，容器也不会使用它作为标识符。容器也会忽略`scope`标志，因为内部Bean始终是匿名的并且只在外部Bean创建时创建。不能独立的访问内部Bean，也不能注入到别的bean中。作为一种特殊情况，可以从自定义scope接收销毁回调。例如，对于包含在单例bean中的一个request-scope内部bean。内部bean实例的创建与外部bean相关联，但销毁回调会被request scope的生命周期调用。这不是常见的情况。内部bean通常只是共享外部bean的scope。
+## Collections
 4.集合，List、Set、Map、Properties；merge=true，合并父子Bean中的属性；
 5.null值与空值；
 6.p命名空间；
