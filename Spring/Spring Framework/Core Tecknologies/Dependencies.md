@@ -283,12 +283,191 @@ ref元素是`<constructor-arg/>`与`<property/>`元素的最终元素，设置�
 ```
 一个内部Bean定义不需要定义ID或者名字，即便指定了，容器也不会使用它作为标识符。容器也会忽略`scope`标志，因为内部Bean始终是匿名的并且只在外部Bean创建时创建。不能独立的访问内部Bean，也不能注入到别的bean中。作为一种特殊情况，可以从自定义scope接收销毁回调。例如，对于包含在单例bean中的一个request-scope内部bean。内部bean实例的创建与外部bean相关联，但销毁回调会被request scope的生命周期调用。这不是常见的情况。内部bean通常只是共享外部bean的scope。
 ## Collections
-4.集合，List、Set、Map、Properties；merge=true，合并父子Bean中的属性；
-5.null值与空值；
-6.p命名空间；
-7.c命名空间；
-8.混合属性。
-1.1.4.3 使用depends-on
+`<list/>`, `<set/>`, `<map/>`, `<props/>`设置Java集合属性的参数值，下面是一个例子
+```xml
+<bean id="moreComplexObject" class="example.ComplexObject">
+	<!-- results in a setAdminEmails(java.util.Properties) call -->
+	<property name="adminEmails">
+		<props>
+			<prop key="administrator">administrator@example.org</prop>
+			<prop key="support">support@example.org</prop>
+			<prop key="development">development@example.org</prop>
+		</props>
+	</property>
+	<!-- results in a setSomeList(java.util.List) call -->
+	<property name="someList">
+		<list>
+			<value>a list element followed by a reference</value>
+			<ref bean="myDataSource" />
+		</list>
+	</property>
+	<!-- results in a setSomeMap(java.util.Map) call -->
+	<property name="someMap">
+		<map>
+			<entry key="an entry" value="just some string"/>
+			<entry key="a ref" value-ref="myDataSource"/>
+		</map>
+	</property>
+	<!-- results in a setSomeSet(java.util.Set) call -->
+	<property name="someSet">
+		<set>
+			<value>just some string</value>
+			<ref bean="myDataSource" />
+		</set>
+	</property>
+</bean>
+```
+集合元素的Value可以嵌套其他bean或者引用对象或者其他集合等。也支持合并集合，开发者可以定义parent的`<list/>`, `<set/>`, `<map/>`, `<props/>`元素，然后定义child `<list/>`, `<set/>`, `<map/>`, `<props/>`元素并继承parent集合元素可以覆盖继承过来的值。child集合时2者的混合，下面是一个例子
+```xml
+<beans>
+	<bean id="parent" abstract="true" class="example.ComplexObject">
+		<property name="adminEmails">
+			<props>
+				<prop key="administrator">administrator@example.com</prop>
+				<prop key="support">support@example.com</prop>
+			</props>
+		</property>
+	</bean>
+	<bean id="child" parent="parent">
+		<property name="adminEmails">
+			<!-- the merge is specified on the child collection definition -->
+			<props merge="true">
+				<prop key="sales">sales@example.com</prop>
+				<prop key="support">support@example.co.uk</prop>
+			</props>
+		</property>
+	</bean>
+<beans>
+```
+注意上面`merge=true`属性的使用，当容器解析child bean并初始化时，实例有一个`adminEmails`集合，包含了child的`adminEmails`集合与parent的`adminEmails`集合的所有结果。不能合并不同的集合类型。Java支持泛型，你可以使用强类型集合，就是声明特定元素类型的集合。注入强类型集合时，Spring会自动将value转换为强类型的值的类型。
+```java
+public class SomeClass {
+
+	private Map<String, Float> accounts;
+
+	public void setAccounts(Map<String, Float> accounts) {
+		this.accounts = accounts;
+	}
+}
+```
+```xml
+<beans>
+	<bean id="something" class="x.y.SomeClass">
+		<property name="accounts">
+			<map>
+				<entry key="one" value="9.99"/>
+				<entry key="two" value="2.75"/>
+				<entry key="six" value="3.99"/>
+			</map>
+		</property>
+	</bean>
+</beans>
+```
+当`something`bean的`accounts`属性注入时，通过反射得知泛型属性的泛型类型信息，因此，Spring的类型转换识别到目标类型然后进行转换。
+## Null and Empty String Values
+Spring认为空参数就是空字符串，下面是一个例子
+```xml
+<bean class="ExampleBean">
+	<property name="email" value=""/>
+</bean>
+```
+前面的例子等价下面的Java代码
+```java
+exampleBean.setEmail("");
+```
+`<null/>`元素表示null值，下面是一个例子
+```xml
+<bean class="ExampleBean">
+	<property name="email">
+		<null/>
+	</property>
+</bean>
+```
+等价于下面的Java代码
+```java
+exampleBean.setEmail(null);
+```
+## 使用p命名空间完成XML快速配置
+p-namespace让你可以用bean的元素属性来描述属性值与引用Bean等，而不是通过`<property/>`元素。Spring支持namespace的扩展配置格式，基于XML模式定义。本章讨论的Bean配置格式定义在XML模式文档中，然而，p-namespace没有定义在XSD文件中，存在Spring Core中。下面的例子展示了2个XML片段，2个效果一样，一个使用标准XML格式，一个使用p-namespace
+```xml
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean name="classic" class="com.example.ExampleBean">
+		<property name="email" value="someone@somewhere.com"/>
+	</bean>
+
+	<bean name="p-namespace" class="com.example.ExampleBean"
+		p:email="someone@somewhere.com"/>
+</beans>
+```
+```xml
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean name="john-classic" class="com.example.Person">
+		<property name="name" value="John Doe"/>
+		<property name="spouse" ref="jane"/>
+	</bean>
+
+	<bean name="john-modern"
+		class="com.example.Person"
+		p:name="John Doe"
+		p:spouse-ref="jane"/>
+
+	<bean name="jane" class="com.example.Person">
+		<property name="name" value="Jane Doe"/>
+	</bean>
+</beans>
+```
+这个例子不仅包含p-namespace的常规用法，还使用特殊的格式声明属性引用。p-namespace的用法不像标准XML格式那么灵活，比如声明属性引用的方式与以ref结尾的属性会相冲突，标准形式不会，建议整个团队保持一个风格。
+## 使用c命名空间完成XML快速配置
+与前面的p-namespace类似，c-namespace从Spring3.1版本引入，可以快速的配置构造函数参数而不用使用`<constructor-arg>`元素。下面是一个例子
+```xml
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:c="http://www.springframework.org/schema/c"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+		https://www.springframework.org/schema/beans/spring-beans.xsd">
+
+	<bean id="beanTwo" class="x.y.ThingTwo"/>
+	<bean id="beanThree" class="x.y.ThingThree"/>
+
+	<!-- traditional declaration with optional argument names -->
+	<bean id="beanOne" class="x.y.ThingOne">
+		<constructor-arg name="thingTwo" ref="beanTwo"/>
+		<constructor-arg name="thingThree" ref="beanThree"/>
+		<constructor-arg name="email" value="something@somewhere.com"/>
+	</bean>
+
+	<!-- c-namespace declaration with argument names -->
+	<bean id="beanOne" class="x.y.ThingOne" c:thingTwo-ref="beanTwo"
+		c:thingThree-ref="beanThree" c:email="something@somewhere.com"/>
+
+</beans>
+```
+`c:`命名空间与`p:`同样的转换规则，在极少数的场景下，构造函数参数名字是不可用的，可以降级到使用参数索引位置
+```xml
+<!-- c-namespace index declaration -->
+<bean id="beanOne" class="x.y.ThingOne" c:_0-ref="beanTwo" c:_1-ref="beanThree"
+	c:_2="something@somewhere.com"/>
+```
+根据XML语法，索引标志需要前导符号`_`，因为XML的属性名不能以数字开头。
+## 符合的属性名
+你可以是红多重属性名来设置Bean属性，只要路径中的组件不是null，考虑下面的定义
+```xml
+<bean id="something" class="things.ThingOne">
+	<property name="fred.bob.sammy" value="123" />
+</bean>
+```
+`something`bean有一个fred属性，里面又个bob属性，里面有个sammy属性。sammy属性最终被设置为123.
+# 使用depends-on
 强制依赖的bean被初始化，即使没有依赖它的Bean要被初始化。就是定义Bean初始化的时机。
 1.1.4.4 懒初始化Bean
 所有的单例Bean都是在启动时初始化的，可以立即发现配置与环境中的错误，但是如果不想要Bean被立即初始化，可以设置lazy-init=true，告诉IoC容器，不要立即初始化，使用时再初始化就可以。
