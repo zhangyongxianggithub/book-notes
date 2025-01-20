@@ -1,0 +1,1 @@
+Spring Boot支持基于Java的配置。虽然使用XML配置元数据来启动`SpringApplication`，我们建议你的主配置是一个`@Configuration`注解修饰的类，这个类通常会定义main方法，做主配置源类是很合适的。`@Import`注解可以用来导入额外的配置类，另外，你也可以使用`@ComponentScan`来扫描Spring组件，包括`@Configuration`类。如果你必须使用XML配置，我们还是建议你从一个`@Configuration`类开始，然后使用`@ImportResource`注解来导入XML配置文件。
