@@ -468,8 +468,22 @@ p-namespace让你可以用bean的元素属性来描述属性值与引用Bean等�
 ```
 `something`bean有一个fred属性，里面又个bob属性，里面有个sammy属性。sammy属性最终被设置为123.
 # 使用depends-on
-强制依赖的bean被初始化，即使没有依赖它的Bean要被初始化。就是定义Bean初始化的时机。
-1.1.4.4 懒初始化Bean
+如果一个Bean依赖另一个Bean，通常意味着一个Bean是另一个Bean的属性。通常是使用`<ref>`元素或者自动装配机制。但是有时候依赖关系不会这么直接，例子就是当需要触发类中的静态初始化器，比如数据库驱动注册，`depends-on`属性与`@DependsOn`注解可以明确的强制某些bean在当前Bean初始化前初始化。下面的例子使用`depends-on`属性表达了依赖一个bean
+```xml
+<bean id="beanOne" class="ExampleBean" depends-on="manager"/>
+<bean id="manager" class="ManagerBean" />
+```
+如果是依赖多个Bean，提供逗号分隔的bean名字列表，逗号、空白字符或者冒号都是有效的分隔符。
+```xml
+<bean id="beanOne" class="ExampleBean" depends-on="manager,accountDao">
+	<property name="manager" ref="manager" />
+</bean>
+
+<bean id="manager" class="ManagerBean" />
+<bean id="accountDao" class="x.y.jdbc.JdbcAccountDao" />
+```
+仅在单例bean的情况下,`depends-on`属性可以指定初始化时依赖项也就指定了相应的销毁时依赖项。与给定bean定义depends-on关系的的bean会先被销毁，然后才会销毁给定bean本身。因此，`depends-on`还可以控制关​​闭顺序。
+# 懒初始化Bean
 所有的单例Bean都是在启动时初始化的，可以立即发现配置与环境中的错误，但是如果不想要Bean被立即初始化，可以设置lazy-init=true，告诉IoC容器，不要立即初始化，使用时再初始化就可以。
 1.1.4.5 注入依赖
 Spring容器可以自动装配相关联的Bean，自动装配功能具有以下的优势：
