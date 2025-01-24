@@ -483,34 +483,199 @@ p-namespace让你可以用bean的元素属性来描述属性值与引用Bean等�
 <bean id="accountDao" class="x.y.jdbc.JdbcAccountDao" />
 ```
 仅在单例bean的情况下,`depends-on`属性可以指定初始化时依赖项也就指定了相应的销毁时依赖项。与给定bean定义depends-on关系的的bean会先被销毁，然后才会销毁给定bean本身。因此，`depends-on`还可以控制关​​闭顺序。
-# 懒初始化Bean
-所有的单例Bean都是在启动时初始化的，可以立即发现配置与环境中的错误，但是如果不想要Bean被立即初始化，可以设置lazy-init=true，告诉IoC容器，不要立即初始化，使用时再初始化就可以。
-1.1.4.5 注入依赖
-Spring容器可以自动装配相关联的Bean，自动装配功能具有以下的优势：
-自动装配减少代码量，不需要指定properties或者构造器参数的信息等；
-自动装配可以根据对象的变化而更新配置。
-当使用的是基于XML的配置元数据时，你可以通过<bean>的autowire属性来指定Bean的自动装配模式，有4种装配模式：
-no：缺省模式，不会自动装配，必须通过ref指定装配的bean，不建议在已经存在的比较大的系统中更改缺省的装配模式，因为明确的指定依赖关系可以让开发者对系统有更好的控制，因为从某种程度来说，它描述了系统的结构；
-byName：通过属性名装配，指定根据Bean内的属性名来装配，Spring容器寻找与属性相同名字的bean来装配；
-byType：根据属性的类型来装配，如果此类型的bean存在多个，则抛出一个异常，如果没有匹配的Bean发现，则注入null；
-constructor：与byType类似，但是匹配的是构造器参数的类型，如果没有相关类型的Bean存在，则抛出异常。
-使用byType或者constructor的自动装配模式，可以装配数组与集合类型的数据。
-自动装配的限制：
-明确的指定property与constructor-arg的值会覆盖自动装配机制，自动装配也不能装配基本类型值，String、Class或者是这些类型的数组；假如容器内有多个满足类型的bean定义，而且不是集合类型的装配的话，不知道装配哪个bean；
-为了避免自动装配可能存在的问题：
-开发者可以明确指定依赖来覆盖自动装配机制、设置autowire-candidate=false来禁止自动装配、设置一个Bean为primary属性；
-设置<bean/>的autowire-candidate=false后，此Bean不参与容器的自动装配系统，但是只对根据类型的自动装配有影响。
-1.1.4.6 方法注入
-在大多数的应用场景下，容器内的bean都是单例的；当一个单例的bean需要依赖其他的单例Bean或者非单例bean需要依赖其他的非单例Bean时，开发者只需要在定义Bean时，把相关的依赖定义成propery等；这时候，如果Bean的生命周期是不同的就会发生一定的问题，假设单例Bean A依赖多例Bean B，可能A的每个方法的调用都需要调用B的相关的逻辑；容器只会初始化一次A，并且只会在初始化时设置一次A的依赖，此时B在ABean中变成了单例，并没有在每个方法调用时都生成新的B。
-上述问题的一种解决方案就是放弃控制反转的自动装配依赖，可以让Bean实现ApplicatonContextAware接口来让Bean持有容器，并通过调用容器的getBean(“B”)方法来每次获取新的B实例；上述的解决方案并不令人满意，因为它把业务代码与Spring框架的代码耦合在了一起；Method Injection，是Spring容器的高级特性，可以完美解决这种情况。
+# Lazy-initialized Bean
+默认情况下，`ApplicationContext`实现会在初始化过程中创建与配置所有的singleton Bean，通常，这种预初始化是想要的，因为在配置与环境中的错误可以可以立即发现，而不需要在几小时会或者几天后发现。如果你不想要这样，可以将singleton Bean设置为延迟加载，这样就不会提前实例化。将Bean设置为延迟加载后，Spring IoC容器会在第一次请求Bean的才去创建，而不是在启动时。延迟加载是通过`@Lazy`注解与`<bean/>`元素中的`lazy-init`属性实现的，如下面的例子所示:
+```java
+@Bean
+@Lazy
+ExpensiveToCreateBean lazy() {
+	return new ExpensiveToCreateBean();
+}
+@Bean
+AnotherBean notLazy() {
+	return new AnotherBean();
+}
+```
+当`ApplicationContext`加载前面的配置后，当`ApplicationContext`启动后，lazy bean不会在启动阶段初始化。然而，如果一个lazy bean如果是一个非lazy bean的依赖，那么lazy bean也会在启动阶段实例化，因为必须满足依赖。您还可以通过在带有`@Configuration`注解类上使用`@Lazy` 注解或在XML中使用`<beans/>`元素上的`default-lazy-init`属性来控制一组Bean的延迟初始化，如以下示例所示:
+```java
+@Configuration
+@Lazy
+public class LazyConfiguration {
+	// No bean will be pre-instantiated...
+}
+```
+# Autowiring Collaborators
+Spring容器可以自动装配协作bean之间的关系。您可以让Spring通过检查`ApplicationContext`的内容自动为您的bean解析协作者(其他bean)。自动装配具有以下优点:
+- 自动装配减少代码量，不需要指定属性或者构造函数参数的信息等；
+- 自动装配可以根据对象的变化而更新配置，比如，如果你需要向类添加一个依赖，依赖能够自动满足不需要修改任何配置，因此自动装配在开发阶段是很有用的，并且当代码库变得更加稳定时，也可以直接切换到显式装配的选项。
 
-Lookup方法注入技术是一种容器覆写容器中Bean中方法的技术，这种lookup方法会返回容器内的其他的Bean；这种技术一般就是用于返回多例Bean；Spring框架是通过字节码生成器CGLIB来动态生成一个子类，通过子类覆写lookup方法，由于要动态生成子类，所以定义类不能是final的，同时需要覆写的方法不能是final的；单元测试情况，你需要自己实现类的子类，，并提供抽象方法的实现方法；Lookup方法的限制就是lookup方法Bean不能使用工厂方法的方式创建，尤其是不能通过@Bean的注解方式创建的Bean，因为在这种情况下，并不是容器负责生成的实例，因此，不能创建一个运行时子类。
+当使用的是基于XML的配置元数据时，你可以通过`<bean>`的`autowire`属性来指定Bean的自动装配模式，有4种装配模式，可以为每个bean指定自动装配，从而可以选择要自动装配的bean。下表描述了四种自动装配模式：
+|**Mode**|**Explanation**|
+|:---|:---|
+|`no`|缺省模式，不会自动装配，必须通过ref指定引用的bean，不建议在已经存在的比较大的系统中更改缺省的装配模式，因为明确的指定依赖关系可以让开发者对系统有更好的控制并且更清晰，因为从某种程度来说，它描述了系统的结构|
+|`byName`|通过属性名装配，指定根据Bean内的属性名来装配，Spring容器寻找与属性相同名字的bean来装配，比如，如果一个Bean definition设置为根据名字装配，它包含一个master属性，Spring会寻找一个叫做master的bean definition，并使用它来设置属性|
+|`byType`|根据属性的类型来装配并且在容器中正好存在一个属性类型的bean，如果此类型的bean存在多个，则抛出一个异常，表示你不能使用`byType`的方式装配Bean，如果没有匹配的Bean发现，则注入null|
+|`constructor`|与`byType`类似，但是匹配的是构造函数参数的类型，如果没有相关类型的Bean存在，则抛出异常|
+
+使用`byType`或者`constructor`的自动装配模式，可以装配数组与typed集合类型的依赖。在这种场景下，所有的容器中类型匹配的自动装配候选者都会注入来满足依赖关系。你可以装key的类型为String类型的配强类型的`Map`实例，其中Map的value包含匹配的类型的Bean实例，key则是Bean的名字。
+## 自动装配的限制与缺点
+在项目中只使用自动装配时效果最佳。如果多数情况下不使用自动装配，开发人员可能会对仅使用它来装配一个或两个bean定义感到困惑。下面是自动装配的限制与缺点:
+- 明确的指定`property`与`constructor-arg`依赖会覆盖自动装配机制，自动装配也不能装配基本类型值，String、Class或者是这些类型的数组，这是设计带来的限制
+- 自动装配比显式装配更模糊而去少明确性，虽然在前面的表格中提到过，Spring总是会仔细的处理混淆的情况，并且努力避免猜测的情况。Bean之间的关系不是那么明确的文档化描述。
+- 对于一些需要从Spring容器生成文档的工具而言，可能无法使用到这些装配信息
+- 容器中可能存在多个匹配类型的Bean，对于集合类型来说，这不是问题，对于单个值来说，这种混淆无法解析，此时就会抛出异常
+
+在后面的场景中，你可以通过下面的方法解决
+- 显式注入，禁止自动呢注入
+- 设置Bean Definition的`autowire-candidate=false`禁止这个Bean的自动装配
+- 设置某个Bean Definition的`primary=true`来设置Bean作为primary candidate
+- 通过基于注解配置的方式实现更细粒度的控制
+## 从自动装配中排除一个Bean
+你可以从自动装配中排出一个Bean，在Spring的XML配置元数据方式中，将`<bean/>`元素的 `autowire-candidate`属性设置为`false`；使用`@Bean`注释时，该属性名为 `autowireCandidate`。容器使该特定bean定义对自动装配基础组件不可用，包括基于注解的注入点，例如`@Autowired`。`autowire-candidate`属性只会影响type-base的自动装配，不会影响基于名字的自动装配，基于名字的注入主要名字匹配就会注入一个Bean。你可以通过基于Bean名字的模式匹配来限定自动装配的候选者，`<beans/>`元素的`default-autowire-candidates`属性接受一个或者多个模式，比如，限定自动装配候选者为名字以`Repository`结尾的Bean，可以提供`*Repository`，提供多个模式时用逗号分隔，bean definition的`autowire-candidate`属性设置有更高的优先级。对于设置了这些属性的Bean，模式匹配规则不生效。这些技术对于您永远不想通过自动装配注入到其他bean中的bean非常有用。这并不意味着排除的bean本身不能使用自动装配进行配置。而是bean本身不是自动装配下装配其他bean的候选对象。从6.2版本开始，`@Bean`方法支持2个自动装配候选者的变体`autowireCandidate`与`defaultCandidate`，当使用qualifier的时候，标记为`defaultCandidate=false`的bean仅用于具有qualifier指示的注入点，这在比较严格的委托场景很有用，这些委托只在特定的场景下可注入，但不会影响其他地方相同类型的Bean的注入。这样的bean在普通注入场景不会注入，需要加上qualifier。相反，`autowireCandidate=false`的行为与上面解释的`autowire-candidate`属性完全相同：这样的bean永远不会通过类型注入。
+# 方法注入
+在大多数的应用场景下，容器内的bean都是单例的；当一个单例的bean需要依赖其他的单例Bean或者非单例bean需要依赖其他的非单例Bean时，开发者只需要在定义Bean时，把相关的依赖定义成property等；这时候，如果Bean的生命周期是不同的就会发生一定的问题，假设单例Bean A依赖多例Bean B，可能A的每个方法的调用都需要调用B的相关的逻辑；容器只会初始化一次A，并且只会在初始化时设置一次A的依赖，此时B在ABean中变成了单例，并没有在每个方法调用时都生成新的B。
+上述问题的一种解决方案就是放弃控制反转，可以让Bean实现`ApplicatonContextAware`接口来让Bean持有容器，并通过调用容器的`getBean("B")`方法来每次获取新的B实例.如下面的代码:
+```java
+package fiona.apple;
+
+// Spring-API imports
+import org.springframework.beans.BeansException;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+
+/**
+ * A class that uses a stateful Command-style class to perform
+ * some processing.
+ */
+public class CommandManager implements ApplicationContextAware {
+
+	private ApplicationContext applicationContext;
+
+	public Object process(Map commandState) {
+		// grab a new instance of the appropriate Command
+		Command command = createCommand();
+		// set the state on the (hopefully brand new) Command instance
+		command.setState(commandState);
+		return command.execute();
+	}
+
+	protected Command createCommand() {
+		// notice the Spring API dependency!
+		return this.applicationContext.getBean("command", Command.class);
+	}
+
+	public void setApplicationContext(
+			ApplicationContext applicationContext) throws BeansException {
+		this.applicationContext = applicationContext;
+	}
+}
+```
+上述的解决方案并不令人满意，因为它把业务代码与Spring框架的代码耦合在了一起；Method Injection，是Spring容器的高级特性，可以完美解决这种情况。
+## Lookup Method injection
+Lookup方法注入技术是一种容器覆写容器中Bean中方法的技术，这种lookup方法会返回容器内的其他的Bean作为lookup的结果；这种技术一般就是用于返回多例Bean；Spring框架是通过字节码生成器CGLIB来动态生成一个子类再通过子类覆写lookup方法来实现方法注入的，由于要动态生成子类，所以定义类不能是final的，同时需要覆写的方法不能是final的；单元测试情况，你需要自己实现类的子类，，并提供抽象方法的实现方法；Lookup方法的限制就是lookup方法Bean不能使用工厂方法的方式创建，尤其是不能通过`@Bean`的注解方式创建的Bean，因为在这种情况下，并不是容器负责生成的实例，因此，不能创建一个运行时子类。
 上面代码可以改造为：
+```java
+package fiona.apple;
 
-配置的XML：
+// no more Spring imports!
 
-	Lookup方法可以是abstract的也可以不是abstract的。
-在基于注解配置的组件模型中，开发者可以在lookup方法上加上注解@Lookup。通常来说，配置基于注解的lookup方法时需要类是实际的实现类，方法是普通的实现方法，这是为了与Spring的组件扫描规则相兼容，因为缺省情况下，Spring容器会忽略抽象类，但是，如果明确注册了抽象类为bean或者明确的通过imported的bean配置，则不会忽略抽象类。
-还有获取不同生命周期Bean的方式是ObjectFactory/Provider。
-任意方法替换
-一种使用较少的方法注入方案是方法替换，当使用XML配置时，可以使用replaced=method元素来替换方法；
+public abstract class CommandManager {
+
+	public Object process(Object commandState) {
+		// grab a new instance of the appropriate Command interface
+		Command command = createCommand();
+		// set the state on the (hopefully brand new) Command instance
+		command.setState(commandState);
+		return command.execute();
+	}
+
+	// okay... but where is the implementation of this method?
+	protected abstract Command createCommand();
+}
+```
+方法签名如下:
+```
+<public|protected> [abstract] <return-type> theMethodName(no-arguments);
+```
+如果方法时abstract的，动态生成的子类会实现方法，否则，动态子类会覆盖类中的具体实现方法，Lookup方法可以是abstract的也可以不是abstract的。考虑下面的例子
+```xml
+<!-- a stateful bean deployed as a prototype (non-singleton) -->
+<bean id="myCommand" class="fiona.apple.AsyncCommand" scope="prototype">
+	<!-- inject dependencies here as required -->
+</bean>
+
+<!-- commandManager uses myCommand prototype bean -->
+<bean id="commandManager" class="fiona.apple.CommandManager">
+	<lookup-method name="createCommand" bean="myCommand"/>
+</bean>
+```
+`commandManager`Bean当需要一个`myCommand`类型的实例时就调用它自己的`createCommand()`方法，你需要将`myCommand`定义为多例Bean，如果定义成singleton了，每次返回的`myCommand`将会都是一个实例。另外在基于注解配置的组件模型中，开发者可以在lookup方法上加上注解`@Lookup`来声明。
+```java
+public abstract class CommandManager {
+
+	public Object process(Object commandState) {
+		Command command = createCommand();
+		command.setState(commandState);
+		return command.execute();
+	}
+
+	@Lookup("myCommand")
+	protected abstract Command createCommand();
+}
+```
+也可以省略名字
+```java
+public abstract class CommandManager {
+
+	public Object process(Object commandState) {
+		Command command = createCommand();
+		command.setState(commandState);
+		return command.execute();
+	}
+
+	@Lookup
+	protected abstract Command createCommand();
+}
+```
+通常来说，配置基于注解的lookup方法时需要类是实际的实现类，方法是普通的实现方法，这是为了与Spring的组件扫描规则相兼容，因为缺省情况下，Spring容器会忽略抽象类，但是，如果明确注册了抽象类为bean或者明确的通过imported的bean配置，则不会忽略抽象类。
+还有获取不同生命周期Bean的方式是`ObjectFactory/Provider`注入，参考[Scoped Beans as Dependencies](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html#beans-factory-scopes-other-injection)，`ServiceLocatorFactoryBean`也是·很有用的。
+## Arbitrary Method Replacement
+一种使用较少的方法注入方案是方法替换，当你真的需要这个功能的时候再回来看也行。当使用XML配置时，可以使用`replaced=method`元素来替换方法；考虑下面的类，有一个`computeValue`方法。
+```java
+public class MyValueCalculator {
+
+	public String computeValue(String input) {
+		// some real code...
+	}
+
+	// some other methods...
+}
+```
+实现了`org.springframework.beans.factory.support.MethodReplacer`接口的类提供了新的方法定义，如下面的例子所示:
+```java
+/**
+ * meant to be used to override the existing computeValue(String)
+ * implementation in MyValueCalculator
+ */
+public class ReplacementComputeValue implements MethodReplacer {
+
+	public Object reimplement(Object o, Method m, Object[] args) throws Throwable {
+		// get the input value, work with it, and return a computed result
+		String input = (String) args[0];
+		...
+		return ...;
+	}
+}
+```
+定义方法替换如下:
+```xml
+<bean id="myValueCalculator" class="x.y.z.MyValueCalculator">
+	<!-- arbitrary method replacement -->
+	<replaced-method name="computeValue" replacer="replacementComputeValue">
+		<arg-type>String</arg-type>
+	</replaced-method>
+</bean>
+
+<bean id="replacementComputeValue" class="a.b.c.ReplacementComputeValue"/>
+```
+可以在`<replaced-method/>`元素中使用一个或者多个`<arg-type/>`元素注解表示方法签名，
