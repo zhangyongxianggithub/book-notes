@@ -678,4 +678,4 @@ public class ReplacementComputeValue implements MethodReplacer {
 
 <bean id="replacementComputeValue" class="a.b.c.ReplacementComputeValue"/>
 ```
-可以在`<replaced-method/>`元素中使用一个或者多个`<arg-type/>`元素注解表示方法签名，
+可以在`<replaced-method/>`元素中使用一个或者多个`<arg-type/>`元素注解表示方法签名，如果方法时重载的那么参数签名是需要的。
